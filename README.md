@@ -1,6 +1,6 @@
 # PicoGUS THT
 
-<img src="picogus-logo.svg" width="500" alt="PicoGUS">
+<img src="picogus-logo.svg" width="500" alt="PicoGUS" />
 
 PicoGUS is a Raspberry Pi Pico based ISA sound card for DOS and Win9x retro computers.
 It is a highly versatile clone card that provides near perfect emulation of the Gravis Ultrasound, Sound Blaster-series, AdLib, Tandy 3-voice and CMS/Game Blaster.
@@ -17,6 +17,9 @@ The designs still have some TSSOP SMD chips as they do not have THT equivalents,
 **Note!** The hardware revisions are intentionally kept aligned with the *major* revision as the original PicoGUS boards. This is done to indicate hardware feature compatibility and to prevent confusion in case of any future major revisions of the original PicoGUS design.
 
 ### Version 1.3
+
+<img src="hw-tht-v1.3/docs/renders/PicoGUS-THT-v1.3.2-purple-front.jpg" alt="PicoGUS THT v1.3.2 Render" width="350" align="right" />
+
 This version is an extension of the PicoGUS 1.2 design while implementing the *wavetable header* with manual volume control from the *hw-hand386* branch. Together with the addition of a full size USB-A connector accessible from the computers backside this card is now a real competitor to the v2.0 SMD design.
 
 In addition, the THT boards have also been slightly resized to optimize for component placement and JCLPCB-pricing. Progress wise, the initial design idea has been built and tested. The release version v1.3.2 is still pending build/test.
@@ -31,11 +34,14 @@ Assembly should be *EASY to MEDIUM* with the appropriate quality tools and consu
 * Multimeter with good continuity tester.
 
 ### Version 2.1
+
+<img src="hw-tht-v2.1/docs/renders/PicoGUS-THT-v2.1.0-purple-front.jpg" alt="PicoGUS THT v2.1.0 Render" width="350" align="right" />
+
 This is an experimental extension of the PicoGUS 2.0 SMD design, made possible using a Waveshare Core2350B board to free enough I/O ports for the 2.0 feature set. This is still in the design phase.
 <br/>
 
-### Experimental Software Features
-We have added experimental features that adds upon community ideas on top of the original software. The features are submitted as Pull Requests to the original PicoGUS repository as well but there is no guarantee that they will ever be included in the official software releases:
+### Experimental Firmware
+We have added experimental features that adds upon community ideas on top of the original firmware and software components. The features are submitted as Pull Requests to the original PicoGUS repository as well but there is no guarantee that they will ever be included in the official software releases:
 * DFS drive support inspired by PicoMEM so the USB drive can be accessed from MS-DOS.
 
 <br/>
