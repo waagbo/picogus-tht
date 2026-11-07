@@ -1,4 +1,0 @@
-(sym_lib_table
-  (version 7)
-  (lib (name "adapter")(type "KiCad")(uri "${KIPRJMOD}/adapter.kicad_sym")(options "")(descr "TSSOP-to-DIP adapter chip symbol (PicoGUS v1.3.2)"))
-)

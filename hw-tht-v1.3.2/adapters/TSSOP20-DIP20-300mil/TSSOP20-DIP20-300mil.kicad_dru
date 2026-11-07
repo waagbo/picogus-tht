@@ -1,7 +1,0 @@
-(version 1)
-# The corner pads of the 90-degree turned TSSOP-20 (pins 1, 10, 11, 20) sit 0.185 mm from the 1.4 mm pads of
-# DIP pins 4, 7, 14 and 17 (300-mil rows leave no more room). JLCPCB: SMD pad to pad >= 0.15 mm, pad to
-# track >= 0.1 mm. Everything else keeps the 0.2 mm netclass clearance.
-(rule "TSSOP corner pad to DIP pad"
-  (constraint clearance (min 0.15mm))
-  (condition "A.Type == 'Pad' && B.Type == 'Pad' && ((A.memberOfFootprint('U1') && B.memberOfFootprint('J1')) || (A.memberOfFootprint('J1') && B.memberOfFootprint('U1')))"))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the DigiKey BOM-upload files from BOM-THT.csv.
+"""Write the DigiKey BOM-upload files from docs/BOM-THT.csv.
 
 Every line's Customer Reference is "PicoGUS-THT-2.1.x: <references>", so the bags of a mixed order say which board
 they are for. DigiKey replaces a customer reference longer than 48 characters with "Character Limit Exceeded", so
@@ -8,6 +8,7 @@ group (C2-7,14-16,20). One BOM line stays one order line, so no line drops below
 
 usage (from hw-tht-v2.1):  python3 tools/digikey_upload.py [boards]
   boards: how many cards to order for (default 1); files for more than one card get a "-<n>x" suffix.
+Writes docs/BOM-THT-digikey.csv (the card) and docs/BOM-THT-digikey-optional.csv (the optional IC sockets).
 Lines without a DigiKey part number (Core2350B2, M62429L) are listed at the end: buy them elsewhere.
 """
 import csv
@@ -16,7 +17,7 @@ import sys
 
 PREFIX = 'PicoGUS-THT-2.1.x: '
 LIMIT = 48
-BOM = 'BOM-THT.csv'
+BOM = 'docs/BOM-THT.csv'
 
 
 def split_ref(r):
@@ -89,8 +90,8 @@ def main():
         line = [qty * boards, pn, r['MPN'], ref]
         price = float(r[unit]) * qty * boards if r[unit] else 0.0
         (socket_lines if r['THT status'] == 'THT (optional)' else main_lines).append((line, price))
-    for name, lines in ((f'BOM-THT-digikey-upload{suffix}.csv', main_lines),
-                        (f'BOM-THT-sockets-digikey-upload{suffix}.csv', socket_lines)):
+    for name, lines in ((f'docs/BOM-THT-digikey{suffix}.csv', main_lines),
+                        (f'docs/BOM-THT-digikey-optional{suffix}.csv', socket_lines)):
         with open(name, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f, lineterminator='\r\n')
             w.writerow(['Quantity', 'Digi-Key Part Number', 'Manufacturer Part Number', 'Customer Reference'])

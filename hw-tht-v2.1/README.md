@@ -5,8 +5,8 @@ with through-hole parts. The RP2040, its flash, crystal and core regulator are r
 **Waveshare Core2350B2** module (RP2350B, 16 MB flash, **8 MB PSRAM**) on four 2x8 sockets, and the module's PSRAM is
 the GUS sample RAM, so v2.0's separate APS6404L is gone. Everything else is v2.0's circuit with the same GPIO map:
 ISA bus logic, PCM5100A DAC, M62429 Waveblaster volume, MIDI out, USB-A host port and IRQ/DMA jumpers. The card is
-the [THT v1.3.2](../hw-tht-v1.3.2/README.md) outline (102.0 × 99.95 mm), with v1.3.2's bracket-side connectors (USB-A,
-line out, MIDI out) and bracket tab holes in v1.3.2's places, so the [v1.3.2 bracket](../hw-tht-v1.3.2/README.md#bracket) fits.
+the [THT v1.3.2](../hw-tht-v1.3/README.md) outline (102.0 × 99.95 mm), with v1.3.2's bracket-side connectors (USB-A,
+line out, MIDI out) and bracket tab holes in v1.3.2's places, so the [v1.3.2 bracket](../hw-tht-v1.3/README.md#bracket) fits.
 v2.0's passive line-out mix (four 1k resistors) is replaced by the **op-amp mixer of the THT v1.3 boards** (NE5532 on
 ISA ±12 V, Waveblaster +6 dB), with film coupling capacitors and a DC-coupled DAC path.
 
@@ -16,8 +16,10 @@ on v2.0's SOIC-8. Everything else is through hole; see
 [Parts with no through-hole version](#parts-with-no-through-hole-version).
 
 > **Status: schematic done; board placed and routed (4 layers, DRC clean, matches the schematic), for review. Not
-> built or tested; no Gerbers yet. Firmware: ported and built (`picogus-v21.uf2`), not tested on hardware** (see
-> [Firmware](#firmware) and [Layout status](#layout-status)).
+> built or tested. Firmware: ported and built (`picogus-v21.uf2`), not tested on hardware** (see
+> [Firmware](#firmware) and [Layout status](#layout-status)). JLCPCB files: `hw-common/tools/jlcpcb.sh
+> hw-tht-v2.1/PicoGUS-THT.kicad_pcb` with `ALLOW_DRC=courtyards_overlap` (the 11 accepted overlaps in the logic
+> column); the Hardware workflow builds them on every change.
 
 Files:
 
@@ -27,14 +29,14 @@ Files:
 | `audio.kicad_sch` | PCM5100A DAC sheet (v2.0's, footprints only) |
 | `mixer.kicad_sch` | Line-out mixer: NE5532 inverting summing amplifier (from THT v1.3), ±12 V filters, Waveblaster input pull-downs |
 | `PicoGUS-THT-schematic.pdf` | Schematic PDF |
-| `BOM-THT.csv` | BOM with a **THT status** column (THT / THT but a different part than v2.0 / no THT version exists / module), the v2.0 part each line replaces, manufacturer, MPN, DigiKey and LCSC numbers, a digikey.no link, alternatives and digikey.no prices; then the kit items (module sockets and headers, jumpers), the optional IC sockets and the v2.0 parts that are gone |
-| `BOM-THT-digikey-upload.csv` | DigiKey cart/BOM upload (see [Cost](#cost)). Customer Reference `PicoGUS-THT-2.1.x: <references>` on every line, so the bags of a mixed order say which board they are for; at most 48 characters (DigiKey prints "Character Limit Exceeded" instead of a longer one), so the 15 × 0.1 µF line reads `C2-7,14-16,20,…` |
-| `BOM-THT-sockets.csv` (+ `-digikey-upload`) | Optional: every IC socketed, with socket and part heights against the Waveblaster daughterboard. The same parts are the optional socket lines of `BOM-THT.csv` |
-| `BOM-THT-lcsc.csv`, `BOM-THT-lcsc-upload.csv`, `BOM-THT-sockets-lcsc-upload.csv` | The whole card from LCSC (see [Cost](#cost)): every BOM line with the LCSC part, order quantity (LCSC minimums), stock and price on the day and what to buy elsewhere; the uploads for LCSC's BOM tool, same customer references as the DigiKey ones |
-| `tools/digikey_upload.py` | Writes both DigiKey upload files from `BOM-THT.csv` (`python3 tools/digikey_upload.py [cards]`; more than one card gives `-<n>x` files) |
-| `tools/lcsc_bom.py` | Writes the three LCSC files from `BOM-THT.csv` with LCSC's live stock and prices (`python3 tools/lcsc_bom.py [cards]`) |
+| `docs/BOM-THT.csv` | BOM with a **THT status** column (THT / THT but a different part than v2.0 / no THT version exists / module), the v2.0 part each line replaces, manufacturer, MPN, DigiKey and LCSC numbers, a digikey.no link, alternatives and digikey.no prices; then the kit items (module sockets and headers, jumpers), the optional IC sockets and the v2.0 parts that are gone |
+| `docs/BOM-THT-digikey.csv` (+ `-optional`: the IC sockets) | DigiKey cart/BOM uploads (see [Cost](#cost)). Customer Reference `PicoGUS-THT-2.1.x: <references>` on every line, so the bags of a mixed order say which board they are for; at most 48 characters (DigiKey prints "Character Limit Exceeded" instead of a longer one), so the 15 × 0.1 µF line reads `C2-7,14-16,20,…` |
+| `docs/BOM-THT-sockets.csv` | Optional: every IC socketed, with socket and part heights against the Waveblaster daughterboard. The same parts are the optional socket lines of `docs/BOM-THT.csv`, ordered with the `-optional` upload files |
+| `docs/BOM-THT-lcsc-order.csv`, `docs/BOM-THT-lcsc.csv` (+ `-optional`) | The whole card from LCSC (see [Cost](#cost)): `-order` has every BOM line with the LCSC part, order quantity (LCSC minimums), stock and price on the day and what to buy elsewhere; the others are the uploads for LCSC's BOM tool, same customer references as the DigiKey ones |
+| `tools/digikey_upload.py` | Writes both DigiKey upload files from `docs/BOM-THT.csv` (`python3 tools/digikey_upload.py [cards]`; more than one card gives `-<n>x` files) |
+| `tools/lcsc_bom.py` | Writes the three LCSC files from `docs/BOM-THT.csv` with LCSC's live stock and prices (`python3 tools/lcsc_bom.py [cards]`) |
 | `tools/gen_core2350b.py` | Generates the Core2350B footprint and 3D model in `hw-common` and checks the pin map |
-| `PicoGUS-THT-top.png`, `PicoGUS-THT-bottom.png` | 3D renders |
+| `docs/renders/` | 3D renders of the routed card: red from the front and the back, green, purple, white and black from the front (ENIG; white silkscreen, black on white). Made with `hw-common/tools/render.sh` |
 | `docs/figures/routing.png` | The routed board: tracks per layer, vias and the AGND/AVDD islands |
 
 The shared `PiGUS library` footprints are linked from `hw-common/`. **New in the shared library for v2.1:**
@@ -43,7 +45,7 @@ The shared `PiGUS library` footprints are linked from `hw-common/`. **New in the
 `TSSOP-20_4.4x6.5mm_P0.65mm_HandSolder_TestPads` (THT v1.3.2's: KiCad's TSSOP with the toes to ±3.9 mm and one
 0.7 mm round test pad per pin in two staggered columns per side, at x ±4.45 / ±5.1 mm),
 `USB_A_Molex_67643_Horizontal_ShieldPin5` (KiCad's Molex 67643 with the shield pads
-numbered 5, as the `USB_A` symbol's shield pin) and `DIP-8_W7.62mm_SOIC-8_Adapter` (no longer used here).
+numbered 5, as the `USB_A` symbol's shield pin) and `C_Film_P5.00mm_7.8x7.8mm_or_CP_D5.0mm_P2.00mm` (C39–C42).
 
 ## What changed compared to v2.0
 
@@ -77,7 +79,7 @@ GPIO assignment except GPIO0–3 (PSRAM, now free). Board positions: see [Layout
 ## Parts with no through-hole version
 
 These are the v2.0 parts that cannot be replaced by a through-hole part. Everything else on v2.0 has a DIP, TO-220,
-axial or radial equivalent (`THT status` column of `BOM-THT.csv`).
+axial or radial equivalent (`THT status` column of `docs/BOM-THT.csv`).
 
 | v2.0 part | Package | Why there is no THT replacement | v2.1 |
 |---|---|---|---|
@@ -93,12 +95,12 @@ Replaced by a different through-hole part (circuit change): 74LVC2G06 → **74AH
 
 ## Cost
 
-digikey.no prices of 2026-10-30, for one board, in NOK; shipping not included. Per-line prices are in `BOM-THT.csv`.
+digikey.no prices of 2026-10-30, for one board, in NOK; shipping not included. Per-line prices are in `docs/BOM-THT.csv`.
 
 | | NOK excl. MVA | NOK incl. 25 % MVA |
 |---|---|---|
-| DigiKey order, `BOM-THT-digikey-upload.csv` (43 lines) | 580.00 | 725.00 |
-| Optional IC sockets, `BOM-THT-sockets-digikey-upload.csv` (U3–U7, U11) | 58.98 | 73.72 |
+| DigiKey order, `docs/BOM-THT-digikey.csv` (43 lines) | 580.00 | 725.00 |
+| Optional IC sockets, `docs/BOM-THT-digikey-optional.csv` (U3–U7, U11) | 58.98 | 73.72 |
 | Both | 638.98 | 798.73 |
 
 * **Not in the DigiKey order**: the Core2350B2 (waveshare.com, US$6.99) and the M62429L (LCSC C52260216, minimum 5),
@@ -107,13 +109,13 @@ digikey.no prices of 2026-10-30, for one board, in NOK; shipping not included. P
 * **C39–C42** (2.2 µF film, 61 NOK) are on backorder at DigiKey until about April 2027: see the LCSC film part or the
   bipolar electrolytic in [Audio](#audio).
 
-**LCSC instead** (lcsc.com prices and stock of 2026-11-06, US$, shipping not included; `BOM-THT-lcsc.csv` has every
+**LCSC instead** (lcsc.com prices and stock of 2026-11-06, US$, shipping not included; `docs/BOM-THT-lcsc-order.csv` has every
 line):
 
 | | US$ |
 |---|---|
-| LCSC order, `BOM-THT-lcsc-upload.csv` (40 lines, quantities raised to LCSC's minimums) | 50.93 |
-| Optional IC sockets, `BOM-THT-sockets-lcsc-upload.csv` | 7.24 |
+| LCSC order, `docs/BOM-THT-lcsc.csv` (40 lines, quantities raised to LCSC's minimums) | 50.93 |
+| Optional IC sockets, `docs/BOM-THT-lcsc-optional.csv` | 7.24 |
 
 * **Not at LCSC**: U3 SN74AHC14N, U6 SN74AHCT126N and U9 MCP1826S-3302E/AB (none in stock, and no LCSC part fits
   without a design change: the 74HC14 does not take 5 V inputs at 3.3 V, the 125 has the opposite enable, the
@@ -122,7 +124,7 @@ line):
 * **Different parts from the BOM** (all in the `Note` column): U7 is TI's SN74LVC244AN (same pinout, 5 V-tolerant
   inputs at 3.3 V like the AHC244, stronger outputs), J7/J9 the XKB clones of the CUI jacks (as on THT v1.3.2),
   C21/C22 Dersonic C0G discs, R27/R28 and R31/R32 the taped Yageo MFR-25, and the generic headers, sockets,
-  ferrites, film and electrolytic capacitors named in `BOM-THT.csv`.
+  ferrites, film and electrolytic capacitors named in `docs/BOM-THT.csv`.
 * U4/U5 (SN74AHC00N): 60 in stock at LCSC on the day, at US$1.46 each.
 
 ## Audio
@@ -267,7 +269,7 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
   Pico micro-USB relief slots.
 * **Bracket end as on THT v1.3.2's final layout (commit 258c8f8)**, top to bottom: J7 MIDI OUT at (217.00, 49.00),
   J9 LINE OUT at (217.00, 75.50) and J5 USB-A (Molex 67643) at (208.64, 92.50), with the bracket tab holes H1/H2 at
-  x 214.70 and the ISA fingers in v1.3.2's places, so the [v1.3.2 bracket](../hw-tht-v1.3.2/README.md#bracket) fits
+  x 214.70 and the ISA fingers in v1.3.2's places, so the [v1.3.2 bracket](../hw-tht-v1.3/README.md#bracket) fits
   (its drawing is on User.Drawings). Its WT VOL hole between the two jacks stays unused: v2.1's Waveblaster volume is
   digital, and U13 with its output capacitors sits behind that hole, where v1.3.2 has RV1.
 * **J6 (USB-C) at the bracket end**, centred at y 108.89, where v1.3.2 has the Pico's micro-USB. It faces the

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the LCSC order for the whole card from BOM-THT.csv, with LCSC's live stock and prices.
+"""Write the LCSC order for the whole card from docs/BOM-THT.csv, with LCSC's live stock and prices.
 
 The LCSC part of each BOM line is the first C-number in its `LCSC PN` column; a line whose `LCSC PN` starts with
 "not at LCSC" is listed as bought elsewhere (the DigiKey part number is given). Order quantities follow LCSC's
@@ -7,9 +7,10 @@ minimum order and order multiple. Customer references are "PicoGUS-THT-2.1.x: <r
 (as in the DigiKey uploads).
 
 usage (from hw-tht-v2.1):  python3 tools/lcsc_bom.py [cards]
-Writes BOM-THT-lcsc.csv (every BOM line: what to order where, stock and price on the day),
-BOM-THT-lcsc-upload.csv and BOM-THT-sockets-lcsc-upload.csv (for LCSC's BOM tool: Quantity, LCSC Part Number,
-Manufacturer Part Number, Customer Reference); files for more than one card get a "-<n>x" suffix.
+Writes docs/BOM-THT-lcsc-order.csv (every BOM line: what to order where, stock and price on the day),
+docs/BOM-THT-lcsc.csv and docs/BOM-THT-lcsc-optional.csv (the card and the optional IC sockets, for LCSC's BOM
+tool: Quantity, LCSC Part Number, Manufacturer Part Number, Customer Reference); files for more than one card get a
+"-<n>x" suffix.
 Needs network access to wmsc.lcsc.com (curl).
 """
 import csv
@@ -24,7 +25,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from digikey_upload import reference  # noqa: E402  (same customer-reference format and length limit)
 
-BOM = 'BOM-THT.csv'
+BOM = 'docs/BOM-THT.csv'
 API = 'https://wmsc.lcsc.com/ftps/wm/product/detail?productCode='
 NOTES = {   # why an LCSC line is not the BOM's part, or what to watch for
     'U4, U5': 'Only 60 in stock at LCSC on the day, and dearer than at DigiKey (296-4510-5-ND, about US$0.90).',
@@ -123,10 +124,10 @@ def main():
     cols = ['References', 'Value', 'Needed', 'Order qty', 'Buy at', 'LCSC Part Number', 'LCSC part', 'Package',
             'BOM part', 'Same part as the BOM', f'LCSC stock {today}', 'MOQ / multiple', 'Unit USD', 'Line USD',
             'Customer Reference', 'Note']
-    with open(f'BOM-THT-lcsc{suffix}.csv', 'w', newline='', encoding='utf-8') as f:
+    with open(f'docs/BOM-THT-lcsc-order{suffix}.csv', 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=cols, lineterminator='\r\n')
         w.writeheader(); w.writerows(overview)
-    for name, lines in ((f'BOM-THT-lcsc-upload{suffix}.csv', card), (f'BOM-THT-sockets-lcsc-upload{suffix}.csv', sockets)):
+    for name, lines in ((f'docs/BOM-THT-lcsc{suffix}.csv', card), (f'docs/BOM-THT-lcsc-optional{suffix}.csv', sockets)):
         with open(name, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f, lineterminator='\r\n')
             w.writerow(['Quantity', 'LCSC Part Number', 'Manufacturer Part Number', 'Customer Reference'])

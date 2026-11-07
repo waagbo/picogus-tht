@@ -1,4 +1,0 @@
-(fp_lib_table
-  (version 7)
-  (lib (name "adapter")(type "KiCad")(uri "${KIPRJMOD}/adapter.pretty")(options "")(descr "TSSOP-to-DIP adapter footprints (PicoGUS v1.3.2)"))
-)

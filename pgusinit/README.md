@@ -21,6 +21,11 @@ Firmware files that comes with release:
   instead of a Pico (or Pico W). The RP2040 and RP2350 firmwares are not
   interchangeable; firmware from this release onwards refuses to `/flash` a
   file made for the other chip.
+* `picogus-v21.uf2` - for the PicoGUS v2.1 THT board (Waveshare Core2350B2
+  module, RP2350B), with the GUS sample RAM in the module's PSRAM. `/flash`
+  tells chips apart, not boards: it would accept `picogus-rp2350.uf2` on a
+  v2.1 card (or this file on a Pico 2 card), which then does not work, so
+  pick the file for the board.
 
 pgusinit must be run with firmware it is compatible with. If run with an
 incompatible firmware, pgusinit will complain about a protocol mismatch. One

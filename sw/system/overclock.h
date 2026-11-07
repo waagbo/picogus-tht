@@ -131,7 +131,7 @@ static inline void overclock_370mhz(void) {
 
 #if PSRAM_QMI
     // QMI PSRAM (v2.1): timing for the new clk_sys, and the write format that
-    // the SDK's flash functions reset (this also runs after settings saves)
+    // the SDK's flash functions reset (overclock_flash_write_done() redoes it after flash writes)
     psram_qmi_reconfigure();
 #endif
 }
