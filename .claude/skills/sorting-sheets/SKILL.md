@@ -62,7 +62,7 @@ tweaks used for the first v1.3 build) or from the minimal form:
 
 ```json
 {"order_csv": "order/DK_PRODUCTS_123.csv",
- "boards": [{"key": "THT", "title": "PicoGUS THT v1.3", "bom": "../hw-tht/BOM-THT.csv", "builds": 1}]}
+ "boards": [{"key": "THT", "title": "PicoGUS THT v1.3", "bom": "../hw-tht-v1.3/docs/BOM-THT.csv", "builds": 1}]}
 ```
 
 Relative paths are relative to the config file. All options are described in `${CLAUDE_SKILL_DIR}/references/config.md`.

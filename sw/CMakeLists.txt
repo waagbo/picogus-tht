@@ -39,13 +39,13 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "4.1.1"
+    VERSION "4.2.0"
     LANGUAGES C CXX ASM
 )
 
 # Full version string including pre-release suffix (if any).
 # CMake's project(VERSION) only allows numeric components, so the suffix lives here.
-set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}")
+set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.2")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -91,6 +91,9 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
+# Use the first Python on PATH rather than the newest version CMake knows about
+# (older CMakes won't look for newer Pythons)
+set(Python3_FIND_STRATEGY LOCATION)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # Global definitions across all targets

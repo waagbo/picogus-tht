@@ -86,8 +86,16 @@ using namespace std;
 #define GUS_RAM_SIZE            (1024u*128u)
 #endif
 
-// fixed panning table (avx)
-static uint16_t const pantablePDF[16] = { 0, 13, 26, 41, 57, 72, 94, 116, 141, 169, 203, 244, 297, 372, 500, 4095 };
+// Pan attenuation derived from nukeykt's LPC-GUS gf1.v:
+// The pan_atten ROM entries in gf1.v are 9-bit two's-complement negatives, so this subtracts
+// (0x200 - pan_atten) << 4 from the current volume and clamps to 0 on borrow:
+//
+//   pan:         0    1    2    3    4    5    6    7    8    9    a    b    c    d    e    f
+//   pan_atten: 000  1fe  1fc  1fa  1f8  1f7  1f4  1f2  1f0  1eb  1e7  1e2  1da  1d2  1c0    -
+//   result:      0   32   64   96  128  144  192  224  256  336  400  480  608  736 1024 mute
+//
+// pan == 0xf is muted directly in gf1.v, but we set 4096 here so it always clamps to 0 in UpdateVolumes().
+static uint16_t const pantableGF1[16] = { 0, 32, 64, 96, 128, 144, 192, 224, 256, 336, 400, 480, 608, 736, 1024, 4096 };
 static bool gus_fixed_table = false;
 
 static uint16_t const sample_rates[32] = {
@@ -171,8 +179,13 @@ struct GFGus {
     uint8_t SampControl;
     uint8_t mixControl;
     uint8_t ActiveChannels;
+    uint8_t ActiveChannelsUser; // unclamped value read back from reg 0x8E
     uint8_t gRegControl;
     uint32_t basefreq;
+    uint32_t frame;       // GF1 frame counter, the ramp rate divider clock (gf1.v ramp_cnt)
+    uint32_t frame_accum; // fixed 44.1 kHz mode: GF1 frames accumulate at sample_rates[] per output frame
+    uint32_t irq_relatch_frame; // frame of the last 8F ACK, no new voice IRQ latch until after this frame
+    bool frame_tick;      // a GF1 frame began on this output frame; ramps only advance on these
 
     struct GusTimer {
         uint32_t delay;
@@ -250,12 +263,16 @@ class GUSChannels {
 
         uint8_t PanPot;
         uint8_t channum;
+        uint32_t irq_hold_frame;
         uint32_t irqmask;
         uint32_t PanLeft;
         uint32_t PanRight;
         int32_t VolLeft;
         int32_t VolRight;
 
+        // Note that this cache is only invalidated in GUSReset, not by writes to DRAM. However
+        // in real world, even during streaming the head is much further away than tail than
+        // this tiny cache
         struct sample_cache_t {
             uint8_t data[32];
             // Signed so it can hold -1 for invalid address
@@ -284,6 +301,7 @@ class GUSChannels {
             PanLeft = 0;
             PanRight = 0;
             PanPot = 0x7;
+            irq_hold_frame = 0;
             sample_cache = {{0}, -1, -1};
         }
 
@@ -335,7 +353,19 @@ class GUSChannels {
             return addr_part;
         }
 
+        /* A voice playing >= 16 bytes per frame misses the cache on every frame, reading
+         * 16 bytes (and an occasional prefetch) only to use a few of those bytes. In this
+         * case it's best to just bypass the cache and fetch directly
+         * An interpolation pair straddling a 1KB PSRAM page still goes through the cache
+         * so we can prefetch across the page boundary. Not ideal but should amortize out */
         INLINE int16_t_pair LoadSamples8(const uint32_t addr/*memory address without fractional bits*/) const {
+            if ((WaveAdd >> WAVE_FRACT) >= 16u && (addr & 0x3ffu) != 0x3ffu) {
+                const uint32_t pair = psram_read16(&psram_spi, addr);
+                return (union int16_t_pair){ .data16 = {
+                    (int16_t)(uint16_t)(pair << 8),
+                    (int16_t)(uint16_t)(pair & 0xff00u)
+                }};
+            }
             const size_t addr_part = prime_cache(addr, 0xfu);
             return (union int16_t_pair){ .data16 = {
                 (int16_t)((uint16_t)sample_cache.data[addr_part] << 8),
@@ -345,6 +375,9 @@ class GUSChannels {
 
         INLINE int16_t_pair LoadSamples16(const uint32_t addr/*memory address without fractional bits*/) const {
             const uint32_t adjaddr = (addr & 0xC0000u/*256KB bank*/) | ((addr & 0x1FFFFu) << 1u/*16-bit sample value within bank*/);
+            if ((WaveAdd >> WAVE_FRACT) >= 8u && (adjaddr & 0x3feu) != 0x3feu) {
+                return (union int16_t_pair){ .data32 = psram_read32(&psram_spi, adjaddr) };
+            }
             const size_t addr_part = prime_cache(adjaddr, 0xeu);
             return (union int16_t_pair){ .data16 = {
                 (int16_t)*(uint16_t*)(sample_cache.data + addr_part),
@@ -468,26 +501,9 @@ class GUSChannels {
         }
         __force_inline void WriteRampRate(uint8_t val) {
             RampRate = val;
-            /* NTS: Note RAMP_FRACT == 10, shift = 10 - (3*(val>>6)).
-             * From the upper two bits, the possible shift values for 0, 1, 2, 3 are: 10, 7, 4, 1 */
-            RampAdd = ((uint32_t)(RampRate & 63)) << ((uint32_t)(RAMP_FRACT - (3*(val >> 6))));
-#if 0//SET TO 1 TO CHECK YOUR MATH!
-            double frameadd = (double)(RampRate & 63)/(double)(1 << (3*(val >> 6)));
-            double realadd = frameadd * (double)(1 << RAMP_FRACT);
-            uint32_t checkadd = (uint32_t)realadd;
-            signed long error = (signed long)checkadd - (signed long)RampAdd;
-
-            if (error < -1L || error > 1L)
-                LOG_MSG("RampAdd nonfixed error %ld (%lu != %lu)",error,(unsigned long)checkadd,(unsigned long)RampAdd);
-#endif
-            if (myGUS.fixed_44k_output) {
-#ifdef FORCE_28CH_27CH
-                if (myGUS.ActiveChannels == 28) {
-                    RampAdd = RampAdd * 22050ul / 22866ul;
-                }
-#endif
-                RampAdd = ((RampAdd * sample_rates[myGUS.ActiveChannels - 1]) + (44100 >> 1)) / 44100;
-            }
+            /* The GF1 adds the whole 6-bit increment to the 12-bit volume, but only on the frames based on
+             * the rate divider. */
+            RampAdd = ((uint32_t)(val & 63)) << RAMP_FRACT;
         }
         INLINE void WaveUpdate(void) {
             bool endcondition;
@@ -517,10 +533,11 @@ class GUSChannels {
                 }
 
                 if (endcondition) {
+                    // Hold gus_crit across the whole endcondition block, as its WaveCtrl RMW
+                    // can conflict with core 0's WriteWaveCtrl.
+                    critical_section_enter_blocking(&gus_crit);
                     if (WaveCtrl & WCTRL_IRQENABLED) /* generate an IRQ if requested */ {
-                        critical_section_enter_blocking(&gus_crit);
                         myGUS.WaveIRQ |= irqmask;
-                        critical_section_exit(&gus_crit);
                     }
 
                     if ((RampCtrl & WCTRL_16BIT/*roll over*/) && !(WaveCtrl & WCTRL_LOOP)) {
@@ -548,9 +565,10 @@ class GUSChannels {
                             WaveAddr = (WaveCtrl & WCTRL_DECREASING) ? WaveStart : WaveEnd;
                         }
                     }
+                    critical_section_exit(&gus_crit);
                 }
             }
-            else if (WaveCtrl & WCTRL_IRQENABLED) {
+            else if ((WaveCtrl & WCTRL_IRQENABLED) && (int32_t)(myGUS.frame - irq_hold_frame) > 0) {
                 /* Undocumented behavior observed on real GUS hardware: A stopped voice will still rapid-fire IRQs
                  * if IRQ enabled and current position <= start position OR current position >= end position */
                 if (WaveCtrl & WCTRL_DECREASING/*backwards (direction)*/)
@@ -573,40 +591,74 @@ class GUSChannels {
             VolLeft=scale_sample(vol16bit[templeft >> RAMP_FRACT], volume.gus, false);
             VolRight=scale_sample(vol16bit[tempright >> RAMP_FRACT], volume.gus, false);
         }
-        INLINE void RampUpdate(void) {
-            if (RampCtrl & 0x3) return; /* if the ramping is turned off, then don't change the ramp */
-
-            int32_t RampLeft;
+        /* gf1.v w368: the ramp rate divider compares the frame counter against the inverted voice
+         * number, selecting one frame in every 1/8/64/512 for rate 0/1/2/3:
+         *   rate 1: ~v[2:0] == cnt[2:0]
+         *   rate 2: ~v[4:0] == cnt[4:0] & cnt[5]
+         *   rate 3: ~v[4:0] == cnt[4:0] & cnt[8:5] == 0xf
+         * which is (cnt ^ ~v) & ((1 << 3*rate) - 1) == 0 since ~v's upper bits are all ones.
+         * On every other frame nothing happens to the ramp. */
+        __force_inline bool RampDividerFrame(void) const {
+            return ((myGUS.frame ^ ~(uint32_t)channum) & ((1u << (3 * (RampRate >> 6))) - 1)) == 0;
+        }
+        /* gf1.v: ramp_end_reach = (current + increment) > end (or (current - increment) < start)
+         * Returns the new volume in next. */
+        __force_inline bool RampEndReached(int32_t &next) const {
             if (RampCtrl & 0x40) {
-                RampVol-=RampAdd;
-                if ((int32_t)RampVol < (int32_t)0) RampVol=0;
-                RampLeft=(int32_t)RampStart-(int32_t)RampVol;
+                next = (int32_t)RampVol - (int32_t)RampAdd;
+                return next < (int32_t)RampStart;
             } else {
-                RampVol+=RampAdd;
-                if (RampVol > ((4096 << RAMP_FRACT)-1)) RampVol=((4096 << RAMP_FRACT)-1);
-                RampLeft=(int32_t)RampVol-(int32_t)RampEnd;
+                next = (int32_t)RampVol + (int32_t)RampAdd;
+                return next > (int32_t)RampEnd;
             }
-            if (RampLeft<0) {
+        }
+        INLINE void RampUpdate(void) {
+            int32_t next;
+            if (RampCtrl & 0x3) {
+                /* if the ramping is turned off, then don't change the ramp, but like a stopped voice,
+                 * a stopped ramp with IRQ enabled keeps re-arming its IRQ. Unlike the wave side this
+                 * only happens on divider frames. */
+                if (!(RampCtrl & 0x20)) return;
+                if (!RampDividerFrame()) return;
+                if ((int32_t)(myGUS.frame - irq_hold_frame) <= 0) return;
+                if (RampEndReached(next)) {
+                    critical_section_enter_blocking(&gus_crit);
+                    myGUS.RampIRQ |= irqmask;
+                    critical_section_exit(&gus_crit);
+                }
+                return;
+            }
+
+            if (!RampDividerFrame()) return;
+            if (!RampEndReached(next)) {
+                RampVol = (uint32_t)next;
                 UpdateVolumes();
                 return;
             }
+            // Hold gus_crit across this section as RampCtrl is RMWed here and can conflict with
+            // core 0's WriteRampCtrl
+            critical_section_enter_blocking(&gus_crit);
             /* Generate an IRQ if needed */
             if (RampCtrl & 0x20) {
-                critical_section_enter_blocking(&gus_crit);
                 myGUS.RampIRQ|=irqmask;
-                critical_section_exit(&gus_crit);
             }
             /* Check for looping */
             if (RampCtrl & 0x08) {
+                // RampLeft = amount of overshoot past the boundary */
+                int32_t RampLeft = (RampCtrl & 0x40) ? ((int32_t)RampStart - next) : (next - (int32_t)RampEnd);
                 /* Bi-directional looping */
                 if (RampCtrl & 0x10) RampCtrl^=0x40;
-                RampVol = (RampCtrl & 0x40) ? (uint32_t)((int32_t)RampEnd-(int32_t)RampLeft) : (uint32_t)((int32_t)RampStart+(int32_t)RampLeft);
+                RampVol = (RampCtrl & 0x40) ? (uint32_t)((int32_t)RampEnd - RampLeft) : (uint32_t)((int32_t)RampStart + RampLeft);
             } else {
+                /* a non-looping ramp stops before applying the increment that would make it cross
+                 * its boundary, so stop one step short of the end */
                 RampCtrl|=1;    //Stop the channel
-                RampVol = (RampCtrl & 0x40) ? RampStart : RampEnd;
+                critical_section_exit(&gus_crit);
+                return;
             }
             if ((int32_t)RampVol < (int32_t)0) RampVol=0;
             if (RampVol > ((4096 << RAMP_FRACT)-1)) RampVol=((4096 << RAMP_FRACT)-1);
+            critical_section_exit(&gus_crit);
             UpdateVolumes();
         }
 
@@ -634,7 +686,7 @@ class GUSChannels {
                 stream[0] += tmpsamp * VolLeft;
                 stream[1] += tmpsamp * VolRight;
                 WaveUpdate();
-                RampUpdate();
+                if (myGUS.frame_tick) RampUpdate();  // ramps advance per GF1 frame
             // }
         }
 #if 0
@@ -817,12 +869,17 @@ static void GUSReset(void) {
         // Stop DMA
         GUS_StopDMA();
 
-        // Reset
-        adlib_commandreg = 85;
+        // Reset, holding gus_crit as the render loop and timer callbacks can modify this
+        // state
+        critical_section_enter_blocking(&gus_crit);
         myGUS.IRQStatus = 0;
         myGUS.RampIRQ = 0;
         myGUS.WaveIRQ = 0;
         myGUS.IRQChan = 0;
+        myGUS.frame = 0;
+        myGUS.frame_accum = 0;
+        myGUS.frame_tick = false;
+        myGUS.irq_relatch_frame = 0;
 
         myGUS.timers[0].delay = 80;
         myGUS.timers[1].delay = 320;
@@ -843,10 +900,12 @@ static void GUSReset(void) {
         // myGUS.fixed_44k_output = false;
 
         myGUS.DMAControl = 0x00;
-        myGUS.mixControl = 0x0b;    // latches enabled by default LINEs disabled
+        // Start up with line out enabled and ready to go, unlike real GUS
+        myGUS.mixControl = 0x08;
         myGUS.TimerControl = 0x00;
         myGUS.SampControl = 0x00;
         myGUS.ActiveChannels = 14;
+        myGUS.ActiveChannelsUser = 14;
         myGUS.ActiveMask=0xffffffffU >> (32-myGUS.ActiveChannels);
         myGUS.basefreq = myGUS.fixed_44k_output ? 44100 : sample_rates[myGUS.ActiveChannels - 1];
 
@@ -855,15 +914,16 @@ static void GUSReset(void) {
 
         myGUS.dmaAddr = 0;
         myGUS.dmaInterval = 0;
-        myGUS.dmaIntervalOverride = 0;
         myGUS.dmaWaiting = false;
 
         myGUS.irqenabled = 0;
         myGUS.gRegControl = 0;
         myGUS.gDramAddr = 0;
         myGUS.gRegData = 0;
+        critical_section_exit(&gus_crit);
     }
 
+    critical_section_enter_blocking(&gus_crit);
     /* if the card was just put into reset, or the card WAS in reset, bits 1-2 are cleared */
     if ((GUS_reset_reg & 1) == 0 || (p_GUS_reset_reg & 1) == 0) {
         /* GUS classic observed behavior: resetting the card, or even coming out of reset, clears bits 1-2.
@@ -890,6 +950,7 @@ static void GUSReset(void) {
     }
 
     GUS_CheckIRQ();
+    critical_section_exit(&gus_crit);
 }
 
 __force_inline static uint8_t GUS_EffectiveIRQStatus(void) {
@@ -932,30 +993,37 @@ static INLINE void GUS_CheckIRQ(void) {
         }
 
         gus_prev_effective_irqstat = irqstat;
+    } else if (gus_prev_effective_irqstat != 0) {
+        // If latches are disabled and there's an IRQ, release it
+        PIC_DeActivateIRQ();
+        gus_prev_effective_irqstat = 0;
     }
 }
 
 // Inner version: caller must already hold gus_crit
 __force_inline static void CheckVoiceIrq_unlocked(void) {
     Bitu totalmask=(myGUS.RampIRQ|myGUS.WaveIRQ) & myGUS.ActiveMask;
-    if (!totalmask) {
+    // gf1.v: the GF1 has global latches for wave IRQ, ramp IRQ, and the responsible voice number.
+    // Once set they're only cleared by an 8F status read, even if the voice control write clears
+    // the voice's own IRQ pending bit. See the comments in the 8F status read handler for more
+    // background regarding irq_relatch_frame.
+    if (!totalmask || (myGUS.IRQStatus & 0x60) || (int32_t)(myGUS.frame - myGUS.irq_relatch_frame) <= 1) {
         GUS_CheckIRQ();
         return;
     }
 
-    if (myGUS.RampIRQ) myGUS.IRQStatus|=0x40;
-    if (myGUS.WaveIRQ) myGUS.IRQStatus|=0x20;
-    // mega hack
-    // PIC_DeActivateIRQ();
-    GUS_CheckIRQ();
+    uint32_t check;
     for (;;) {
-        uint32_t check=(1u << myGUS.IRQChan);
+        check=(1u << myGUS.IRQChan);
         if (totalmask & check) {
             break;
         }
         myGUS.IRQChan++;
         if (myGUS.IRQChan>=myGUS.ActiveChannels) myGUS.IRQChan=0;
     }
+    if (myGUS.RampIRQ & check) myGUS.IRQStatus|=0x40;
+    if (myGUS.WaveIRQ & check) myGUS.IRQStatus|=0x20;
+    GUS_CheckIRQ();
 }
 
 __force_inline static void CheckVoiceIrq(void) {
@@ -964,18 +1032,13 @@ __force_inline static void CheckVoiceIrq(void) {
     critical_section_exit(&gus_crit);
 }
 
-uint32_t CheckVoiceIrq_async(Bitu val) {
-    CheckVoiceIrq();
-    return 0;
-}
-
 __force_inline static uint16_t ExecuteReadRegister(void) {
     uint8_t tmpreg;
 //  LOG_MSG("Read global reg %x",myGUS.gRegSelect);
     switch (myGUS.gRegSelect) {
     case 0x8E:  // read active channel register
         // NTS: The GUS SDK documents the active channel count as bits 5-0, which is wrong. it's bits 4-0. bits 7-5 are always 1 on real hardware.
-        return ((uint16_t)(0xE0 | (myGUS.ActiveChannels - 1))) << 8;
+        return ((uint16_t)(0xE0 | (myGUS.ActiveChannelsUser - 1))) << 8;
     case 0x41: // Dma control register - read acknowledges DMA IRQ
         critical_section_enter_blocking(&gus_crit);
         tmpreg = myGUS.DMAControl & 0xbf;
@@ -1020,6 +1083,15 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         // 10 bit fractional wave address
         if (curchan) return (uint16_t)(curchan->WaveEnd >> 1);
         else return 0x0000;
+    case 0x86: // Channel volume ramp rate register
+        if (curchan) return (uint16_t)(curchan->RampRate << 8);
+        else return 0x0000;
+    case 0x87: // Channel volume ramp start register
+        if (curchan) return (uint16_t)((curchan->RampStart >> (4+RAMP_FRACT)) << 8);
+        else return 0x0000;
+    case 0x88: // Channel volume ramp end register
+        if (curchan) return (uint16_t)((curchan->RampEnd >> (4+RAMP_FRACT)) << 8);
+        else return 0x0000;
     case 0x89: // Channel volume register
         if (curchan) return (uint16_t)((curchan->RampVol >> RAMP_FRACT) << 4);
         else return 0x0000;
@@ -1042,12 +1114,23 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
         tmpreg=myGUS.IRQChan|0x20;
         uint32_t mask;
         mask=1u << myGUS.IRQChan;
-        if (!(myGUS.RampIRQ & mask)) tmpreg|=0x40;
-        if (!(myGUS.WaveIRQ & mask)) tmpreg|=0x80;
-        myGUS.RampIRQ&=~mask;
-        myGUS.WaveIRQ&=~mask;
+        // gf1.v: report and clear the global latched IRQ type(s), not the voice's current pending bits
+        if (myGUS.IRQStatus & 0x40) myGUS.RampIRQ &= ~mask; else tmpreg|=0x40;
+        if (myGUS.IRQStatus & 0x20) myGUS.WaveIRQ &= ~mask; else tmpreg|=0x80;
         myGUS.IRQStatus&=0x9f;
-        CheckVoiceIrq_unlocked();
+        // This is an approximation of the real GF1, where the 8F read clears the global wave/ramp
+        // IRQ latches, and re-latching does not happen until the voice service loop visits the ACKed
+        // voice. This re-triggers the IRQ but only after the delay introduced by the service loop.
+        // Without that delay, titles like Dope could occasionally miss the new IRQ and never ack
+        // it, hanging music playback.
+        // NOTE that a frame delay of 1 is an approximation of the service loop delay, which
+        // depending on which voice in the loop it's on, could be less than 1 frame.
+        if ((tmpreg & 0xc0) != 0xc0) {
+            guschan[myGUS.IRQChan]->irq_hold_frame = myGUS.frame + 1;
+            myGUS.irq_relatch_frame = myGUS.frame;
+            if (++myGUS.IRQChan >= myGUS.ActiveChannels) myGUS.IRQChan = 0;
+        }
+        GUS_CheckIRQ();
         critical_section_exit(&gus_crit);
         return (uint16_t)(tmpreg << 8);
     default:
@@ -1060,26 +1143,27 @@ __force_inline static uint16_t ExecuteReadRegister(void) {
 
 static uint32_t GUS_TimerEventHandler(Bitu val) {
     // putchar('-');
+    if (!myGUS.timers[val].running) {
+        // If the timer has been set to no longer run, stop the timer before IRQs can be raised
+        return 0;  // Stop timer
+    }
     critical_section_enter_blocking(&gus_crit);
     if (!myGUS.timers[val].masked) myGUS.timers[val].reached=true;
     if (myGUS.timers[val].raiseirq) {
         myGUS.IRQStatus|=0x4 << val;
         GUS_CheckIRQ();
     }
-    if (myGUS.timers[val].running) {
-        critical_section_exit(&gus_crit);
-        // putchar('.');
-        return myGUS.timers[val].delay;  // Keep timer running
-    }
     critical_section_exit(&gus_crit);
     // putchar('.');
-    return 0;  // Stop timer
+    return myGUS.timers[val].delay;  // Keep timer running
 }
 
  
 __force_inline static void ExecuteGlobRegister(void) {
     int i;
 //  if (myGUS.gRegSelect|1!=0x44) LOG_MSG("write global register %x with %x", myGUS.gRegSelect, myGUS.gRegData);
+    /* gf1.v:888: voice register writes (select < 0x40, including 0x0E) are dropped while the GF1 is held in reset */
+    if (myGUS.gRegSelect < 0x40 && !(GUS_reset_reg & 1)) return;
     switch(myGUS.gRegSelect) {
     case 0x0:  // Channel voice control register
         // TODO figure out what FillUp even does!!
@@ -1186,6 +1270,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         // gus_chan->FillUp();
         myGUS.gRegSelect = myGUS.gRegData>>8;       //JAZZ Jackrabbit seems to assume this?
         myGUS.ActiveChannels = 1+((myGUS.gRegData>>8) & 31); // NTS: The GUS SDK documents this field as bits 5-0, which is wrong, it's bits 4-0. 5-0 would imply 64 channels.
+        myGUS.ActiveChannelsUser = myGUS.ActiveChannels; // unclamped value for reads of 0x8E
 
         /* The GUS SDK claims that if a channel count less than 14 is written, then it caps to 14.
          * That's not true. Perhaps what the SDK is doing, but the actual hardware acts differently.
@@ -1223,7 +1308,7 @@ __force_inline static void ExecuteGlobRegister(void) {
         break;
     case 0x41:  // Dma control register
         critical_section_enter_blocking(&gus_crit);
-        myGUS.DMAControl &= ~0xFFu; // FIXME: Does writing DMA Control clear the DMA TC IRQ?
+        myGUS.DMAControl &= ~0xFFu; // keeps bit 8: writing DMA control does not clear the TC IRQ (gf1.v clears dram_dma_tc only on reset or a 0x41 read)
         myGUS.DMAControl |= (uint8_t)(myGUS.gRegData>>8);
         if (myGUS.DMAControl & 1) GUS_StartDMA();
         else GUS_StopDMA();
@@ -1252,11 +1337,11 @@ __force_inline static void ExecuteGlobRegister(void) {
         break;
     case 0x46:  // Timer 1 control
         myGUS.timers[0].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[0].delay = ((0x100 - myGUS.timers[0].value) * 80) - 5;
+        myGUS.timers[0].delay = (0x100 - myGUS.timers[0].value) * 80;
         break;
     case 0x47:  // Timer 2 control
         myGUS.timers[1].value = (uint8_t)(myGUS.gRegData>>8);
-        myGUS.timers[1].delay = ((0x100 - myGUS.timers[1].value) * 320) - 5;
+        myGUS.timers[1].delay = (0x100 - myGUS.timers[1].value) * 320;
         break;
     case 0x49:  // DMA sampling control register
         /*
@@ -1355,7 +1440,11 @@ __force_inline uint8_t read_gus(Bitu port) {
     case 0x107:
         if((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
-            return psram_read8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
+            // This peek on core 0 may happen while core 1 is writing to PSRAM asynchronously (for
+            // example, the GUSDK's gf1_delay() uses peeks, which may be called interleaved with DMA
+            // uploads). Use the cross core version of read8 so they don't stomp on each other.
+            // TODO: need to measure if we hold IOCHRDY for too long here
+            return psram_read8_xcore(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask);
 #else
             return GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask];
 #endif
@@ -1380,14 +1469,20 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     switch(port) {
     case 0x0:
         myGUS.gRegControl = 0;
+        critical_section_enter_blocking(&gus_crit);
         myGUS.mixControl = (uint8_t)val;
+        // Re-evaluate the IRQ line if IRQ latches are enabled or disabled
+        GUS_CheckIRQ();
+        critical_section_exit(&gus_crit);
         // return;
         break;
     case 0x8:
         adlib_commandreg = (uint8_t)val;
         break;
     case 0x9:
-//TODO adlib_commandreg should be 4 for this to work else it should just latch the value
+        // Only reach timer control logic when the last 2X8 index was 4 and bit 0 of register 0x45 is clear
+        // (gf1.v: cpu_write & CS1 & cpu_addr_9 & adlib_reg_sel_4[1] & ~timer_ctrl_b0)
+        if (adlib_commandreg != 4 || (myGUS.TimerControl & 0x01)) break;
         critical_section_enter_blocking(&gus_crit);
         if (val & 0x80) {
             myGUS.timers[0].reached=false;
@@ -1440,7 +1535,7 @@ __force_inline void write_gus(Bitu port, Bitu val) {
     case 0x107:
         if ((myGUS.gDramAddr & myGUS.gDramAddrMask) < myGUS.memsize) {
 #ifdef PSRAM
-            psram_write8(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
+            psram_write8_xcore(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val); // see 3X7 read
             // psram_write8_async(&psram_spi, myGUS.gDramAddr & myGUS.gDramAddrMask, (uint8_t)val);
 #else
             GUSRam[myGUS.gDramAddr & myGUS.gDramAddrMask] = (uint8_t)val;
@@ -1472,6 +1567,19 @@ GUS_DMA_EventHandler(Bitu val) {
         // puts("stopping");
         DEBUG_LOG_MSG("GUS DMA event: DMA control 'enable DMA' bit was reset, stopping DMA transfer events");
         GUS_DMA_Active = false;
+        return 0;
+    }
+
+    if (myGUS.DMAControl & 0x02 /* direction: read from GUS DRAM to host*/) {
+        // We don't support GUS->host transfers, so terminate it early with TC.
+        // Not doing so would get the PIO SM stuck
+        DEBUG_LOG_MSG("GUS DMA event: GUS->host DMA not supported, terminating transfer with TC");
+        critical_section_enter_blocking(&gus_crit);
+        myGUS.DMAControl |= 0x100u;
+        myGUS.IRQStatus |= 0x80;
+        GUS_StopDMA();
+        GUS_CheckIRQ();
+        critical_section_exit(&gus_crit);
         return 0;
     }
 
@@ -1538,6 +1646,7 @@ GUS_DMA_isr() {
             psram_write32_async(&psram_spi, myGUS.dmaAddr - dmaOffset, dma_data_union.data32);
         }
 #endif
+        myGUS.dmaAddr = (myGUS.dmaAddr + 1) & 0xFFFFFu; // wrap at 1MB
         critical_section_enter_blocking(&gus_crit);
         /* Raise the TC irq, and stop DMA */
         myGUS.DMAControl |= 0x100u; /* NTS: DOSBox SVN approach: Use bit 8 for DMA TC IRQ */
@@ -1546,9 +1655,17 @@ GUS_DMA_isr() {
         GUS_CheckIRQ();
         critical_section_exit(&gus_crit);
     } else {
-        ++myGUS.dmaAddr;
+        myGUS.dmaAddr = (myGUS.dmaAddr + 1) & 0xFFFFFu; // wrap at 1MB
         /* keep going */
-        PIC_AddEvent(&GUS_DMA_Event, myGUS.dmaInterval, 0);
+        if (myGUS.dmaInterval == 1 && !gpio_get(DACK_PIN)) {
+            // For a DMA interval of one, re-trigger DRQ immediately instead of round tripping
+            // through the alarm pool. This helps keep save two IRQs per DMA byte and prevent
+            // starving the audio sample IRQ. Typical DMA cycle time in single cycle mode is
+            // approximately 1.6us which is just about what ULTRAWRD says anyway.
+            GUS_DMA_EventHandler(0);
+        } else {
+            PIC_AddEvent(&GUS_DMA_Event, myGUS.dmaInterval, 0);
+        }
     }
 }
 irq_handler_t GUS_DMA_isr_pt = GUS_DMA_isr;
@@ -1561,6 +1678,7 @@ __force_inline void GUS_StopDMA() {
     // Setting GUS_DMA_Active to false will cancel the next DMA event if it happens
     GUS_DMA_Active = false;
     // Clear DMA enable bit (from Interwave Programmer's Guide: "The hardware resets this bit when the TC line is asserted.")
+    // Also verified in gf1.v, the dram_dma_en flop is cleared
     myGUS.DMAControl &= 0x1FEu;
 #ifdef POLLING_DMA
     next_event = 0;
@@ -1601,20 +1719,22 @@ __force_inline void GUS_StartDMA() {
     // 10:6 μs–7 μs
     // 11:13 μs–14 μs
     // From ULTRAWRD: it's 650KHz with a divisor...
+    // From LPC-GUS gf1.v dram_dma_tick: it's 1 transfer per DRAM refresh slot (one voice slot, ~1.6us) with a divisor.
+    // Note the "out of order" divisor. gf1.v agrees with it and reading ULTRAWRD closely agrees.
     if (myGUS.dmaIntervalOverride) {
         myGUS.dmaInterval = myGUS.dmaIntervalOverride;
     } else {
         switch ((myGUS.DMAControl >> 3u) & 3u) {
-        case 0b00:
+        case 0b00: // /1
             myGUS.dmaInterval = 1;
             break;
-        case 0b01:
-            myGUS.dmaInterval = 3;
-            break;
-        case 0b10:
+        case 0b01: // /4
             myGUS.dmaInterval = 6;
             break;
-        case 0b11:
+        case 0b10: // /2
+            myGUS.dmaInterval = 3;
+            break;
+        case 0b11: // /8
             myGUS.dmaInterval = 12;
             break;
         }
@@ -1628,6 +1748,22 @@ __force_inline void GUS_StartDMA() {
 }
 
 
+// Tick the GF1 frame counter. In normal mode one output frame is one GF1 frame. In fixed 44.1khz
+// mode the GF1 would be running at sample_rates[myGUS.ActiveChannels - 1], so accumulate that
+// against the output rate and only tick when a GF1 frame begins.
+static __force_inline void GUS_FrameTick(void) {
+    uint32_t gf1_rate = sample_rates[myGUS.ActiveChannels - 1];
+#ifdef FORCE_28CH_27CH
+    if (myGUS.ActiveChannels == 28) gf1_rate = 22050;
+#endif
+    myGUS.frame_accum += gf1_rate;
+    myGUS.frame_tick = myGUS.frame_accum >= myGUS.basefreq;
+    if (myGUS.frame_tick) {
+        myGUS.frame_accum -= myGUS.basefreq;
+        myGUS.frame++;
+    }
+}
+
 //extern uint32_t __scratch_x("my_sub_section") (GUS_CallBack)(Bitu max_len, int16_t* play_buffer) {  // did not compile/link multifw with this.. scratch?? check.
 extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
     static int32_t accum[2];
@@ -1640,6 +1776,7 @@ extern uint32_t GUS_CallBack(Bitu max_len, int16_t* play_buffer) {
         while (s < buffer_size) {
             accum[0] = accum[1] = 0;
             uint32_t cur_rate = myGUS.basefreq;
+            GUS_FrameTick();
             for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
                 guschan[c]->generateSample(accum);
             }
@@ -1735,10 +1872,15 @@ extern uint32_t GUS_sample_stereo(void) {
         return 0;
     }
     int32_t accum[2] = {0, 0};
+    GUS_FrameTick();
     for (Bitu c = 0; c < myGUS.ActiveChannels; ++c) {
         guschan[c]->generateSample(accum);
     }
     CheckVoiceIrq();
+    // If mixer line output is disabled, mute
+    if (myGUS.mixControl & 0x02) {
+        return 0;
+    }
     int16_t l = clamp16(accum[0]);
     int16_t r = clamp16(accum[1]);
     return ((uint32_t)(uint16_t)l) | ((uint32_t)(uint16_t)r << 16);
@@ -1747,12 +1889,10 @@ extern uint32_t GUS_sample_stereo(void) {
 // Generate logarithmic to linear volume conversion tables
 static void MakeTables(void) {
     int i;
-    double out = (double)(1 << 13);
-    for (i=4095;i>=0;i--) {
-        vol16bit[i]=(uint16_t)((int16_t)out);
-        out/=1.002709201;       /* 0.0235 dB Steps */
-        //Original amplification routine in the hardware
-        //vol16bit[i] = ((256 + i & 0xff) << VOL_SHIFT) / (1 << (24 - (i >> 8)));
+    // Fix original DOSBox "Original amplification routine in the hardware" code by fixing a precendence
+    // bug and shifting by 13 instead of VOL_SHIFT (14)
+    for (i=0;i<4096;i++) {
+        vol16bit[i] = ((256 + (i & 0xff)) << 13) / (1 << (24 - (i >> 8)));
     }
     /* FIX: DOSBox 0.74 had code here that produced a pantable which
      *      had nothing to do with actual panning control variables.
@@ -1772,9 +1912,9 @@ static void MakeTables(void) {
      *      mono. */
     if (gus_fixed_table) {
         for (i=0;i < 16;i++)
-            pantable[i] = pantablePDF[i] * 2048u;
+            pantable[i] = (uint32_t)pantableGF1[i] << RAMP_FRACT;
 
-        LOG_MSG("GUS: using accurate (fixed) pantable");
+        LOG_MSG("GUS: using GF1 pan ROM pantable");
     }
     else {
         for (i=0;i < 8;i++)
@@ -1904,9 +2044,9 @@ public:
 static GUS* test = NULL;
 void GUS_OnReset(void) {
     LOG_MSG("Allocating GUS emulation");
-    test = new GUS();
-
+    // Initialize gus_crit before the GUS constructor's reset takes it
     critical_section_init(&gus_crit);
+    test = new GUS();
 }
 
 void GUS_Setup() {
@@ -1915,9 +2055,11 @@ void GUS_Setup() {
         cfg = interp_default_config();
         // Linear interpolation setup
         interp_config_set_blend(&cfg, true);
+        interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 0, &cfg);
         cfg = interp_default_config();
-        interp_config_set_shift(&cfg, 1); // Shift WaveAddr by 1
+        // shift WaveAddr right by 2 so it is the top 8 of the WAVE_FRACT=10 fraction bits
+        interp_config_set_shift(&cfg, 2);
         interp_config_set_signed(&cfg, true);
         interp_set_config(interp0, 1, &cfg);
 #endif

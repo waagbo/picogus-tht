@@ -6,9 +6,8 @@
 	(descr "TSSOP-20 0.65 mm with hand-solder toes (to +-3.9 mm) and one 0.7 mm round test pad per pin: two staggered columns per side (x +-4.45 / +-5.1 mm), each pad straight out from its pin (odd pins inner column, even pins outer), numbered like the pin (same net); the board joins each pin to its pad with a straight 0.2 mm F.Cu track. PicoGUS THT v1.3.2.")
 	(tags "TSSOP test pad")
 	(property "Reference" "REF**"
-		(at 0.0125 4.575 180)
+		(at 0 -4.425 0)
 		(layer "F.SilkS")
-		(uuid "0b6f1fe8-0e73-4eec-bbe6-6dde90566773")
 		(effects
 			(font
 				(size 1 1)
@@ -17,9 +16,30 @@
 		)
 	)
 	(property "Value" "TSSOP-20_4.4x6.5mm_P0.65mm_HandSolder_TestPads"
-		(at 0 4.425 180)
+		(at 0 4.425 0)
 		(layer "F.Fab")
-		(uuid "5b1190ce-4595-42b7-aee8-8f336624d88a")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
 		(effects
 			(font
 				(size 1 1)
@@ -37,7 +57,6 @@
 			(type solid)
 		)
 		(layer "F.SilkS")
-		(uuid "49c1c75e-edfd-426c-8314-a19bed7ee88c")
 	)
 	(fp_line
 		(start -2.11 3.37)
@@ -47,67 +66,46 @@
 			(type solid)
 		)
 		(layer "F.SilkS")
-		(uuid "fac619f1-b054-4072-8310-b983d29420f8")
 	)
-	(fp_line
-		(start -5.7 -3.525)
-		(end 5.7 -3.525)
-		(stroke
-			(width 0.05)
-			(type solid)
+	(fp_text user "1"
+		(at -5.1 -3.975 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
 		)
-		(layer "F.CrtYd")
-		(uuid "c138fbfa-337b-4d4d-b479-7dbb62c62688")
 	)
-	(fp_line
-		(start -5.7 3.525)
-		(end -5.7 -3.525)
-		(stroke
-			(width 0.05)
-			(type solid)
+	(fp_text user "10"
+		(at -5.1 3.975 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
 		)
-		(layer "F.CrtYd")
-		(uuid "30b8cd0d-f5da-4ac7-8317-d675c413d502")
 	)
-	(fp_line
-		(start 5.7 -3.525)
-		(end 5.7 3.525)
-		(stroke
-			(width 0.05)
-			(type solid)
+	(fp_text user "11"
+		(at 5.1 3.975 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
 		)
-		(layer "F.CrtYd")
-		(uuid "0dfefa3c-679c-4591-97b2-2af9ec1a7424")
 	)
-	(fp_line
-		(start 5.7 3.525)
-		(end -5.7 3.525)
-		(stroke
-			(width 0.05)
-			(type solid)
+	(fp_text user "20"
+		(at 5.1 -3.975 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
 		)
-		(layer "F.CrtYd")
-		(uuid "f07d66ba-c1eb-4262-aa39-8a14c55d4323")
-	)
-	(fp_line
-		(start -2.2 -2.25)
-		(end -1.2 -3.25)
-		(stroke
-			(width 0.1)
-			(type solid)
-		)
-		(layer "F.Fab")
-		(uuid "5ea8e04d-7788-460d-9210-81a299ee7e65")
-	)
-	(fp_line
-		(start -2.2 3.25)
-		(end -2.2 -2.25)
-		(stroke
-			(width 0.1)
-			(type solid)
-		)
-		(layer "F.Fab")
-		(uuid "628241b5-84b5-4734-a227-1cf3efa0d811")
 	)
 	(fp_line
 		(start -1.2 -3.25)
@@ -117,7 +115,6 @@
 			(type solid)
 		)
 		(layer "F.Fab")
-		(uuid "d848d786-15d3-40bc-b25c-b0494a0cb928")
 	)
 	(fp_line
 		(start 2.2 -3.25)
@@ -127,7 +124,6 @@
 			(type solid)
 		)
 		(layer "F.Fab")
-		(uuid "99c4e10e-609e-4082-94ed-1cdf02cec881")
 	)
 	(fp_line
 		(start 2.2 3.25)
@@ -137,331 +133,300 @@
 			(type solid)
 		)
 		(layer "F.Fab")
-		(uuid "d549d0b4-76b5-4938-abfa-a547adb46091")
 	)
-	(fp_text user "1"
-		(at -5.1 -3.975 180)
-		(layer "F.SilkS")
-		(uuid "e4789cb4-a125-448e-8d44-0562e690d115")
-		(effects
-			(font
-				(size 0.8 0.8)
-				(thickness 0.12)
-			)
+	(fp_line
+		(start -2.2 3.25)
+		(end -2.2 -2.25)
+		(stroke
+			(width 0.1)
+			(type solid)
 		)
+		(layer "F.Fab")
 	)
-	(fp_text user "10"
-		(at -5.1 3.975 180)
-		(layer "F.SilkS")
-		(uuid "adc197e8-f5e3-48ae-bb78-dd49899715fa")
-		(effects
-			(font
-				(size 0.8 0.8)
-				(thickness 0.12)
-			)
+	(fp_line
+		(start -2.2 -2.25)
+		(end -1.2 -3.25)
+		(stroke
+			(width 0.1)
+			(type solid)
 		)
+		(layer "F.Fab")
 	)
-	(fp_text user "20"
-		(at 5.1 -3.975 180)
-		(layer "F.SilkS")
-		(uuid "1a80f992-e220-4be3-bf42-21f50863c0b4")
-		(effects
-			(font
-				(size 0.8 0.8)
-				(thickness 0.12)
-			)
+	(fp_line
+		(start -5.7 -3.525)
+		(end 5.7 -3.525)
+		(stroke
+			(width 0.05)
+			(type solid)
 		)
+		(layer "F.CrtYd")
 	)
-	(fp_text user "11"
-		(at 5.1 3.975 180)
-		(layer "F.SilkS")
-		(uuid "c90b6184-ff82-4282-af75-e2884e78e78d")
-		(effects
-			(font
-				(size 0.8 0.8)
-				(thickness 0.12)
-			)
+	(fp_line
+		(start 5.7 -3.525)
+		(end 5.7 3.525)
+		(stroke
+			(width 0.05)
+			(type solid)
 		)
+		(layer "F.CrtYd")
 	)
-	(pad "1" smd circle
-		(at -4.45 -2.925)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "db0217f3-61d6-4ba1-830d-0d8030a29404")
+	(fp_line
+		(start 5.7 3.525)
+		(end -5.7 3.525)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+	)
+	(fp_line
+		(start -5.7 3.525)
+		(end -5.7 -3.525)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
 	)
 	(pad "1" smd roundrect
 		(at -3.0125 -2.925)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "be4e3307-baea-49a0-8c74-8edf2fb98027")
-	)
-	(pad "2" smd circle
-		(at -5.1 -2.275)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "abc46bbe-df3b-4412-9e55-0dae2cff62ae")
 	)
 	(pad "2" smd roundrect
 		(at -3.0125 -2.275)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "f0e6ea53-db4a-40ee-9bcc-93e0863d906f")
-	)
-	(pad "3" smd circle
-		(at -4.45 -1.625)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "cf7cda7c-b662-4b68-a194-4fa015f6d0bc")
 	)
 	(pad "3" smd roundrect
 		(at -3.0125 -1.625)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "bb1dbdea-87a9-4e26-a02f-d52669a6104b")
-	)
-	(pad "4" smd circle
-		(at -5.1 -0.975)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "f2c15703-9ea7-4f5b-a611-4a468df9bb6f")
 	)
 	(pad "4" smd roundrect
 		(at -3.0125 -0.975)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "51a71334-652c-4b24-b2e8-5bfed440f528")
-	)
-	(pad "5" smd circle
-		(at -4.45 -0.325)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "ee6ca3db-a214-4338-9e3f-c0fa08c1477b")
 	)
 	(pad "5" smd roundrect
 		(at -3.0125 -0.325)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "00d815d8-b390-4e0f-a7d1-33b3a381fd32")
-	)
-	(pad "6" smd circle
-		(at -5.1 0.325)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "82054432-e897-47b5-b276-a9b2e6284f11")
 	)
 	(pad "6" smd roundrect
 		(at -3.0125 0.325)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "84a3ca14-3fbb-4e80-8323-9674fe9659b4")
-	)
-	(pad "7" smd circle
-		(at -4.45 0.975)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "dde2588f-bb81-489f-bafb-f16c4f4e4dd6")
 	)
 	(pad "7" smd roundrect
 		(at -3.0125 0.975)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "5d862ca6-a483-41e2-afa9-696db04074da")
-	)
-	(pad "8" smd circle
-		(at -5.1 1.625)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "48e6f070-5f44-482e-b2a4-73ba6b1a2bc5")
 	)
 	(pad "8" smd roundrect
 		(at -3.0125 1.625)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "b6ea0054-a840-44b9-af93-f974eab034ef")
-	)
-	(pad "9" smd circle
-		(at -4.45 2.275)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "cc92b0a2-e756-4560-a547-31e1baf04dcb")
 	)
 	(pad "9" smd roundrect
 		(at -3.0125 2.275)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "87c114ac-31ef-43c1-9970-544f5e96cdb2")
-	)
-	(pad "10" smd circle
-		(at -5.1 2.925)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "abd6748f-1673-4688-a5f5-b9fe527c2239")
 	)
 	(pad "10" smd roundrect
 		(at -3.0125 2.925)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "2800fb89-a748-4e5a-bd50-af792c6e6c2b")
 	)
 	(pad "11" smd roundrect
 		(at 3.0125 2.925)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "7ab760df-79ca-4531-bfe3-2110725c23e3")
-	)
-	(pad "11" smd circle
-		(at 5.1 2.925)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "ea6e6a32-34a8-43be-bce2-4e1599e343bc")
 	)
 	(pad "12" smd roundrect
 		(at 3.0125 2.275)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "a732eb8d-19de-4b54-8a03-1829472111f9")
-	)
-	(pad "12" smd circle
-		(at 4.45 2.275)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "d798f6bd-3100-4c7e-a985-44397848e97b")
 	)
 	(pad "13" smd roundrect
 		(at 3.0125 1.625)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "32c6d32f-30b1-47a8-b194-055372374a42")
-	)
-	(pad "13" smd circle
-		(at 5.1 1.625)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "36b005c4-b17d-4cbc-8904-bcb2fbb5be53")
 	)
 	(pad "14" smd roundrect
 		(at 3.0125 0.975)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "a7ea9326-c7a3-4af3-ac67-c5184e69560b")
-	)
-	(pad "14" smd circle
-		(at 4.45 0.975)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "1888330f-17ad-4a35-8fea-3c487e31bc41")
 	)
 	(pad "15" smd roundrect
 		(at 3.0125 0.325)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "91f78031-6df1-455b-836a-9476abcd6c2a")
-	)
-	(pad "15" smd circle
-		(at 5.1 0.325)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "c667447f-1d0f-46a2-b0df-7fa50cc4c5ad")
 	)
 	(pad "16" smd roundrect
 		(at 3.0125 -0.325)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "0ba8a620-c702-4b3b-8bac-f2960e35c7dd")
-	)
-	(pad "16" smd circle
-		(at 4.45 -0.325)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "3ee05365-fd0d-47da-ac5f-e9860e7e36a2")
 	)
 	(pad "17" smd roundrect
 		(at 3.0125 -0.975)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "07e65a0c-ece7-4a3c-bcd3-a7bf899faa87")
-	)
-	(pad "17" smd circle
-		(at 5.1 -0.975)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "3dbb9eb3-8f88-42ed-8e96-c49e0d43b580")
 	)
 	(pad "18" smd roundrect
 		(at 3.0125 -1.625)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "4cdf1c07-2607-4b3e-b0bb-4cfa20a1b4e9")
-	)
-	(pad "18" smd circle
-		(at 4.45 -1.625)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "98552733-1e8b-43b0-8823-6bb6d9d954b8")
 	)
 	(pad "19" smd roundrect
 		(at 3.0125 -2.275)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "3dabaef4-1c12-4bb3-9c97-a728547b437e")
-	)
-	(pad "19" smd circle
-		(at 5.1 -2.275)
-		(size 0.7 0.7)
-		(property pad_prop_testpoint)
-		(layers "F.Cu" "F.Mask")
-		(uuid "f11db2db-908f-4349-9e20-b3a9bfe2be27")
 	)
 	(pad "20" smd roundrect
 		(at 3.0125 -2.925)
 		(size 1.775 0.4)
 		(layers "F.Cu" "F.Mask" "F.Paste")
 		(roundrect_rratio 0.25)
-		(uuid "a4fefdd0-68a7-4078-94be-1cae004b1875")
+	)
+	(pad "1" smd circle
+		(at -4.45 -2.925)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
 	)
 	(pad "20" smd circle
 		(at 4.45 -2.925)
 		(size 0.7 0.7)
 		(property pad_prop_testpoint)
 		(layers "F.Cu" "F.Mask")
-		(uuid "efdfa9e6-cd00-432e-9235-dc8d4bc7ce5a")
+	)
+	(pad "2" smd circle
+		(at -5.1 -2.275)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "19" smd circle
+		(at 5.1 -2.275)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "3" smd circle
+		(at -4.45 -1.625)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "18" smd circle
+		(at 4.45 -1.625)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "4" smd circle
+		(at -5.1 -0.975)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "17" smd circle
+		(at 5.1 -0.975)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "5" smd circle
+		(at -4.45 -0.325)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "16" smd circle
+		(at 4.45 -0.325)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "6" smd circle
+		(at -5.1 0.325)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "15" smd circle
+		(at 5.1 0.325)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "7" smd circle
+		(at -4.45 0.975)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "14" smd circle
+		(at 4.45 0.975)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "8" smd circle
+		(at -5.1 1.625)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "13" smd circle
+		(at 5.1 1.625)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "9" smd circle
+		(at -4.45 2.275)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "12" smd circle
+		(at 4.45 2.275)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "10" smd circle
+		(at -5.1 2.925)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
+	)
+	(pad "11" smd circle
+		(at 5.1 2.925)
+		(size 0.7 0.7)
+		(property pad_prop_testpoint)
+		(layers "F.Cu" "F.Mask")
 	)
 	(embedded_fonts no)
 	(model "${KICAD10_3DMODEL_DIR}/Package_SO.3dshapes/TSSOP-20_4.4x6.5mm_P0.65mm.step"

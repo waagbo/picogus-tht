@@ -13,7 +13,7 @@ Keys starting with `_` (e.g. `_comment`) are ignored.
 
 ```json
 "boards": [
-  {"key": "THT", "title": "PicoGUS THT v1.3 (through-hole)", "bom": "../hw-tht/BOM-THT.csv", "builds": 2},
+  {"key": "THT", "title": "PicoGUS THT v1.3 (through-hole)", "bom": "../hw-tht-v1.3/docs/BOM-THT.csv", "builds": 2},
   {"key": "SMD", "title": "PicoGUS SMD v1.3", "bom": "../hw-smd/BOM-SMD.csv"}
 ]
 ```

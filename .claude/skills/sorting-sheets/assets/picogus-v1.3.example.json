@@ -1,8 +1,8 @@
 {
-  "_comment": "Example config: PicoGUS THT v1.3 + SMD v1.3 from one DigiKey order (the substitutions and tweaks used for the first v1.3 build). Paths are relative to the config file: copy it next to the order CSV and point the bom paths at the picogus repo checkout (hw-tht/BOM-THT.csv, hw-smd/BOM-SMD.csv).",
+  "_comment": "Example config: PicoGUS THT v1.3 + SMD v1.3 from one DigiKey order (the substitutions and tweaks used for the first v1.3 build). Paths are relative to the config file: copy it next to the order CSV and point the bom paths at the picogus repo checkout (hw-tht-v1.3/docs/BOM-THT.csv, hw-smd/BOM-SMD.csv).",
   "order_csv": "DK_PRODUCTS_123456789.csv",
   "boards": [
-    {"key": "THT", "title": "PicoGUS THT v1.3 (through-hole)", "bom": "../../../../hw-tht/BOM-THT.csv", "builds": 1},
+    {"key": "THT", "title": "PicoGUS THT v1.3 (through-hole)", "bom": "../../../../hw-tht-v1.3/docs/BOM-THT.csv", "builds": 1},
     {"key": "SMD", "title": "PicoGUS SMD v1.3", "bom": "../../../../hw-smd/BOM-SMD.csv", "builds": 1}
   ],
   "substitutions": [

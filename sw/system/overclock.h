@@ -68,6 +68,19 @@ static inline void overclock_set_flash_timing(void) {
 }
 #endif
 
+// Call right after flash_range_erase()/flash_range_program(), before anything reads flash or PSRAM
+// again. On RP2350 a flash write puts the QMI back to the bootrom's flash divider (123MHz at 370MHz)
+// and resets the QMI PSRAM's write format (v2.1); this puts both back. Nothing to do on RP2040, where
+// the SDK re-runs boot2 and so keeps PICO_FLASH_SPI_CLKDIV.
+static inline void overclock_flash_write_done(void) {
+#if !PICO_RP2040
+    overclock_set_flash_timing();
+#endif
+#if PSRAM_QMI
+    psram_qmi_reconfigure();
+#endif
+}
+
 // 370MHz PLL configuration:
 // 12MHz XOSC / 2 (REFDIV) = 6MHz reference
 // 6MHz * 185 (FBDIV) = 1110MHz VCO

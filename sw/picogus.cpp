@@ -160,8 +160,6 @@ static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint32_t cur_read = 0;
 static uint32_t cur_write = 0;
-static bool queueSaveSettings = false;
-static bool queueReboot = false;
 
 Settings settings;
 void processSettings(void);
@@ -212,6 +210,7 @@ __force_inline void select_picogus(uint8_t value) {
         break;
     case CMD_MPUDELAY: // MPU sysex delay
     case CMD_MPUFAKE: // MPU fake all notes off
+    case CMD_MPUWAIT: // MPU wait on busy status reads
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
         break;
@@ -277,7 +276,6 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_HWTYPE: // Hardware version
         break;
     case CMD_FLASH: // Firmware write mode
-        pico_firmware_start();
         break;
     default:
         control_active = false;
@@ -357,13 +355,19 @@ __force_inline void write_picogus_high(uint8_t value) {
     case CMD_MPUDELAY: // MPU SYSEX delay
         settings.MPU.delaySysex = value;
 #ifdef SOUND_MPU
-        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
         break;
     case CMD_MPUFAKE: // MPU fake all notes off
         settings.MPU.fakeAllNotesOff = value;
 #ifdef SOUND_MPU
-        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
+#endif
+        break;
+    case CMD_MPUWAIT: // MPU wait on busy status reads
+        settings.MPU.waitBusyStatus = value;
+#ifdef SOUND_MPU
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
@@ -510,7 +514,6 @@ __force_inline void write_picogus_high(uint8_t value) {
         DBG_PRINTF("requesting startup mode: %u\n", value);
         break;
     case CMD_SAVE:
-        queueSaveSettings = true;
         break;
     case CMD_REBOOT:
         watchdog_hw->scratch[3] = settings.startupMode;
@@ -595,6 +598,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.MPU.delaySysex;
     case CMD_MPUFAKE: // MPU fake all notes off
         return settings.MPU.fakeAllNotesOff;
+    case CMD_MPUWAIT: // MPU wait on busy status reads
+        return settings.MPU.waitBusyStatus;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
         return settings.SB.oplSpeedSensitive;
     case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
@@ -990,7 +995,6 @@ __force_inline void handle_iow(void) {
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
             // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
             MPU401_WriteData(iow_read & 0xFF, true);
-            gpio_xor_mask(LED_PIN);
             break;
         case 1:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
@@ -1010,6 +1014,12 @@ __force_inline void handle_iow(void) {
             control_active = true;
         } else if (control_active) {
             select_picogus(iow_read & 0xFF);
+            if (sel_reg == CMD_FLASH) {
+                // Release IOCHRDY then start (or finish) firmware programming
+                pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+                pico_firmware_start();
+                return;
+            }
         }
     } else if (port == DATA_PORT_LOW) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
@@ -1023,14 +1033,16 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         if (control_active) {
             write_picogus_high(iow_read & 0xFF);
+            if (sel_reg == CMD_SAVE) {
+                // Release IOCHRDY then save settings to flash
+                pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+                saveSettings(&settings);
+                return;
+            }
         }
     }
     // Fallthrough if no match, or for slow write, reset PIO
     pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-    if (queueSaveSettings) {
-        saveSettings(&settings);
-        queueSaveSettings = false;
-    }
 }
 
 __force_inline void handle_ior(void) {
@@ -1348,6 +1360,18 @@ int main()
         }
 #endif // TEST_PSRAM
     }
+#ifdef SOUND_GUS
+    // test_psram() leaves a 0..255 sawtooth in every byte. Real GF1 DRAM powers up mostly flat,
+    // and some games play through memory they never loaded: Star Control 2 plays effects
+    // backwards from base+len-1 down to start = end = base with its first sample at address 0,
+    // and the GF1 cannot stop at start 0 (gf1.v compares the wrapped 29-bit address against
+    // start, so "new < 0" never holds), so the voice runs on through 0xFFFFF and plays the top
+    // of DRAM. Clear the 1MB once so that plays silence instead of the test pattern.
+    DBG_PUTS("Clearing GUS DRAM...");
+    for (uint32_t addr = 0; addr < 1024u * 1024u; addr += 4) {
+        psram_write32(&psram_spi, addr, 0);
+    }
+#endif // SOUND_GUS
 #endif // PSRAM
 #endif // PSRAM_CORE0
 

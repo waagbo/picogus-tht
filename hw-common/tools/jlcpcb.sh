@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # JLCPCB fabrication (and assembly) files for a KiCad board, with kicad-cli (KiCad 10).
 #
-#   hw-common/tools/jlcpcb.sh hw-tht/PicoGUS-THT.kicad_pcb [OUT_DIR]
+#   hw-common/tools/jlcpcb.sh hw-tht-v1.3/PicoGUS-THT.kicad_pcb [OUT_DIR]
 #
 # Output (default OUT_DIR: <board dir>/build/jlcpcb):
 #   <name>-gerbers.zip     upload this to jlcpcb.com (gerbers + Excellon drill files)
@@ -10,7 +10,8 @@
 #   <name>-cpl-jlc.csv     JLCPCB placement list (Designator, Mid X, Mid Y, Layer, Rotation), SMD parts only
 #                          (plus SMD parts on nested dual footprints, *_Nested)
 #
-# The script stops when DRC finds errors; FORCE=1 exports anyway.
+# The script stops when DRC finds errors. ALLOW_DRC=type1,type2 (DRC report types such as
+# courtyards_overlap) lets those types through but still stops on any other; FORCE=1 exports anyway.
 set -euo pipefail
 
 pcb=$(realpath "$1")
@@ -25,19 +26,25 @@ echo "== DRC ($name)"
 if ! kicad-cli pcb drc --severity-error --schematic-parity --exit-code-violations \
         -o "$out/$name-drc.rpt" "$pcb" >/dev/null; then
     grep -E '^\*\* Found' "$out/$name-drc.rpt" || true
-    if [ "${FORCE:-0}" != 1 ]; then
-        echo "DRC errors: see $out/$name-drc.rpt (FORCE=1 to export anyway)" >&2
+    # violation types in the report, e.g. courtyards_overlap, unconnected_items
+    found=$(grep -oE '^\[[a-z_]+\]' "$out/$name-drc.rpt" | tr -d '[]' | sort -u | tr '\n' ' ')
+    other=""
+    for t in $found; do
+        case ",${ALLOW_DRC:-}," in *",$t,"*) ;; *) other="$other $t" ;; esac
+    done
+    if [ -n "${ALLOW_DRC:-}" ] && [ -z "$other" ]; then
+        echo "DRC errors are all of the accepted types ($ALLOW_DRC)"
+    elif [ "${FORCE:-0}" != 1 ]; then
+        echo "DRC errors:${other:- $found} - see $out/$name-drc.rpt (ALLOW_DRC=<types> or FORCE=1 to export anyway)" >&2
         exit 1
     fi
 fi
 grep -E '^\*\* Found' "$out/$name-drc.rpt" || true
 
 echo "== Gerbers"
-# inner copper layers of a multilayer board (In1.Cu,In2.Cu,...), from the board's layer table
-inner=$(grep -oE '^\s*\([0-9]+ "In[0-9]+\.Cu"' "$pcb" | grep -oE 'In[0-9]+\.Cu' | sort -V | sed 's/^/,/' | tr -d '\n')
 # JLCPCB: Protel extensions (default), no X2 attributes, silkscreen clipped by the mask openings
 kicad-cli pcb export gerbers -o "$out/gerbers" \
-    --layers F.Cu${inner},B.Cu,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts \
+    --layers F.Cu,B.Cu,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts \
     --exclude-value --subtract-soldermask --no-x2 --no-netlist --check-zones "$pcb" >/dev/null
 
 echo "== Drill"

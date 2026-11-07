@@ -20,14 +20,12 @@
 
 #include "flash_settings.h"
 #include "../include/pg_debug.h"
-#include "overclock.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/clocks.h"
-#include "pico/stdlib.h"
-#if PSRAM_QMI
 #include "pico/multicore.h"
-#endif
+#include "pico/stdlib.h"
+#include "overclock.h"
 
 static const Settings defaultSettings = {
     .magic = SETTINGS_MAGIC,
@@ -53,7 +51,8 @@ static const Settings defaultSettings = {
     .MPU = {
         .basePort = 0x330,
         .delaySysex = false,
-        .fakeAllNotesOff = false
+        .fakeAllNotesOff = false,
+        .waitBusyStatus = false
     },
     .CMS = {
         .basePort = 0x220
@@ -205,32 +204,30 @@ void saveSettings(const Settings* settings)
     static_assert(sizeof(Settings) < FLASH_PAGE_SIZE, "Settings struct doesn't fit inside one flash page");
     memcpy(data, settings, sizeof(Settings));
     DBG_PRINTF("doing settings save: ");
-    // No need for flash_safe_execute or stop second core, since it will not touch flash
-    // If the 2nd core will ever touch flash, reconsider this approach!
+    // Pause the 2nd core while flash is busy if it reads flash. Currently only emu8950's TLL table uses flashdata
+    // so firmwares with that enabled register core 1 as a lockout victim.
 #if PSRAM_QMI
-    // ...except for the QMI PSRAM (PicoGUS v2.1): core 1 (GUS audio, ISA DMA) reads and
-    // writes it through the QMI, which is not usable while the flash is written, so hold
-    // core 1 until the flash and the PSRAM setup are back
-    const bool hold_core1 = multicore_lockout_victim_is_initialized(1);
-    if (hold_core1) {
+    // PicoGUS v2.1: GUS core 1 (audio, ISA DMA) also registers, as it reads and writes the QMI PSRAM, which is
+    // not usable while the flash is written. Wait for it however long it takes: running on would hit the PSRAM.
+    const bool locked_out = multicore_lockout_ready();
+    if (locked_out) {
         multicore_lockout_start_blocking();
     }
+#else
+    // Time out rather than hang core 0 if core 1 doesn't respond
+    const bool locked_out = multicore_lockout_ready() && multicore_lockout_start_timeout_us(1000);
 #endif
-    // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
-    set_sys_clock_khz(240000, true);
 
     DBG_PUTCHAR('/');
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(SETTINGS_SECTOR, FLASH_SECTOR_SIZE);    // last sector
     DBG_PUTCHAR('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
+    overclock_flash_write_done();
     restore_interrupts(ints);
-    overclock_370mhz();
-#if PSRAM_QMI
-    if (hold_core1) {
+    if (locked_out) {
         multicore_lockout_end_blocking();
     }
-#endif
     DBG_PRINTF("settings saved");
 }
 

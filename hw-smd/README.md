@@ -1,7 +1,7 @@
 # PicoGUS SMD v1.3.0 – based on PicoGUS v1.2
 
 Board revision **v1.3.0 (SMD)**: the PicoGUS **v1.2** SMD card with the additions made for the
-through-hole board in [`hw-tht/`](../hw-tht/README.md):
+through-hole board v1.3.0 (the current through-hole board, v1.3.2, is in [`hw-tht-v1.3/`](../hw-tht-v1.3/README.md)):
 
 * **Waveblaster (wavetable) daughterboard header** J9, with MIDI and /RESET drive
 * **Analogue WT volume** (RV1) and an **NE5532 op-amp mixer** that sums the PCM audio (unity gain) and the WT

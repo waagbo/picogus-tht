@@ -108,6 +108,18 @@ __force_inline static void psram_write8_async(psram_spi_inst_t *spi, uint32_t ad
     spi->base[addr] = val;
 }
 
+// rp2040-psram's cross-core variants (DRAM peek/poke from core 0 while core 1
+// writes asynchronously): here every access is a single load or store through
+// the QMI, which serialises the two cores, and the "async" writes above are
+// already complete when they return, so these are the plain accesses
+__force_inline static uint8_t psram_read8_xcore(psram_spi_inst_t *spi, uint32_t addr) {
+    return spi->base[addr];
+}
+
+__force_inline static void psram_write8_xcore(psram_spi_inst_t *spi, uint32_t addr, uint8_t val) {
+    spi->base[addr] = val;
+}
+
 __force_inline static void psram_write16(psram_spi_inst_t *spi, uint32_t addr, uint16_t val) {
     memcpy((void *)(spi->base + addr), &val, sizeof(val));
 }
