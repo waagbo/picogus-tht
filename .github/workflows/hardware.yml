@@ -19,17 +19,20 @@ jobs:
         include:
           # THT v1.3: the 12 accepted courtyard overlaps in the logic column are DRC errors in its rules
           # (see hw-tht-v1.3/README.md, Layout status); any other DRC error still fails the job
+          # cpl: all lists the through-hole parts in the placement file too, so JLCPCB can solder them
           - board: hw-tht-v1.3/PicoGUS-THT
             key: tht
             allow_drc: courtyards_overlap
+            cpl: all
           - board: hw-smd/PicoGUS-SMD
             key: smd
             allow_drc: ''
+            cpl: smd
     steps:
       - uses: actions/checkout@v4
 
       - name: DRC + gerbers, drill, assembly BOM/CPL
-        run: ALLOW_DRC='${{ matrix.allow_drc }}' hw-common/tools/jlcpcb.sh ${{ matrix.board }}.kicad_pcb out
+        run: ALLOW_DRC='${{ matrix.allow_drc }}' CPL='${{ matrix.cpl }}' hw-common/tools/jlcpcb.sh ${{ matrix.board }}.kicad_pcb out
 
       - name: Upload
         if: always()

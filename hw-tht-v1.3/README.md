@@ -860,7 +860,7 @@ C2905423 is a female header, not the Pico. C2935925 is DEALON, not Amphenol. C69
 ## JLCPCB files
 
 ```
-ALLOW_DRC=courtyards_overlap hw-common/tools/jlcpcb.sh hw-tht-v1.3/PicoGUS-THT.kicad_pcb   # -> hw-tht-v1.3/build/jlcpcb/
+CPL=all ALLOW_DRC=courtyards_overlap hw-common/tools/jlcpcb.sh hw-tht-v1.3/PicoGUS-THT.kicad_pcb   # -> hw-tht-v1.3/build/jlcpcb/
 ```
 
 The script stops if DRC (including the schematic-parity check) finds errors. On this board DRC finds only the 12
@@ -871,14 +871,21 @@ run the script): outline to x 218.29 (102.0 mm), 422 vias, 756 plated holes. It 
 
 * `PicoGUS-THT-gerbers.zip`: upload this to jlcpcb.com. It holds the Gerbers (Protel extensions, no X2)
   and the Excellon drill files (PTH and NPTH separate, mm).
-* `PicoGUS-THT-bom-jlc.csv` and `PicoGUS-THT-cpl-jlc.csv`: the BOM and placement files for JLCPCB assembly. The
-  placement file has the SMD parts only, all on Top: **U3 and U4 (90°), U8 (90°), U9 (180°) and U12 (0°)**.
-  The rotations are KiCad's, with no JLCPCB offset table; a correction worked out for v1.3.1's U8 (−90°) does not
-  carry over. The TSSOPs' test pads are part of their footprints, so JLCPCB can place U3/U4/U9 too.
+* `PicoGUS-THT-bom-jlc.csv` and `PicoGUS-THT-cpl-jlc.csv`: the BOM and placement files for JLCPCB assembly, with
+  **every part** (39 BOM lines, 85 placements), so JLCPCB can solder the through-hole parts too; for an SMD-only
+  order, deselect the through-hole lines in JLCPCB's BOM step. The SMD parts are all on Top: **U3 and U4 (90°),
+  U8 (90°), U9 (180°) and U12 (0°)**. The rotations are KiCad's, with no JLCPCB offset table; check each part in
+  JLCPCB's placement preview (a correction worked out for v1.3.1's U8, −90°, does not carry over). The TSSOPs' test
+  pads are part of their footprints, so JLCPCB can place U3/U4/U9 too.
+  The BOM takes the LCSC part from each part's LCSC field (any note after the number dropped; the MPN column then
+  names the part LCSC sells). `PicoGUS-THT-jlcpcb-parts.csv` overrides J6/J7 for assembly with a 1x2 header
+  (Amphenol 77311-118-02LF, C599036): the hand build cuts them from the 1x40 strip instead. JLCPCB fits no jumper
+  shunts: add the four by hand. On 2026-11-07 LCSC had none of U2, U5 and U10, and the Pico (C7203002) is only in
+  JLCPCB's assembly library.
 * `PicoGUS-THT-drc.rpt`: the DRC report.
 
 The **Hardware (JLCPCB files)** GitHub Action runs the same script for this board (with
-`ALLOW_DRC=courtyards_overlap`) and for `hw-smd`.
+`ALLOW_DRC=courtyards_overlap` and `CPL=all`) and for `hw-smd`.
 
 Order options: 2 layers, **1.6 mm**, **Surface finish: ENIG** and **Gold fingers: Yes** with the **45° finger
 chamfer** (the ISA edge connector). ENIG is required: JLCPCB only gold-plates the fingers on ENIG boards; with HASL
