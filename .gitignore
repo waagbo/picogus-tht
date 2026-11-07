@@ -12,3 +12,4 @@ fp-info-cache
 
 firmware.ld
 flash_firmware.h
+__pycache__/
