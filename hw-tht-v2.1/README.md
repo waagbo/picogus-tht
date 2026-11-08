@@ -185,14 +185,6 @@ Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link
 * **Heights**: on 8.5 mm female headers the module's top is at about 12 mm. It sits right of the Waveblaster
   daughterboard area, so that is fine. Soldered straight into the card on its male headers, the module sits at about
   3.5 mm.
-* **Low-profile socket (alternative)**: four **Mill-Max 803-43-016-10-002000** (2x8 double-row low-profile socket,
-  4.2 mm tall and 5.08 mm wide per Mill-Max's series 800–803 drawing; 0.56 mm tails; the contacts take 0.64 mm square
-  pins, so the same male headers fit) put the module top at about 7.7 mm. On LCSC: XFCN PM254V-12-08-H355-U (C55595101,
-  3.55 mm, 5.0 mm wide; about 7 mm) or Hong Cheng HC-PM254-5.0H-2x8PZ (C27985236, 5 mm, gold). The footprint takes
-  them as is (1.0 mm holes, 2x8 blocks; a part wider than 5.08 mm would not fit, as the two rings are side by side).
-  Fit the male headers short end down into a low-profile socket so their plastic sits on it, long end up through the
-  module. The same idea as PicoPew's low-profile headers (hackaday.io project 167369, log 170776). The `(U12 socket)`
-  line of `docs/BOM-THT.csv` lists them as alternatives; the upload files keep the Sullins part.
 
 ## GPIO map (= v2.0)
 
