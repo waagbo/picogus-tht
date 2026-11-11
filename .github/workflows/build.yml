@@ -188,6 +188,10 @@ jobs:
           version: "2.0-64"
           tag: "2025-07-01-Build"
 
+      # pgdfs.sys, the PGDFS driver for Windows NT 4.0/2000/XP (the DDK headers come with it)
+      - name: Install MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-i686
+
       - name: Build DOS tools
         shell: bash
         run: sw/scripts/build_release.sh --no-firmware --require-dos-tools --out $OUTPUT_DIR
@@ -198,7 +202,8 @@ jobs:
           name: ${{ matrix.flavor }}-dos-tools
           path: ${{env.OUTPUT_DIR}}
 
-    # Unit tests that run on the build machine: every sw/<module>/test with a Makefile
+    # Unit tests that run on the build machine: every sw/<module>/test with a Makefile,
+    # and the client core of the PGDFS Windows drivers (pgdfs/win/test)
     host-tests:
       runs-on: ubuntu-22.04
       needs: plan
@@ -241,7 +246,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          for makefile in sw/*/test/Makefile; do
+          for makefile in sw/*/test/Makefile pgdfs/win/test/Makefile; do
             echo "::group::$(dirname "$makefile")"
             make -C "$(dirname "$makefile")" test
             echo "::endgroup::"

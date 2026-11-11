@@ -20,7 +20,7 @@ The features at present:
 | Feature | Branch | What it adds |
 |---|---|---|
 | `cdrom-subdir` | `sw/cdrom-subdir` | CD images in a `CDROM` folder on the USB drive |
-| `pgdfs` | `sw/pgdfs` | the USB drive as a DOS drive letter; `PGDFS.EXE` and `DFSDIAG.EXE` |
+| `pgdfs` | `sw/pgdfs` | the USB drive as a DOS and Windows drive letter; `PGDFS.EXE`, `DFSDIAG.EXE`, `win9x/PGDFS.VXD`, `winnt/pgdfs.sys` |
 | `webserver` | `sw/webserver` | a web page on Pico W and Pico 2 W boards; firmware images `picogusw.uf2` and `pg2350w.uf2` |
 
 Each has its notes in `sw/experimental/<feature>.md` on its branch, and in

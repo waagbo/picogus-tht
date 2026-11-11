@@ -11,6 +11,12 @@ The DOS side is derived from Mateusz Viste's EtherDFS client; the requests
 and answers are the EtherDFS "EDF5" protocol, moved over the ISA bus instead
 of Ethernet. The protocol is documented in `sw/dfs/PROTOCOL.md`.
 
+For Windows there are drivers of their own: `PGDFS.VXD` for Windows 95, 98
+and ME and `pgdfs.sys` for Windows NT 4.0, 2000 and XP, with long file names
+and the USB drive handled as a removable drive. See
+[win/README.md](win/README.md) (`PGDFSWIN.md` in the release files). Use one
+or the other: do not load `PGDFS.EXE` under a Windows that has its driver.
+
 ## Requirements
 
 * A PicoGUS with firmware that includes PGDFS (protocol version 5 or later).
@@ -140,7 +146,8 @@ output together with the diagnostics block.
   index 0. exFAT is not supported yet.
 * DOS 3.x is not supported yet (PGDFS uses the DOS 4+ layout of the SDA and
   the CDS, like EtherDFS).
-* Windows 9x (DOS box and Windows itself) is untested.
+* Under Windows use the Windows drivers (see above). `PGDFS.EXE` loaded
+  before Windows 9x is untested there.
 * No file locking across programs: LOCK/UNLOCK calls are accepted and
   ignored, as in EtherDFS.
 * Free space and total size are reported capped just under 2 GB, which is
@@ -159,9 +166,9 @@ there on the stick itself (plug it into any other system) and they can be
 seen from DOS with `DFSDIAG /LDIR [path]`, which lists a directory with
 each entry's long name next to its short one, using the PGDFS `LONGNAME`
 subfunction (the card answers with the entry's long name, or its short name
-when it has none; see `sw/dfs/PROTOCOL.md`). Windows 9x is untested; being
-served through the DOS redirector interface, the drive would show short
-names there as well.
+when it has none; see `sw/dfs/PROTOCOL.md`). The Windows drivers use the
+same request to give Windows the long names, and create files with long
+names.
 
 Names cross the wire in the OEM code page of the card's FatFs, a firmware
 build option: `FATFS_CODE_PAGE` (CMake, default 437 = US). Build the

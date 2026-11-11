@@ -15,6 +15,9 @@
 #
 # Firmware needs PICO_SDK_PATH, PICO_EXTRAS_PATH and arm-none-eabi-gcc; the DOS
 # tools need OpenWatcom (wcl on PATH and WATCOM set) and are skipped without it.
+# A tree with the PGDFS Windows drivers (pgdfs/win) builds them with the DOS
+# tools: PGDFS.VXD with OpenWatcom as well, pgdfs.sys with the MinGW-w64 cross
+# compiler (i686-w64-mingw32-gcc), which is skipped with a notice without it.
 #
 # CI runs this script once per flavor, chip and kind of file, in a checkout
 # that already has the experimental features merged in for the experimental
@@ -104,6 +107,29 @@ build_dos_tools() {
     done
 }
 
+# The PGDFS drivers for Windows, where the tree has them: win9x/ (PGDFS.VXD and
+# its INF) and winnt/ (pgdfs.sys, its INF and a .reg file for Windows NT 4.0)
+build_windows_drivers() {
+    local tree="$1" out="$2" win="$1/pgdfs/win"
+    [[ -f "${win}/Makefile" ]] || return 0
+    command -v wcl >/dev/null && [[ -n "${WATCOM:-}" ]] || return 0   # as the DOS tools
+    echo "==== Windows drivers: pgdfs/win"
+    make -C "${win}/9x" INCLUDE="${WATCOM}/h" > "${BUILD_ROOT}/win-9x.log" 2>&1 \
+        || { echo "build failed, see ${BUILD_ROOT}/win-9x.log" >&2; tail -30 "${BUILD_ROOT}/win-9x.log" >&2; return 1; }
+    mkdir -p "${out}/win9x"
+    cp "${win}/9x/pgdfs.vxd" "${win}/9x/pgdfs9x.inf" "${out}/win9x/"
+    echo "  win9x/pgdfs.vxd"
+    if command -v i686-w64-mingw32-gcc >/dev/null; then
+        make -C "${win}/nt" > "${BUILD_ROOT}/win-nt.log" 2>&1 \
+            || { echo "build failed, see ${BUILD_ROOT}/win-nt.log" >&2; tail -30 "${BUILD_ROOT}/win-nt.log" >&2; return 1; }
+        mkdir -p "${out}/winnt"
+        cp "${win}/nt/pgdfs.sys" "${win}/nt/pgdfsnt.inf" "${win}/nt/pgdfsnt.reg" "${out}/winnt/"
+        echo "  winnt/pgdfs.sys"
+    else
+        echo "  winnt/pgdfs.sys skipped: no MinGW-w64 cross compiler (i686-w64-mingw32-gcc)"
+    fi
+}
+
 # The documentation that goes with the files: README.md is pgusinit's, as in
 # every release so far; other DOS tools get <TOOL>.md. A source tree that
 # carries experimental features (sw/experimental/<feature>.md) also gets
@@ -115,6 +141,7 @@ collect_docs() {
         [[ "${dir}" != pgusinit && -f "${tree}/${dir}/README.md" ]] || continue
         cp "${tree}/${dir}/README.md" "${out}/$(echo "${dir}" | tr '[:lower:]' '[:upper:]').md"
     done
+    [[ -f "${tree}/pgdfs/win/README.md" ]] && cp "${tree}/pgdfs/win/README.md" "${out}/PGDFSWIN.md"
     for file in "${!FEATURE_DOCS[@]}"; do
         [[ -f "${tree}/${file}" ]] && cp "${tree}/${file}" "${out}/${FEATURE_DOCS[$file]}"
     done
@@ -161,6 +188,7 @@ build_set() {
     fi
     if [[ ${DOS_TOOLS} -eq 1 ]]; then
         build_dos_tools "${tree}" "${out}"
+        build_windows_drivers "${tree}" "${out}"
         collect_docs "${tree}" "${out}"
     fi
 }

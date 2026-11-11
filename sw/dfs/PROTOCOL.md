@@ -7,6 +7,17 @@ the TSR packs the call into a request frame, ships it to the card, and unpacks
 the answer. The card serves the request from its own FatFs volume, so DOS never
 sees sectors and the volume format is the card's business.
 
+The Windows drivers (`pgdfs/win`: `PGDFS.VXD` for Windows 9x, `pgdfs.sys` for
+Windows NT) speak the same protocol through a shared client core
+(`pgdfs/win/common/pgc.c`), with paths that may carry long names (FatFs
+resolves them) and `LONGNAME` for the listings. The card serves one client at a
+time: its open-file ids and search ids are not tagged with an owner, so only
+one of these drivers, or the DOS tools, may use the card at once. The Windows
+drivers rely on that to notice a USB drive that was replugged between two
+requests: the card forgets its open files when it unmounts the drive, so a
+request on an id the driver still holds answers 6 (invalid handle), or an OPEN
+answers with an id the driver believes to be in use.
+
 The request/answer payloads are the EtherDFS "EDF5" protocol (Mateusz Viste,
 MIT), which is also what PicoMEM's PMDFS speaks. Only the framing and the
 transport differ: EtherDFS uses raw Ethernet frames, PMDFS a shared-RAM window,
