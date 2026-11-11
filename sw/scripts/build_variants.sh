@@ -11,6 +11,11 @@
 # The RP2350 release files have names that stay intact on a DOS (8.3) file
 # system; the other variants get an "-rp2350" or "-v21" suffix.
 #
+# Some variants only exist in source trees that carry an experimental feature
+# (sw/experimental/README.md), and are part of the default set there: "web",
+# all modes with the web server for Pico W and Pico 2 W boards, is
+# picogusw.uf2 and pg2350w.uf2.
+#
 # Needs PICO_SDK_PATH and PICO_EXTRAS_PATH like a normal SDK build. Uses
 # CMake's default generator unless CMAKE_GENERATOR is set (e.g. to Ninja);
 # stick to one generator, as the SDK's picotool fetch directory is shared.
@@ -38,7 +43,7 @@ declare -A PROJECT_TYPES=(
     [sb-ym3812]=SB_YM3812          [sb-emu8950]=SB_EMU8950
     [adlib]=ADLIB                  [adlib-ymf262]=ADLIB_YMF262
     [adlib-ym3812]=ADLIB_YM3812    [adlib-dbopl3]=ADLIB_DBOPL3
-    [analyzer]=ANALYZER
+    [analyzer]=ANALYZER            [web]=MULTIFW
 )
 declare -A OUTPUTS=(
     [multifw]=picogus              [ne2k]=pg-ne2k
@@ -48,12 +53,16 @@ declare -A OUTPUTS=(
     [sb-ym3812]=pg-sb-ym3812       [sb-emu8950]=pg-sb-emu8950
     [adlib]=pg-adlib               [adlib-ymf262]=pg-adlib-ymf262
     [adlib-ym3812]=pg-adlib-ym3812 [adlib-dbopl3]=pg-adlib-dbopl3
-    [analyzer]=pg-analyzer
+    [analyzer]=pg-analyzer         [web]=picogus
 )
-# RP2350 names of the release files; everything else is <RP2040 name>-rp2350
-# or <RP2040 name>-v21
+# Names of the collected files where they differ from what the build calls
+# them; otherwise RP2350 files are <RP2040 name>-rp2350 or <RP2040 name>-v21
+declare -A RP2040_OUTPUTS=(
+    [web]=picogusw
+)
 declare -A RP2350_OUTPUTS=(
     [multifw]=pgus2350             [ne2k]=ne2k2350
+    [web]=pg2350w
 )
 declare -A PICOGUS21_OUTPUTS=(
     [multifw]=core2350
@@ -63,7 +72,20 @@ DEFAULT_VARIANTS=(multifw ne2k)
 # The ISA analyzer is written for RP2350 boards (QMI registers, optional QMI PSRAM)
 declare -A CHIP_ONLY=([analyzer]=rp2350)
 # Variants that need a Pico W or Pico 2 W (CYW43), so not for the v2.1 board
-declare -A NEEDS_PICOW=([ne2k]=1)
+declare -A NEEDS_PICOW=([ne2k]=1 [web]=1)
+# Variants built for the Pico W / Pico 2 W board rather than the platform's
+# default board (the NE2K project type picks that board by itself)
+declare -A PICOW_BOARDS=([rp2040]=picow_fast [rp2350]=pico2w_fast)
+declare -A ON_PICOW_BOARD=([web]=1)
+# Variants of experimental features: the directory under sw/ the feature adds.
+# They join the lists above in source trees that have it.
+declare -A FEATURE_DIR=([web]=web)
+for variant in "${!FEATURE_DIR[@]}"; do
+    if [[ -d "${SW_DIR}/${FEATURE_DIR[$variant]}" ]]; then
+        ALL_VARIANTS+=("${variant}")
+        DEFAULT_VARIANTS+=("${variant}")
+    fi
+done
 
 # Name of the collected UF2 for a chip/variant pair
 dest_name() {
@@ -71,14 +93,16 @@ dest_name() {
     case "${chip}" in
         rp2350) echo "${RP2350_OUTPUTS[$variant]:-${OUTPUTS[$variant]}-rp2350}.uf2" ;;
         picogus21) echo "${PICOGUS21_OUTPUTS[$variant]:-${OUTPUTS[$variant]}-v21}.uf2" ;;
-        *) echo "${OUTPUTS[$variant]}.uf2" ;;
+        *) echo "${RP2040_OUTPUTS[$variant]:-${OUTPUTS[$variant]}}.uf2" ;;
     esac
 }
 
 # Why a variant isn't built for a platform, or nothing if it is
 skip_reason() {
     local chip="$1" variant="$2" only="${CHIP_ONLY[$2]:-}"
-    if [[ "${chip}" == picogus21 ]]; then
+    if [[ -n "${FEATURE_DIR[$variant]:-}" && ! -d "${SW_DIR}/${FEATURE_DIR[$variant]}" ]]; then
+        echo "this source tree has no sw/${FEATURE_DIR[$variant]}"
+    elif [[ "${chip}" == picogus21 ]]; then
         if [[ -n "${NEEDS_PICOW[$variant]:-}" ]]; then
             echo "needs a Pico W"
         elif [[ -n "${only}" ]]; then
@@ -173,6 +197,8 @@ build_one() {
     if [[ "${chip}" == picogus21 ]]; then
         platform=rp2350
         board_args=(-DPICO_BOARD=picogus21)
+    elif [[ -n "${ON_PICOW_BOARD[$variant]:-}" ]]; then
+        board_args=(-DPICO_BOARD="${PICOW_BOARDS[$chip]}")
     fi
 
     echo "==== ${chip} ${variant} (PROJECT_TYPE=${PROJECT_TYPES[$variant]}) -> ${dest_name}"

@@ -143,12 +143,14 @@ collect_docs() {
 }
 
 # build_set <source tree> <output dir> <build dir>
+# The firmware images are build_variants.sh's default set: all modes and
+# NE2000, plus what the tree's experimental features add
 build_set() {
     local tree="$1" out="$2" build="$3"
     mkdir -p "${out}" "${build}"
     if [[ ${FIRMWARE} -eq 1 ]]; then
         "${tree}/sw/scripts/build_variants.sh" --platform "${PLATFORM}" --out "${out}" --build-dir "${build}" \
-            ${VARIANT_ARGS[@]+"${VARIANT_ARGS[@]}"} multifw ne2k
+            ${VARIANT_ARGS[@]+"${VARIANT_ARGS[@]}"}
     fi
     if [[ ${DOS_TOOLS} -eq 1 ]]; then
         build_dos_tools "${tree}" "${out}"
