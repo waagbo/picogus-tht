@@ -8,12 +8,23 @@ files, next to the mainline ones:
 |---|---|---|
 | Source | the branch being built | the same commit with every feature branch merged in |
 | Files | `binaries/` | `binaries/experimental/` |
-| Firmware version | `v4.2.0` | `v4.2.0+cdrom-subdir+pgdfs` (lists the features) |
+| Firmware version | `v4.2.0` | `v4.2.0+cdrom-subdir+pgdfs+webserver` (lists the features) |
 
 Both flavors contain the same set of files: the firmware images for RP2040,
-RP2350 and PicoGUS v2.1, and the DOS programs. Experimental features may change `pgusinit.exe`
-and the control protocol and may add DOS programs of their own, so use the
-files of one flavor together.
+RP2350 and PicoGUS v2.1, and the DOS programs. Experimental features may
+change `pgusinit.exe` and the control protocol and may add DOS programs and
+firmware images of their own, so use the files of one flavor together.
+
+The features at present:
+
+| Feature | Branch | What it adds |
+|---|---|---|
+| `cdrom-subdir` | `sw/cdrom-subdir` | CD images in a `CDROM` folder on the USB drive |
+| `pgdfs` | `sw/pgdfs` | the USB drive as a DOS drive letter; `PGUSDFS.EXE` and `DFSDIAG.EXE` |
+| `webserver` | `sw/webserver` | a web page on Pico W and Pico 2 W boards; firmware images `picogusw.uf2` and `pg2350w.uf2` |
+
+Each has its notes in `sw/experimental/<feature>.md` on its branch, and in
+`EXPERIMENTAL.md` of the experimental set.
 
 ## The feature branches
 
@@ -23,7 +34,10 @@ flavor. To add a feature, add its branch there; to drop one, remove its line.
 A feature branch
 
 - is based on (and regularly merged with) the mainline branch, so that it
-  merges cleanly on top of it and alongside the other features;
+  merges cleanly on top of it and alongside the other features. Features
+  often add to the same places (a mode's main loop, the control port
+  handlers, a README section); where two of them add lines at the very same
+  spot git can't combine them, so one of the two moves its lines a little;
 - describes itself in `sw/experimental/<feature>.md`, a file only that branch
   has. Its first line is a `# Title`, the rest is the feature's change notes.
   This file is what marks a source tree as carrying the feature: the build
