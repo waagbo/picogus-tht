@@ -15,8 +15,11 @@ on:
 #   mainline      the commit as it is
 #   experimental  the commit with the experimental feature branches listed in
 #                 sw/experimental/branches.txt merged in
-# Each flavor ends up as one artifact, picogus-mainline and
-# picogus-experimental, and a version tag attaches both to a draft release.
+# Each flavor ends up as one artifact, picogus-mainline-<commit> and
+# picogus-experimental-<commit> (the short commit hash tells the downloads of
+# different builds apart). A version tag builds a release: the artifacts are
+# then picogus-mainline and picogus-experimental, and both are attached to a
+# draft release as picogus-v<version>.zip and picogus-v<version>-experimental.zip.
 # The experimental flavor is left out when that list is empty, when the
 # repository variable PICOGUS_EXPERIMENTAL is "false", or when a manual run
 # turns it off. A failure in the experimental flavor (a feature branch that no
@@ -28,6 +31,7 @@ jobs:
       outputs:
         flavors: ${{ steps.plan.outputs.flavors }}
         experimental: ${{ steps.plan.outputs.experimental }}
+        bundle_suffix: ${{ steps.plan.outputs.bundle_suffix }}
       steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -37,6 +41,9 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          # The commit being built: for a pull request its head, not the merge commit GitHub makes
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          RELEASE: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
           INPUT_EXPERIMENTAL: ${{ inputs.experimental }}
           VAR_EXPERIMENTAL: ${{ vars.PICOGUS_EXPERIMENTAL }}
         run: |
@@ -56,6 +63,12 @@ jobs:
           fi
           echo "flavors=$FLAVORS" >> "$GITHUB_OUTPUT"
           echo "experimental=$EXPERIMENTAL" >> "$GITHUB_OUTPUT"
+          # Bundles of builds that are not a release carry the short commit hash in their name
+          if [[ "$RELEASE" == "true" ]]; then
+            echo "bundle_suffix=" >> "$GITHUB_OUTPUT"
+          else
+            echo "bundle_suffix=-${COMMIT::7}" >> "$GITHUB_OUTPUT"
+          fi
 
     build-firmware:
       runs-on: ubuntu-22.04
@@ -247,7 +260,7 @@ jobs:
       - name: Upload bundle
         uses: actions/upload-artifact@v7
         with:
-          name: picogus-${{ matrix.flavor }}
+          name: picogus-${{ matrix.flavor }}${{ needs.plan.outputs.bundle_suffix }}
           path: ${{env.STAGING_DIR}}
 
     create-release:
