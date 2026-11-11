@@ -387,10 +387,11 @@ int pgc_probe(pgc_card *c) {
   c->port = port;
   c->maxpl = (maxlen < PGC_MAX_PAYLOAD) ? maxlen : PGC_MAX_PAYLOAD;
   c->probed = 1;
-  /* a request left BUSY by someone else finishes first; then start clean */
+  /* a request left BUSY by someone else finishes first; then start clean
+   * (but give up at once if the card does not answer: Windows is starting) */
   check_medium(c);
   if (c->present) {
-    for (id = 1; id <= PGC_SLOTS; id++) {
+    for (id = 1; id <= PGC_SLOTS && c->timeouts == 0; id++) {
       put16(payload(c), id);
       (void)request(c, AL_CLSFIL, 2, 0);
     }
@@ -514,10 +515,6 @@ int pgc_delete(pgc_card *c, const char *path) {
     if (*p == '?' || *p == '*') return PGC_ENOFILE;   /* the card would take it as a mask */
   }
   return path_request(c, AL_DELETE, path, 0);
-}
-
-int pgc_delete_mask(pgc_card *c, const char *pathmask) {
-  return path_request(c, AL_DELETE, pathmask, 0);
 }
 
 int pgc_rename(pgc_card *c, const char *from, const char *to) {

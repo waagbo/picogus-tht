@@ -200,7 +200,9 @@ struct ioreq {
 #define ACCESS_WRITEONLY    0x0001
 #define ACCESS_READWRITE    0x0002
 #define ACCESS_EXECUTE      0x0003
-#define ACTION_MASK         0xFF
+#define ACTION_EXISTS_OPEN    0x01  /* bits of the open action; ir_options has */
+#define ACTION_TRUNCATE       0x02  /* other open flags (no-inherit, 80h) too  */
+#define ACTION_NEXISTS_CREATE 0x10
 #define ACTION_OPENED       1
 #define ACTION_CREATED      2
 #define ACTION_REPLACED     3

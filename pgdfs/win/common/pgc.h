@@ -237,8 +237,6 @@ int      pgc_setattr(pgc_card *c, const char *path, uint8_t attr);
 int      pgc_mkdir(pgc_card *c, const char *path);
 int      pgc_rmdir(pgc_card *c, const char *path);
 int      pgc_delete(pgc_card *c, const char *path);     /* one file, no wildcards */
-/* every file of a directory whose 8.3 name matches a DOS pattern: "\\DIR\\*.TMP" */
-int      pgc_delete_mask(pgc_card *c, const char *pathmask);
 int      pgc_rename(pgc_card *c, const char *from, const char *to);
 /* the long name of the last component of an 8.3 path */
 int      pgc_longname(pgc_card *c, const char *path, char *name, uint16_t max);
