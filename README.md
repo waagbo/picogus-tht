@@ -22,7 +22,16 @@ The designs still have some TSSOP SMD chips as they do not have THT equivalents,
 
 This version is an extension of the PicoGUS 1.2 design while implementing the *wavetable header* with manual volume control from the *hw-hand386* branch. Together with the addition of a full size USB-A connector accessible from the computers backside this card is now a real competitor to the v2.0 SMD design.
 
-In addition, the THT boards have also been slightly resized to optimize for component placement and JCLPCB-pricing. Progress wise, the initial design idea has been built and tested. The release version v1.3.2 is still pending build/test.
+In addition, the THT boards have also been slightly resized to optimize for component placement and JCLPCB-pricing.
+The v1.3.2 is currently under quality assurance. The following features have been tested and verified.
+* [x] Card Assembly ➔ Minor adjustments to DigiKey BOM.
+* [x] Flash, boot and detect card ➔ OK (v4.2.0-beta2).
+* [x] Audio Playback ➔ OK (v4.2.0-beta2, SB Mode).
+* [x] Wavetable MIDI Playback  ➔ OK (WavetablePi)
+* [ ] External MIDI Playback
+* [ ] USB-A Connector
+
+The release version v1.3.2 is still pending build/test.
 
 Assembly should be *EASY to MEDIUM* with the appropriate quality tools and consumables and a good project for beginners that want a little more challenge. Here is a list of recommended supplies with some personal recommendations:
 * [Low Temperature Solder Paste](https://www.digikey.com/en/products/detail/chip-quik-inc/NC191LTA10/13531404) for easy soldering of SMD components.
