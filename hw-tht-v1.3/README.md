@@ -721,7 +721,7 @@ C22 = 10 µF bipolar · RV1A = 10k log (CW end from C22, CCW end to GND, wiper t
   (about unity gain for both sources; PCM was −0.4 dB). On a board built that way, swap R10/R11/R19/R20 to
   20k (and C30/C31 to 47 pF; leaving 100 pF costs only ~0.2 dB more at 20 kHz) to get the extra WT gain. Raising the feedback instead
   of lowering R12/R13 keeps the daughterboard's load as before: about 4.8 kΩ at RV1 max (RV1 ∥ R12 ∥ R14).
-* **RV1** (dual-gang 10 k audio taper, right angle: Bourns PTD902-2020K-A103, or the Alps RK097 the footprint was drawn for) sets the Waveblaster
+* **RV1** (dual-gang 10 k audio taper, right angle, 15 mm flat shaft: Bourns PTD902-2015F-A103, or the Alps RK097 the footprint was drawn for) sets the Waveblaster
   level. Its shaft goes through the ISA bracket between the MIDI and line-out jacks. The signal is on the
   CW-end terminals (3/6) and GND is on the CCW end (1/4), so the level rises clockwise. The 10 k summing
   resistor loads the wiper only a little, because a log pot's wiper is near the GND end for most of its travel.
@@ -849,9 +849,9 @@ python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT-sockets.csv docs/BOM-THT-
   the front. Solder them before the through-hole parts, the TSSOPs first; then check each pin against its neighbours
   on the test pads (a bridge shows as a short between two pads) and ring each test pad through to the part it
   connects to.
-* **DigiKey BOM cost**: about 560 kr excl. MVA for one board at digikey.no's single-piece prices of 2026-11-07
+* **DigiKey BOM cost**: about 563 kr excl. MVA for one board at digikey.no's single-piece prices of 2026-11-07
   (parts only, no PCB, no shipping; price breaks lower it a little). The PCM5102A-Q1 is 60 kr of that: with the
-  PCM5100A the board is about 524 kr. The optional machined socket set was ~80 kr on rev B, plus ~21 kr for the
+  PCM5100A the board is about 528 kr. The optional machined socket set was ~80 kr on rev B, plus ~21 kr for the
   Pico sockets.
 * **Ceramic capacitors must have 5.0 mm (or 5.08 mm) lead pitch.** 2.5 mm parts don't fit (e.g. TDK FG1x, Vishay K…L2).
 
@@ -920,12 +920,12 @@ location", move it to B.Silkscreen first, or JLCPCB prints the placeholder text 
 6. **Fine-pitch soldering.** U3, U4 and U9 are 0.65 mm-pitch TSSOPs soldered to the card. The hand-solder land
    pattern leaves room for an iron, and every pin has a test pad, but it needs flux, a fine tip and a magnifier.
    Check for bridges on the test pads before fitting the through-hole parts around them.
-7. **RV1.** The BOM uses the Bourns PTD902-2020K-A103 (24 kr; DigiKey had 426 in October, and on 2026-11-07 its
-   page showed no stock figure and suggested the Alps RK09712200HA instead). It has the same 2.5 mm pin grid and
-   M7 bushing as the Alps RK097 the footprint was drawn for; test-fit one in the bracket before a large order.
-   LCSC doesn't list it, so the LCSC column keeps the Alps RK09712200HA (C470545, 158 in stock); the same pot
-   with a 15 mm shaft, RK09712200MC (C444934, 572 in stock), is about half the price if a knob fits on 5 mm
-   less shaft. Alps North America has published a discontinuation notice that covers parts of the RK097 range.
+7. **RV1.** The pot has a **15 mm flat (D) shaft**, so one knob fits both BOM lines: DigiKey's Bourns
+   PTD902-2015F-A103 (27.42 kr) and LCSC's Alps RK09712200MC (C444934, $1.69; DigiKey does not sell it). The
+   Bourns has the same 2.5 mm pin grid and M7 bushing as the Alps RK097 the footprint was drawn for; test-fit
+   one with its knob in the bracket before a large order. The 20 mm versions (Bourns PTD902-2020K-A103, knurled,
+   the earlier BOM part; Alps RK09712200HA, flat, 44.66 kr at DigiKey) also fit if a knob needs more shaft. Alps
+   North America has published a discontinuation notice that covers parts of the RK097 range.
 8. **ISA bracket.** No stock bracket fits: the tabs must be 1.70 mm longer than a Keystone 9202's, and no bracket
    made for v1.2, v1.3.0, v1.3.1 or the routed v1.3.2 layout fits. Cut the four openings in the
    [Bracket](#bracket) table (and counterbore the J5/J8 holes).
