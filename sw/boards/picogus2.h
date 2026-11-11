@@ -1,5 +1,8 @@
 // Board config file for PicoGUS 2.0, also compatible with the Pi Pico 
 
+// The below line isn't just a comment - it's a directive to the Pico SDK cmake system
+// pico_cmake_set PICO_PLATFORM = rp2040
+
 #ifndef _BOARDS_PICOGUS2_H
 #define _BOARDS_PICOGUS2_H
 

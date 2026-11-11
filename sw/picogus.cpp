@@ -23,10 +23,10 @@
 #include "hardware/adc.h"
 #include "hardware/pio.h"
 #include "hardware/irq.h"
-#include "hardware/regs/vreg_and_chip_reset.h"
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
 
+#include "system/platform.h"
 #include "system/overclock.h"
 #include "system/pico_reflash.h"
 #include "system/flash_settings.h"
@@ -40,7 +40,7 @@
 board_type_t BOARD_TYPE;
 
 #ifdef PSRAM
-#include "psram_spi.h"
+#include "system/psram.h"
 psram_spi_inst_t psram_spi;
 psram_spi_inst_t* async_spi_inst;
 #endif
@@ -160,8 +160,6 @@ static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint32_t cur_read = 0;
 static uint32_t cur_write = 0;
-static bool queueSaveSettings = false;
-static bool queueReboot = false;
 
 Settings settings;
 void processSettings(void);
@@ -176,7 +174,7 @@ static void wtvol_from_mixer(uint8_t volume) {
 #define IOW_PIO_SM 0
 #define IOR_PIO_SM 1
 
-const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
+const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING PICOGUS_FW_STRING_SUFFIX;
 
 static uint8_t basePort_low;
 static uint8_t mouseSensitivity_low;
@@ -212,6 +210,7 @@ __force_inline void select_picogus(uint8_t value) {
         break;
     case CMD_MPUDELAY: // MPU sysex delay
     case CMD_MPUFAKE: // MPU fake all notes off
+    case CMD_MPUWAIT: // MPU wait on busy status reads
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
         break;
@@ -275,9 +274,9 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_DEFAULTS: // Select reset to defaults register
         break;
     case CMD_HWTYPE: // Hardware version
+    case CMD_CHIPTYPE: // Microcontroller type
         break;
     case CMD_FLASH: // Firmware write mode
-        pico_firmware_start();
         break;
     default:
         control_active = false;
@@ -357,13 +356,19 @@ __force_inline void write_picogus_high(uint8_t value) {
     case CMD_MPUDELAY: // MPU SYSEX delay
         settings.MPU.delaySysex = value;
 #ifdef SOUND_MPU
-        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
         break;
     case CMD_MPUFAKE: // MPU fake all notes off
         settings.MPU.fakeAllNotesOff = value;
 #ifdef SOUND_MPU
-        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
+#endif
+        break;
+    case CMD_MPUWAIT: // MPU wait on busy status reads
+        settings.MPU.waitBusyStatus = value;
+#ifdef SOUND_MPU
+        MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
         break;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
@@ -513,7 +518,6 @@ __force_inline void write_picogus_high(uint8_t value) {
         DBG_PRINTF("requesting startup mode: %u\n", value);
         break;
     case CMD_SAVE:
-        queueSaveSettings = true;
         break;
     case CMD_REBOOT:
         watchdog_hw->scratch[3] = settings.startupMode;
@@ -598,6 +602,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.MPU.delaySysex;
     case CMD_MPUFAKE: // MPU fake all notes off
         return settings.MPU.fakeAllNotesOff;
+    case CMD_MPUWAIT: // MPU wait on busy status reads
+        return settings.MPU.waitBusyStatus;
     case CMD_OPLWAIT: // Adlib speed sensitive fix
         return settings.SB.oplSpeedSensitive;
     case CMD_MOUSEPORT:  // USB Mouse port (0 - disabled)
@@ -684,6 +690,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.Volume.psgVol;
     case CMD_HWTYPE: // Hardware version
         return BOARD_TYPE;
+    case CMD_CHIPTYPE: // Microcontroller type
+        return PICOGUS_CHIP_TYPE;
     case CMD_FLASH:
         // Get status of firmware write
         return pico_firmware_getStatus();
@@ -995,7 +1003,6 @@ __force_inline void handle_iow(void) {
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
             // printf("MPU IOW: port: %x value: %x\n", port, iow_read & 0xFF);
             MPU401_WriteData(iow_read & 0xFF, true);
-            gpio_xor_mask(LED_PIN);
             break;
         case 1:
             pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
@@ -1015,6 +1022,12 @@ __force_inline void handle_iow(void) {
             control_active = true;
         } else if (control_active) {
             select_picogus(iow_read & 0xFF);
+            if (sel_reg == CMD_FLASH) {
+                // Release IOCHRDY then start (or finish) firmware programming
+                pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+                pico_firmware_start();
+                return;
+            }
         }
     } else if (port == DATA_PORT_LOW) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_END);
@@ -1028,14 +1041,16 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         if (control_active) {
             write_picogus_high(iow_read & 0xFF);
+            if (sel_reg == CMD_SAVE) {
+                // Release IOCHRDY then save settings to flash
+                pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+                saveSettings(&settings);
+                return;
+            }
         }
     }
     // Fallthrough if no match, or for slow write, reset PIO
     pio_sm_put(pio0, IOW_PIO_SM, IO_END);
-    if (queueSaveSettings) {
-        saveSettings(&settings);
-        queueSaveSettings = false;
-    }
 }
 
 __force_inline void handle_ior(void) {
@@ -1234,19 +1249,29 @@ int main()
     stdio_init_all();
 #endif
     DBG_PUTS(firmware_string);
-    io_rw_32 *reset_reason = (io_rw_32 *) (VREG_AND_CHIP_RESET_BASE + VREG_AND_CHIP_RESET_CHIP_RESET_OFFSET);
-    if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
+    io_rw_32 *reset_reason = &PLATFORM_CHIP_RESET_REG;
+    if (*reset_reason & PLATFORM_CHIP_RESET_HAD_POWER_ON_BITS) {
         DBG_PUTS("I was reset due to power on reset or brownout detection.");
-    } else if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_RUN_BITS) {
+    } else if (*reset_reason & PLATFORM_CHIP_RESET_HAD_RUN_PIN_BITS) {
         DBG_PUTS("I was reset due to the RUN pin (either manually or due to ISA RESET signal)");
-    } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_PSM_RESTART_BITS) {
+    } else if(*reset_reason & PLATFORM_CHIP_RESET_HAD_DEBUG_BITS) {
         DBG_PUTS("I was reset due the debug port");
     }
 
     // Load settings from flash
     loadSettings(&settings, true /* migrate */);
-    hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
+    platform_disable_xip_cache();
 
+#if PICOGUS_BOARD_V21
+    // PicoGUS v2.1 THT (Core2350B2, RP2350B): the v2.0 circuit, so it runs as a
+    // PicoGUS 2.0 (LED on GPIO23, M62429 on GPIO24/25). GPIO29 is grounded as on
+    // v2.0, but the RP2350B can't read it with the ADC, so the type is fixed here.
+    DBG_PUTS("Running on PicoGUS v2.1");
+    LED_PIN = 1 << 23;
+    gpio_init(23);
+    gpio_set_dir(23, GPIO_OUT);
+    BOARD_TYPE = PICOGUS_2;
+#else
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
     // GPIO 25 must be high to read GPIO 29 on the Pico W
     gpio_init(25);
@@ -1280,6 +1305,7 @@ int main()
         gpio_set_dir(23, GPIO_OUT);
         BOARD_TYPE = PICOGUS_2;
     }
+#endif // PICOGUS_BOARD_V21
     gpio_set_mask(LED_PIN);
 
     if (BOARD_TYPE == PICOGUS_2) {
@@ -1342,6 +1368,18 @@ int main()
         }
 #endif // TEST_PSRAM
     }
+#ifdef SOUND_GUS
+    // test_psram() leaves a 0..255 sawtooth in every byte. Real GF1 DRAM powers up mostly flat,
+    // and some games play through memory they never loaded: Star Control 2 plays effects
+    // backwards from base+len-1 down to start = end = base with its first sample at address 0,
+    // and the GF1 cannot stop at start 0 (gf1.v compares the wrapped 29-bit address against
+    // start, so "new < 0" never holds), so the voice runs on through 0xFFFFF and plays the top
+    // of DRAM. Clear the 1MB once so that plays silence instead of the test pattern.
+    DBG_PUTS("Clearing GUS DRAM...");
+    for (uint32_t addr = 0; addr < 1024u * 1024u; addr += 4) {
+        psram_write32(&psram_spi, addr, 0);
+    }
+#endif // SOUND_GUS
 #endif // PSRAM
 #endif // PSRAM_CORE0
 
@@ -1415,8 +1453,12 @@ extern void PIC_DeActivateIRQ(void);
 #endif // USBONLY
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
+        platform_gpio_enable_input(i);
         gpio_disable_pulls(i);
     }
+    platform_gpio_enable_input(IOW_PIN);
+    platform_gpio_enable_input(IOR_PIN);
+    platform_gpio_enable_input(DACK_PIN);
     gpio_disable_pulls(IOW_PIN);
     gpio_disable_pulls(IOR_PIN);
     gpio_pull_down(IOCHRDY_PIN);

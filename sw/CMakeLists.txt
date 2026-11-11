@@ -3,8 +3,29 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards)
+# Chip selection: build for RP2350 (Raspberry Pi Pico 2 / Pico 2 W) with
+# -DPICO_PLATFORM=rp2350, or pick an RP2350 board directly with -DPICO_BOARD
+# (-DPICO_BOARD=picogus21 for the RP2350B PicoGUS v2.1 THT board).
+# The default is RP2040. PICO_PLATFORM may also come from the environment,
+# as it does for the Pico SDK itself.
+if(NOT PICO_PLATFORM AND DEFINED ENV{PICO_PLATFORM})
+    set(PICO_PLATFORM $ENV{PICO_PLATFORM})
+endif()
+if(PICO_PLATFORM MATCHES "riscv")
+    message(FATAL_ERROR "PicoGUS runs on the RP2350 Arm cores only (it contains Arm assembly): use PICO_PLATFORM=rp2350")
+endif()
 if(NOT PICO_BOARD)
-    set(PICO_BOARD "picogus2")
+    if(PICO_PLATFORM MATCHES "^rp2350")
+        if(PROJECT_TYPE STREQUAL "NE2K")
+            set(PICO_BOARD "pico2w_fast")
+        else()
+            set(PICO_BOARD "pico2_fast")
+        endif()
+    elseif(PROJECT_TYPE STREQUAL "NE2K")
+        set(PICO_BOARD "picow_fast")
+    else()
+        set(PICO_BOARD "picogus2")
+    endif()
     message("PICO_BOARD not set, defaulting to ${PICO_BOARD}")
 endif()
 set(PICO_COPY_TO_RAM 1)
@@ -19,13 +40,26 @@ set(PICO_COPY_TO_RAM 1)
 include(pico_sdk_import.cmake)
 
 project(picogus
-    VERSION "4.1.1"
+    VERSION "4.2.0"
     LANGUAGES C CXX ASM
 )
 
 # Full version string including pre-release suffix (if any).
 # CMake's project(VERSION) only allows numeric components, so the suffix lives here.
-set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}")
+set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.2")
+
+# Experimental features describe themselves in experimental/<feature>.md (see
+# experimental/README.md). Name the ones this source tree carries in the
+# version, e.g. 4.2.0+pgdfs, so such firmware can be told from the mainline.
+file(GLOB PICOGUS_EXPERIMENTAL_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/experimental/*.md)
+list(SORT PICOGUS_EXPERIMENTAL_FILES)
+foreach(FEATURE_FILE ${PICOGUS_EXPERIMENTAL_FILES})
+    get_filename_component(FEATURE ${FEATURE_FILE} NAME_WE)
+    if(NOT FEATURE STREQUAL "README")
+        string(APPEND PICOGUS_VERSION "+${FEATURE}")
+    endif()
+endforeach()
+message("PicoGUS firmware version: ${PICOGUS_VERSION}")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -47,10 +81,28 @@ set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# Chip-specific settings (PICO_PLATFORM is final once the board has been processed)
+if(PICO_PLATFORM MATCHES "^rp2350")
+    set(PICOGUS_CHIP "rp2350")
+    set(PICOGUS_UF2_FAMILY_ID "0xe48bff59") # RP2350, Arm Secure
+    # fw_memmap_c2ram.ld, included by the generated multifw scripts, is chip-specific
+    set(PICOGUS_MULTIFW_LD_DIR ${CMAKE_SOURCE_DIR}/multifw/rp2350)
+    # The RP2350 has no boot2 in front of the image. Embed the SDK's XIP setup
+    # function instead, so the flash clock divider from the board header
+    # (PICO_FLASH_SPI_CLKDIV) is applied at startup and after every flash write,
+    # as boot2 does on the RP2040.
+    add_compile_definitions(PICO_EMBED_XIP_SETUP=1)
+else()
+    set(PICOGUS_CHIP "rp2040")
+    set(PICOGUS_UF2_FAMILY_ID "0xe48bff56")
+    set(PICOGUS_MULTIFW_LD_DIR ${CMAKE_SOURCE_DIR}/multifw)
+endif()
+message("Building PicoGUS firmware for ${PICOGUS_CHIP} on board ${PICO_BOARD}")
+
 ################################################################################
 # Helper function for setting linker script
 function(set_linker_script TARGET script)
-    target_link_directories(${TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/multifw)
+    target_link_directories(${TARGET} PRIVATE ${PICOGUS_MULTIFW_LD_DIR})
     pico_set_linker_script(${TARGET} ${script})
 
     # Add dependencies on the 'included' linker scripts so that the target gets
@@ -60,6 +112,9 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
+# Use the first Python on PATH rather than the newest version CMake knows about
+# (older CMakes won't look for newer Pythons)
+set(Python3_FIND_STRATEGY LOCATION)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # Global definitions across all targets
@@ -306,6 +361,12 @@ function(build_gus TARGET_NAME MULTIFW)
         SCALE_22K_TO_44K=1
         # FORCE_28CH_27CH=1
     )
+    if(PICO_BOARD STREQUAL "picogus21")
+        # PicoGUS v2.1 THT: GUS sample RAM in the Core2350B2's PSRAM on the RP2350B's
+        # QMI (CS1 = GPIO47) instead of an APS6404L on PIO SPI (GPIO0-3)
+        target_compile_definitions(${TARGET_NAME} PRIVATE PSRAM_QMI=1)
+        target_sources(${TARGET_NAME} PRIVATE system/psram_qmi.c)
+    endif()
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
 endfunction()
@@ -313,7 +374,7 @@ endfunction()
 option(SOUND_WSS "Build SB firmware with WSS (AD1848) support instead of SB16 DSP" OFF)
 ################################################################################
 # Build SB firmware
-function(build_sb_8950 TARGET_NAME MULTIFW)
+function(build_sb_emu8950 TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
@@ -443,7 +504,7 @@ endfunction()
 ################################################################################
 # Build AdLib firmware — DOSBox OPL3 core
 function(build_adlib_dbopl3 TARGET_NAME MULTIFW)
-    set(USE_DBOPL3_OPL TRUE)
+    set(USE_DBOPL_OPL TRUE)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
@@ -566,11 +627,18 @@ endfunction()
 function(build_ne2k TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-ne2k")
+    # The CYW43 PIO SPI takes 2 PIO cycles per bit. On RP2350 keep the clock
+    # within the CYW43439's 50MHz gSPI limit: 370MHz / 4 / 2 = 46.25MHz.
+    if(PICOGUS_CHIP STREQUAL "rp2350")
+        set(CYW43_CLKDIV 4)
+    else()
+        set(CYW43_CLKDIV 3)
+    endif()
     target_compile_definitions(${TARGET_NAME} PRIVATE
        NE2000=1
        PICOW=1
        CYW43_CONFIG_FILE="cyw43_firmware.h"
-       CYW43_PIO_CLOCK_DIV_INT=3
+       CYW43_PIO_CLOCK_DIV_INT=${CYW43_CLKDIV}
     )
     target_sources(${TARGET_NAME} PRIVATE
         ne2000play.cpp
@@ -783,5 +851,5 @@ endif()
 add_custom_target(
     program
     DEPENDS ${FW_TARGET}
-    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
+    COMMAND openocd -f interface/cmsis-dap.cfg -f target/${PICOGUS_CHIP}.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
 )
