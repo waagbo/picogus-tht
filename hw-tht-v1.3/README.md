@@ -44,8 +44,8 @@ Files:
 | `usb.kicad_sch` | USB host port (J11 USB-A, F1, C34/C35, U12) (as v1.3.1) |
 | `PicoGUS-THT-schematic.pdf` | Schematic PDF |
 | `docs/BOM-THT.csv` | BOM with DigiKey **and** LCSC part numbers, stock (2026-11-07) and a digikey.no link per line |
-| `docs/BOM-THT-digikey.csv`, `docs/BOM-THT-lcsc.csv` (+ `-optional`) | DigiKey and LCSC upload files for one board, made from `BOM-THT.csv` (see [Ordering](#ordering)); optional: sockets (U12 is in the main files, marked "(optional)") |
-| `docs/BOM-THT-sockets.csv` (+ `-digikey-optional`, `-lcsc-optional`) | Socket build: every DIP IC and the Pico socketed, with heights (see [Socket build](#socket-build)) |
+| `docs/BOM-THT-digikey.csv`, `-lcsc.csv`, `-mouser.csv`, `-farnell.csv` (+ `-optional`) | DigiKey, LCSC, Mouser and Farnell upload files for one board, made from `BOM-THT.csv` (see [Ordering](#ordering)); optional: sockets (U12 is in the main files, marked "(optional)") |
+| `docs/BOM-THT-sockets.csv` (+ `-digikey-optional`, `-lcsc-optional`, `-mouser-optional`, `-farnell-optional`) | Socket build: every DIP IC and the Pico socketed, with heights (see [Socket build](#socket-build)) |
 | `docs/renders/` | 3D renders of the routed card: red from the front and the back, green, purple, white and black from the front (ENIG; white silkscreen, black on white). Made with `hw-common/tools/render.sh` |
 | `docs/figures/` | Figures for the README's exceptions and design choices (e.g. the test pads, the placement options, the accepted courtyard overlaps), with the scripts that make them in `docs/figures/src/` |
 
@@ -490,7 +490,7 @@ line-out cable (868 against 285 µV/A without a Waveblaster).
 
 ## Socket build
 
-`docs/BOM-THT-sockets.csv` (with its DigiKey and LCSC upload files) lists everything needed to build the
+`docs/BOM-THT-sockets.csv` (with its DigiKey, LCSC, Mouser and Farnell upload files) lists everything needed to build the
 card with every DIP IC and the Pico socketed. The same parts are the optional socket lines of `docs/BOM-THT.csv`. U3, U4
 and U9 are soldered TSSOPs and U8/U12 SMD parts: they are never socketed.
 
@@ -823,7 +823,16 @@ one board; `-optional` adds the sockets. Each line's Customer Reference is the b
 `PicoGUS-THT-1.3.2: C30,C31`, so every bag arrives labelled for sorting. Both files include the optional U12 as
 `PicoGUS-THT-1.3.2: U12 (optional)`, so it comes with the order (`--main U12`). The quantities are for one board: set
 the number of boards in the shop's BOM tool. LCSC raises lines to its minimum order quantities (50 for some
-resistors). After changing `BOM-THT.csv`, regenerate them (from this folder):
+resistors).
+
+`docs/BOM-THT-mouser.csv` (Mouser BOM tool) and `docs/BOM-THT-farnell.csv` (Farnell BOM upload) list the same lines
+by manufacturer and MPN (the DigiKey line's), with no shop part numbers: the shops' BOM tools match them, and a line
+with no match is one that shop does not sell (pick an alternative from `BOM-THT.csv`). Columns: Quantity,
+Manufacturer Part Number, Manufacturer, Customer Part Number, Description. Mouser's Customer # takes only 21
+characters, so the Mouser file has the positions without the board name (`C30,C31`, `U12 (optional)`), and the
+20 × 0.1 µF line reads `0.1uF x20`. Farnell gets the DigiKey text (Farnell's length limit is not checked yet).
+
+After changing `BOM-THT.csv`, regenerate them (from this folder):
 
 ```
 python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT.csv docs/BOM-THT --prefix 'PicoGUS-THT-1.3.2: ' \

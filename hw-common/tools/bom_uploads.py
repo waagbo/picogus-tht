@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DigiKey and LCSC upload files from a board BOM CSV (one board).
+"""DigiKey, LCSC, Mouser and Farnell upload files from a board BOM CSV (one board).
 
     python3 hw-common/tools/bom_uploads.py BOM.csv OUT_PREFIX --prefix "PicoGUS-THT-1.3.2: " \
         [--label "(jumpers)=J1,J7 shunts" ...] [--all-optional] [--main U12 ...]
@@ -9,23 +9,31 @@ Writes (only the files that get lines):
     OUT_PREFIX-digikey-optional.csv  the same for lines whose Type says "optional"
     OUT_PREFIX-lcsc.csv              Quantity, LCSC Part Number, Manufacturer Part Number, Customer Part Number
     OUT_PREFIX-lcsc-optional.csv
+    OUT_PREFIX-mouser.csv            Quantity, Manufacturer Part Number, Manufacturer, Customer Part Number, Description
+    OUT_PREFIX-mouser-optional.csv
+    OUT_PREFIX-farnell.csv           the same columns
+    OUT_PREFIX-farnell-optional.csv
 
 The BOM needs a references column ("References" or "Socket for"), "Qty", "Type", an MPN column
 ("MPN (DigiKey line)" or "MPN"), "DigiKey PN" and "LCSC PN [MPN if different]". DigiKey and LCSC cells may carry
 a note after the part number ("C2894974 [HCTL PZ254-2-13-Z-8.5]"): the first word is the part number and a
 bracketed MPN replaces the BOM's MPN on the LCSC line. Lines with Qty 0 or no part number are skipped, and so are
 LCSC lines whose "LCSC stock ..." cell starts with "n/a" (a part LCSC does not sell, e.g. one only in JLCPCB's
-assembly library).
+assembly library). The Mouser and Farnell files carry no shop part numbers: their BOM tools match each line by
+manufacturer and MPN (the DigiKey line's), and every line with an MPN is listed.
 
 The customer reference is PREFIX + the reference designators, so every bag arrives labelled with its board
-positions. --main REFS puts that optional line in the main DigiKey and LCSC files, marked "(optional)", so it
-is ordered by default. DigiKey allows 48 characters; longer lists are shortened to ranges (C3-9,11-14). Lines whose
-references are not designators, e.g. "(jumpers)", take their text from --label; for "Socket for" BOMs,
-"U2 (74AHC244)" becomes "U2 socket".
+positions. --main REFS puts that optional line in the main files, marked "(optional)", so it is ordered by
+default. DigiKey allows 48 characters (LCSC and Farnell get the same text); longer lists are shortened to ranges
+(C3-9,11-14). Mouser's Customer # takes only 21 characters, so the Mouser files carry the positions without
+PREFIX, and a line that is still too long gets its value and count instead ("0.1uF x20"). Lines whose references
+are not designators, e.g. "(jumpers)", take their text from --label; for "Socket for" BOMs, "U2 (74AHC244)"
+becomes "U2 socket".
 """
 import argparse, csv, re, sys
 
 MAXLEN = 48
+MOUSER_MAXLEN = 21  # CartItemRequest.CustomerPartNumber in Mouser's API (api.mouser.com/api/docs/V1)
 
 
 def designators(text):
@@ -84,33 +92,35 @@ def main():
     H = rows[0].keys()
     refcol = 'References' if 'References' in H else 'Socket for'
     mpncol = 'MPN (DigiKey line)' if 'MPN (DigiKey line)' in H else 'MPN'
-    out = {k: [] for k in ('digikey', 'digikey-optional', 'lcsc', 'lcsc-optional')}
+    out = {k + o: [] for k in ('digikey', 'lcsc', 'mouser', 'farnell') for o in ('', '-optional')}
     for r in rows:
         qty = int(r['Qty'] or 0)
         if qty <= 0:
             continue
         refs_text = r[refcol]
         refs = designators(refs_text)
-        if refs is not None:
-            if len(refs) != qty and refs_text not in labels:
-                pass  # e.g. one header strip for J6, J7: the quantity is what is bought
-            ref = a.prefix + ','.join(refs)
-            if len(ref) > MAXLEN:
-                ref = a.prefix + compress(refs)
+        # the positions text, in its long and short forms (one header strip for J6, J7: qty is what is bought)
+        if refs_text in labels:
+            forms = [labels[refs_text]]
+        elif refs is not None:
+            forms = [','.join(refs), compress(refs)]
         else:
-            text = labels.get(refs_text) or (socket_label(refs_text) if refcol == 'Socket for' else None)
+            text = socket_label(refs_text) if refcol == 'Socket for' else None
             if not text:
                 sys.exit('no --label for line %r' % refs_text)
-            ref = a.prefix + text
-        if refs_text in labels and refs is not None:
-            ref = a.prefix + labels[refs_text]
-        if len(ref) > MAXLEN:
-            sys.exit('customer reference too long (%d > %d): %s' % (len(ref), MAXLEN, ref))
+            forms = [text]
         opt = '-optional' if (a.all_optional or 'optional' in r.get('Type', '').lower()) else ''
+        tail = ''
         if opt and refs_text in a.main:  # an optional part ordered by default
-            ref += ' (optional)'; opt = ''
-            if len(ref) > MAXLEN:
-                sys.exit('customer reference too long (%d > %d): %s' % (len(ref), MAXLEN, ref))
+            tail = ' (optional)'; opt = ''
+        ref = next((a.prefix + t + tail for t in forms if len(a.prefix + t + tail) <= MAXLEN), None)
+        if not ref:
+            sys.exit('customer reference too long (> %d): %s' % (MAXLEN, a.prefix + forms[-1] + tail))
+        value = (r.get('Value') or r.get('Type') or '').strip()
+        mref = next((t + tail for t in forms + ['%s x%d' % (value.replace(' ', ''), qty)]
+                     if len(t + tail) <= MOUSER_MAXLEN), None)
+        if not mref:
+            sys.exit('Mouser customer reference too long (> %d): %s' % (MOUSER_MAXLEN, forms[-1] + tail))
         dk = re.match(r'\s*([^\s\[]+)', r.get('DigiKey PN') or '')
         if dk:
             out['digikey' + opt].append([qty, dk[1], r[mpncol].strip(), ref])
@@ -122,8 +132,15 @@ def main():
             # "[UNI-ROYAL MFR0W4F1003A50]": the first word is the maker when it has no digit
             mpn = mpn.split(' ', 1)[1] if lc[2] and ' ' in mpn and not re.search(r'\d', mpn.split(' ', 1)[0]) else mpn
             out['lcsc' + opt].append([qty, lc[1], mpn, ref])
+        mpn = (r[mpncol] or '').strip()
+        if mpn and mpn != 'None':
+            maker = (r.get('Manufacturer') or '').strip()
+            out['mouser' + opt].append([qty, mpn, maker, mref, value])
+            out['farnell' + opt].append([qty, mpn, maker, ref, value])
     heads = {'digikey': ['Quantity', 'Digi-Key Part Number', 'Manufacturer Part Number', 'Customer Reference'],
-             'lcsc': ['Quantity', 'LCSC Part Number', 'Manufacturer Part Number', 'Customer Part Number']}
+             'lcsc': ['Quantity', 'LCSC Part Number', 'Manufacturer Part Number', 'Customer Part Number'],
+             'mouser': ['Quantity', 'Manufacturer Part Number', 'Manufacturer', 'Customer Part Number', 'Description'],
+             'farnell': ['Quantity', 'Manufacturer Part Number', 'Manufacturer', 'Customer Part Number', 'Description']}
     for k, lines in out.items():
         if not lines:
             continue
