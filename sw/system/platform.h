@@ -34,10 +34,12 @@
 #error "PicoGUS supports RP2040 and RP2350 (Arm) only"
 #endif
 
-#if PICO_RP2350 && !PICO_RP2350A
+#if PICO_RP2350 && !PICO_RP2350A && !PICOGUS_BOARD_V21
 // Board detection reads GPIO29 through the ADC, and on the 48 GPIO RP2350B
-// (e.g. Pimoroni Pico Plus 2) the ADC inputs are GPIO40-47 instead
-#error "PicoGUS supports RP2350A (30 GPIO) boards such as the Raspberry Pi Pico 2; RP2350B boards need board detection ported"
+// (e.g. Pimoroni Pico Plus 2) the ADC inputs are GPIO40-47 instead. The one
+// RP2350B board PicoGUS knows, v2.1 THT (boards/picogus21.h), sets its board
+// type at compile time.
+#error "PicoGUS supports RP2350A (30 GPIO) boards such as the Raspberry Pi Pico 2, and the RP2350B PicoGUS v2.1 (PICO_BOARD=picogus21)"
 #endif
 
 #if PICO_RP2040
@@ -50,8 +52,14 @@
 #define PLATFORM_UF2_FAMILY_ID 0xe48bff56u
 #define PLATFORM_UF2_FAMILY_ID_OPTIONAL 1
 #else
+#if PICOGUS_BOARD_V21
+// PicoGUS v2.1 THT: its firmware is not interchangeable with the Pico 2's
+#define PICOGUS_CHIP_NAME "RP2350B"
+#define PICOGUS_CHIP_TYPE CHIP_RP2350B_V21
+#else
 #define PICOGUS_CHIP_NAME "RP2350"
 #define PICOGUS_CHIP_TYPE CHIP_RP2350
+#endif
 #define PICOGUS_FW_STRING_SUFFIX " (" PICOGUS_CHIP_NAME ")"
 #define PLATFORM_UF2_FAMILY_ID 0xe48bff59u // RP2350, Arm Secure
 #define PLATFORM_UF2_FAMILY_ID_OPTIONAL 0

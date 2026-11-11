@@ -25,9 +25,13 @@ typedef enum {
 
 typedef enum { PICO_BASED = 0, PICOGUS_2 = 1 } board_type_t;
 
-// Microcontroller the firmware runs on, as reported by CMD_CHIPTYPE. Firmware from before RP2350 support doesn't know
-// the register and returns 0xFF: that is always an RP2040.
-typedef enum { CHIP_RP2040 = 0, CHIP_RP2350 = 1 } chip_type_t;
+// Microcontroller the firmware runs on, as reported by CMD_CHIPTYPE: each value has firmware files of its own.
+// Firmware from before RP2350 support doesn't know the register and returns 0xFF: that is always an RP2040.
+typedef enum {
+    CHIP_RP2040 = 0,        // Pico, Pico W, PicoGUS 2.0
+    CHIP_RP2350 = 1,        // Pico 2, Pico 2 W
+    CHIP_RP2350B_V21 = 2    // PicoGUS v2.1 THT (Core2350B module)
+} chip_type_t;
 
 typedef enum {
     INVALID_MODE = 0,

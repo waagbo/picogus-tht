@@ -40,7 +40,7 @@
 board_type_t BOARD_TYPE;
 
 #ifdef PSRAM
-#include "psram_spi.h"
+#include "system/psram.h"
 psram_spi_inst_t psram_spi;
 psram_spi_inst_t* async_spi_inst;
 #endif
@@ -1257,6 +1257,16 @@ int main()
     loadSettings(&settings, true /* migrate */);
     platform_disable_xip_cache();
 
+#if PICOGUS_BOARD_V21
+    // PicoGUS v2.1 THT (Core2350B2, RP2350B): the v2.0 circuit, so it runs as a
+    // PicoGUS 2.0 (LED on GPIO23, M62429 on GPIO24/25). GPIO29 is grounded as on
+    // v2.0, but the RP2350B can't read it with the ADC, so the type is fixed here.
+    DBG_PUTS("Running on PicoGUS v2.1");
+    LED_PIN = 1 << 23;
+    gpio_init(23);
+    gpio_set_dir(23, GPIO_OUT);
+    BOARD_TYPE = PICOGUS_2;
+#else
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
     // GPIO 25 must be high to read GPIO 29 on the Pico W
     gpio_init(25);
@@ -1290,6 +1300,7 @@ int main()
         gpio_set_dir(23, GPIO_OUT);
         BOARD_TYPE = PICOGUS_2;
     }
+#endif // PICOGUS_BOARD_V21
     gpio_set_mask(LED_PIN);
 
     if (BOARD_TYPE == PICOGUS_2) {

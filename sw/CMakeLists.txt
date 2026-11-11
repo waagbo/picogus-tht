@@ -4,7 +4,8 @@ cmake_minimum_required(VERSION 3.13)
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards)
 # Chip selection: build for RP2350 (Raspberry Pi Pico 2 / Pico 2 W) with
-# -DPICO_PLATFORM=rp2350, or pick an RP2350 board directly with -DPICO_BOARD.
+# -DPICO_PLATFORM=rp2350, or pick an RP2350 board directly with -DPICO_BOARD
+# (-DPICO_BOARD=picogus21 for the RP2350B PicoGUS v2.1 THT board).
 # The default is RP2040. PICO_PLATFORM may also come from the environment,
 # as it does for the Pico SDK itself.
 if(NOT PICO_PLATFORM AND DEFINED ENV{PICO_PLATFORM})
@@ -347,6 +348,12 @@ function(build_gus TARGET_NAME MULTIFW)
         SCALE_22K_TO_44K=1
         # FORCE_28CH_27CH=1
     )
+    if(PICO_BOARD STREQUAL "picogus21")
+        # PicoGUS v2.1 THT: GUS sample RAM in the Core2350B2's PSRAM on the RP2350B's
+        # QMI (CS1 = GPIO47) instead of an APS6404L on PIO SPI (GPIO0-3)
+        target_compile_definitions(${TARGET_NAME} PRIVATE PSRAM_QMI=1)
+        target_sources(${TARGET_NAME} PRIVATE system/psram_qmi.c)
+    endif()
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
 endfunction()
