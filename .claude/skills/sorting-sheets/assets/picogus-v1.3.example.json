@@ -1,0 +1,36 @@
+{
+  "_comment": "Example config: PicoGUS THT v1.3 + SMD v1.3 from one DigiKey order (the substitutions and tweaks used for the first v1.3 build). Paths are relative to the config file: copy it next to the order CSV and point the bom paths at the picogus repo checkout (hw-tht-v1.3/docs/BOM-THT.csv, hw-smd/BOM-SMD.csv).",
+  "order_csv": "DK_PRODUCTS_123456789.csv",
+  "boards": [
+    {"key": "THT", "title": "PicoGUS THT v1.3 (through-hole)", "bom": "../../../../hw-tht-v1.3/docs/BOM-THT.csv", "builds": 1},
+    {"key": "SMD", "title": "PicoGUS SMD v1.3", "bom": "../../../../hw-smd/BOM-SMD.csv", "builds": 1}
+  ],
+  "substitutions": [
+    {"ref": "RV1", "use": "RK09712200HA", "note": "BOM: Bourns PTD902-2020K-A103"},
+    {"ref": "J9", "use": "77313-101-26LF", "note": "gold; BOM: Sullins PEC13DAAN"},
+    {"ref": "J6", "use": "77311-118-02LF", "note": "gold; or cut 2× 1x2 from the 1x40 strip"},
+    {"boards": ["SMD"], "ref": "C10", "use": "C2012X7R1H105K085AC", "note": "same value/size as BOM C2012X7R1H105K125AB"},
+    {"boards": ["SMD"], "ref": "C15", "use": "C3216X5R1E106K085AC", "note": "same value/size as BOM CL31A106KAHNNNE"}
+  ],
+  "values": {
+    "J1": "2x9 pin header", "J5": "3.5 mm jack, black", "J6": "1x2 pin header", "J8": "3.5 mm jack, green",
+    "J9": "2x13 pin header", "RV1": "10 kΩ dual log pot", "(jumpers)": "2.54 mm shunt"
+  },
+  "labels": {
+    "(jumpers)": {"label": "Jumpers", "sub": "J1 ×3, J7 ×1"},
+    "(DB-standoff)": {"label": "DB standoff"},
+    "(DB-screws)": {"label": "DB screws"}
+  },
+  "extra_squares": [
+    {"refs": ["(pins)"], "label": "U1 header pins", "sub": "cut 2× 1x20 from one strip", "qty": 1, "qty_unit": "strip",
+     "value": "1x40 strip", "type": "THT", "use": "PREC040SAAN-RC", "bom_mpn": "PREC040SAAN-RC", "bom_dkpn": "S1012EC-40-ND",
+     "note": "Not needed with a Pico H or a Pico soldered flat."}
+  ],
+  "combine": [
+    {"refs": ["(DB-standoff)", "(DB-screws)"], "label": "DB hardware", "sub": "Waveblaster mounting",
+     "value": "M3×11 F-F standoff ×1, M3×6 screw ×2"}
+  ],
+  "companions": [
+    {"main": "U1", "companion": "(pins)", "qty_text": "1 + 1 pin strip"}
+  ]
+}

@@ -12,3 +12,10 @@ fp-info-cache
 
 firmware.ld
 flash_firmware.h
+__pycache__/
+binaries/
+
+# DOS tool build outputs (OpenWatcom)
+*.exe
+*.err
+*.map

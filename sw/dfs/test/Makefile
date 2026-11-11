@@ -1,6 +1,7 @@
 # Host test harness for the PGDFS file server (../dfs_server.c, ../dfs_fs.c).
 #
-#   make test            build with cc and run the server tests
+#   make test            build with cc and run the server tests, then the
+#                        transport tests (Makefile.transport)
 #   make test DEBUG=1    same, with DFS_LOG() output from the server
 #   make arm-size        compile the firmware objects with arm-none-eabi-gcc
 #                        (firmware ffconf.h) and print their sizes
@@ -35,6 +36,7 @@ all: $(B)/test_server
 
 test: $(B)/test_server
 	./$(B)/test_server
+	$(MAKE) -f Makefile.transport check
 
 $(B):
 	mkdir -p $(B)

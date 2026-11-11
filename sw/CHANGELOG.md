@@ -1,16 +1,64 @@
-# Unreleased
+# v4.2.0
+
+## Fixes/improvements
+
+### GUS mode
+
+GUS emulation has received a ton of fixes under the hood, solving a lot of long-outstanding issues and annoyances. Huge thanks to [nukeykt's LPC-GUS](https://github.com/nukeykt/LPC-GUS) `gf1.v`, reverse engineered from a die shot of a GF1 as a reference.
+
+- Hocus Pocus now works with the Ultramid version bundled with it. It polls the DRAM peek command at the same time as it DMAs new sound effect samples, which could hang the rp2040-psram library.
+- Fixes sound stuttering in Hocus Pocus and probably other games that stream audio: when the DMA interval is 1, DRQ is now triggered immediately instead of via alarm which saves IRQ round trips.
+- The line-out disable bit now mutes the output. This fixes hanging notes still playing when paused in CapaMOD.
+- The GF1's voice IRQ latch and its timing is emulated. This fixes music occasionally stopping in the demo Dope (and perhaps others).
+- Volume ramps are now applied once per GF1 frame, which is more accurate and more efficient. A stopped ramp now retriggers IRQs and a finished non-looping ramp stops one increment short of its end value.
+- Pan attenuation now uses the GF1's ROM values from `gf1.v`. DOSBox's volume implementation is also fixed and matches GF1.
+- Voices playing back faster than the PSRAM sample cache simply bypass it. Fixes crackles/stutters in _very_ fast playing samples.
+- GF1 timer accuracy: writes to 2X9 are routed to the timers, stopping a timer immediately cancels its IRQ, and the 5us fudge on timer periods is removed.
+- DMA fixes: the DMA rate divider is now in the correct order, DMA address wraps at 1MB, the address advances past the terminal count byte, and unsupported GUS->host DMA requests are ended early instead of getting the ISA DMA state machine stuck.
+- Only active voices set the wave/ramp IRQ status bits.
+- Ramp registers can now be read back, and register writes during reset are dropped.
+- Register 0x8E reads back the active channel count as written, even if we clamp to 14 channels internally.
+- The IRQ line is deasserted when mix control disables the IRQ latches.
+- GUS resets no longer clear the DMA interval override set by pgusinit.
+- Fixes in inter-core synchronization.
+- GUS RAM is cleared at power on. This works around an bug in Star Control II where it plays garbage after the first sample in GUS RAM.
+
+### MPU-401
+
+- UART mode and reset now behave like a real MPU-401. Bytes go straight to the MIDI output, DRR reads busy for about 100us after each data write, and a UART mode reset delays about 33ms while the output drains. This fixes Frederik Pohl's Gateway and its buggy driver with no need for workarounds.
+- Sequencer ticks keep counting while a data request is outstanding. This fixes the too-slow tempo in Gateway and probably other Legend Entertainment titles.
+- When the MIDI buffer is full, intelligent mode track output is deferred instead of blocking the ISA bus handler.
+- New `pgusinit /mpuwait 1|0` option. Some games like A-10 Tank Killer give up after only 256 busy status reads. Now that PicoGUS acts even more like a real MPU-401, those titles time out on fast PCs just like with a real card. When mpuwait is enabled, each busy status read raises IOCHRDY an extra 2us to give the MIDI buffer extra time to drain.
+
+### SB mode
+
+- Fixes SB DMA transfers getting out of phase, which caused flipped stereo on SBPro or garbage audio on SB16.
+- Blinkenlights on SB DSP activity, once per DMA block, and blinkenlights on OPL music is back.
+- Brings in improvements to dbopl3 from [HitoriSensei's PicoMemBlaster fork of PicoMEM](https://github.com/HitoriSensei/ISA-PicoMEM).
+
+### CD-ROM
+
+- Blinkenlights on every sector transfer.
+
+### USB
+
+- Basic (hacky) support for the Logitech G920 wheel as a joystick. A full overhaul of joystick support is coming...
+
+### ISA analyzer
+
+- Captured ISA bus transactions are now timestamped.
+
+### General
+
+Overhauled firmware flashing to be more resilient.
 
 ## New features
 
-### PGDFS: the USB drive as a DOS drive letter (all modes with the USB stack)
+### RP2350 support
 
-- The USB drive plugged into the PicoGUS can now be mapped to a DOS drive letter with the new `PGUSDFS.EXE` TSR, in the same spirit as PicoMEM's PMDFS: `PGUSDFS E:` gives you `E:` backed by the FAT32 drive, with read and write access, from plain DOS 5.0+. Copy files to and from the drive, run programs from it, edit files on it, in any firmware mode that carries the USB host stack (GUS, AdLib, SB, MPU-401, PSG, USB). CD-ROM emulation keeps working alongside it; both share the card's FatFs volume.
-- PGDFS is a DOS network redirector derived from [EtherDFS](https://mateusz.fr/etherdfs/) (MIT) and speaks the same EDF5 request format, so the card-side server is the ethersrv code on FatFs. The transport is new: request/answer frames stream through a two-port I/O data window with 16-bit transfers (`rep insw`/`rep outsw`: the motherboard splits each word into two 8-bit cycles for the card, so this roughly halves the CPU cost per byte), driven by eight new control-port registers (see `sw/dfs/PROTOCOL.md`). `DFSDIAG.EXE` exercises the transport and protocol for diagnostics and throughput measurement.
-- The data window base is configurable like the other emulated devices' ports: `pgusinit /dfsport <port>` (even; default 1D4h; 0 disables PGDFS), stored with `pgusinit /save`.
-- Long file names: the DOS redirector interface is 8.3-only, so files with long names show up as `LONGNA~1.EXT`, but the new `LONGNAME` lookup returns the long name behind an 8.3 path and `DFSDIAG /LDIR` lists a directory with long names. The OEM code page used for file names is a firmware build option, `-DFATFS_CODE_PAGE=<n>` (437 US by default; 850 Western Europe, 865 Nordic, ...), for drives written on non-US Windows machines.
-- The control-port protocol version is now 5. `pgusinit` shows the mounted USB drive (label, filesystem, size) in its status output.
-- Diagnostics: the new `DIAG` request returns the card's disk and FatFs telemetry (USB read/write counters, refused, failed and timed-out transfers, the last SCSI status, the last failing FatFs call and the free-cluster count FatFs is working with). `DFSDIAG /INFO` prints it and `DFSDIAG` prints it after any failed command; `DFSDIAG /WRTEST` and `/MKDIR` reproduce a write round trip without the TSR. A failing sector transfer underneath a mounted drive is now reported to DOS as a write fault (1Dh) or read fault (1Eh) instead of "drive not ready" (15h). FatFs no longer trusts the FAT32 FSInfo free count written by other operating systems (`FF_FS_NOFSINFO`), a stale count of which makes every allocation fail with "Access denied"; the FAT is counted on the first free-space query after a mount instead.
-- Firmware built with `-DPGDFS=OFF` omits all of this and keeps the previous behaviour.
+- The firmware now also builds for the RP2350, from the same source as the RP2040 firmware: for PicoGUS v1.x and Femto boards with a Raspberry Pi Pico 2 or Pico 2 W in place of the Pico or Pico W (`pgus2350.uf2`, and `ne2k2350.uf2` for NE2000/WiFi), and for the PicoGUS v2.1 THT board, which has an RP2350B on a Core2350B module and keeps the GUS sample RAM in the module's PSRAM (`pgus-v21.uf2`). Not tested on hardware yet. See `sw/docs/rp2350.md`.
+- Firmware for the RP2040 and the RP2350 is not interchangeable, so flashing is guarded: the firmware checks the UF2 data it is sent and refuses a file for the other chip (or one that isn't laid out as a PicoGUS firmware file) before erasing anything, and `pgusinit /flash` checks the file against the card's chip before sending it. pgusinit shows the chip on its hardware line when it is not an RP2040.
+- Releases contain the firmware for every platform. `sw/scripts/build_release.sh` builds the same set of files locally, and with `--experimental` a second set with the experimental feature branches merged in (see `sw/experimental/README.md`).
 
 # v4.1.1
 

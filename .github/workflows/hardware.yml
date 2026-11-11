@@ -1,0 +1,39 @@
+name: Hardware (JLCPCB files)
+on:
+  push:
+    paths: ['hw-tht-v1.3/**', 'hw-smd/**', 'hw-common/**', '.github/workflows/hardware.yml']
+  pull_request:
+    paths: ['hw-tht-v1.3/**', 'hw-smd/**', 'hw-common/**', '.github/workflows/hardware.yml']
+  workflow_dispatch:
+
+jobs:
+  jlcpcb:
+    runs-on: ubuntu-24.04
+    # the boards are KiCad 10 files
+    container:
+      image: kicad/kicad:10.0
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # THT v1.3: the 12 accepted courtyard overlaps in the logic column are DRC errors in its rules
+          # (see hw-tht-v1.3/README.md, Layout status); any other DRC error still fails the job
+          - board: hw-tht-v1.3/PicoGUS-THT
+            key: tht
+            allow_drc: courtyards_overlap
+          - board: hw-smd/PicoGUS-SMD
+            key: smd
+            allow_drc: ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: DRC + gerbers, drill, assembly BOM/CPL
+        run: ALLOW_DRC='${{ matrix.allow_drc }}' hw-common/tools/jlcpcb.sh ${{ matrix.board }}.kicad_pcb out
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jlcpcb-${{ matrix.key }}
+          path: out/

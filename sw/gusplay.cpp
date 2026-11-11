@@ -43,7 +43,10 @@
 #endif // USB_MSC
 
 #ifdef PSRAM
-#include "psram_spi.h"
+#include "system/psram.h"
+#if PSRAM_QMI
+#include "pico/multicore.h"
+#endif
 extern psram_spi_inst_t psram_spi;
 #endif
 
@@ -116,6 +119,11 @@ static void update_gus_timing(uint8_t channels) {
 void play_gus() {
     DBG_PUTS("starting core 1");
     // flash_safe_execute_core_init();
+#if PSRAM_QMI
+    // Let core 0 hold this core while it writes the flash (settings save): the QMI PSRAM
+    // this core plays from is unusable meanwhile
+    multicore_lockout_victim_init();
+#endif
     uint32_t start, end;
 
     // Init PIC on this core so it handles timers
@@ -158,7 +166,7 @@ void play_gus() {
 #endif
 
 #ifdef SOUND_MPU
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
 
     init_audio();
