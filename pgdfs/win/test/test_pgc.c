@@ -347,6 +347,18 @@ static void test_names(void) {
         if (strcmp(s.longname, "Program Files") == 0 && (s.attr & PGC_ATTR_DIR)) seen_long++;
     }
     CHECK(r == PGC_ENOMORE && seen_long == 2, "root listing has the long dir: %d entries", n);
+    n = 0;
+    for (r = pgc_find_mask(&card, &s, "\\Program Files", "*.TXT", 0x16, 0); r == PGC_OK; r = pgc_find_next(&card, &s)) {
+        n++;
+        CHECK(strstr(s.shortname, ".TXT") != NULL, "DOS pattern match: %s", s.shortname);
+    }
+    CHECK(r == PGC_ENOMORE && n == 2, "*.TXT finds the two text files: %d", n);
+    n = 0;
+    for (r = pgc_find_mask(&card, &s, "\\Program Files", "SHORT.TXT", 0x06, 0); r == PGC_OK; r = pgc_find_next(&card, &s)) n++;
+    CHECK(r == PGC_ENOMORE && n == 1, "exact 8.3 name: %d", n);
+    CHECK(pgc_find_mask(&card, &s, "\\Program Files", "*.BAK", 0x16, 0) == PGC_ENOMORE, "no match -> 12h");
+    CHECK(pgc_find_mask(&card, &s, "", "????????.???", 0x08, 0) == PGC_OK && strcmp(s.shortname, "PGTEST") == 0,
+          "volume label search: '%s'", s.shortname);
     r = pgc_find_first(&card, &s, "\\NOPE", 0x16, 1);
     CHECK(r == PGC_ENOPATH, "listing a missing dir -> 3: %d", r);
     CHECK(pgc_mkdir(&card, "\\Empty") == PGC_OK, "mkdir empty");

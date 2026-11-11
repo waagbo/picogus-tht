@@ -179,6 +179,7 @@ typedef struct {
   uint16_t dir_id, pos;
   uint8_t  sattr;
   uint8_t  want_long;
+  char     mask[11];        /* FCB form of the pattern                      */
   char     dir[PGC_PATH_MAX];
 } pgc_find;
 
@@ -236,6 +237,8 @@ int      pgc_setattr(pgc_card *c, const char *path, uint8_t attr);
 int      pgc_mkdir(pgc_card *c, const char *path);
 int      pgc_rmdir(pgc_card *c, const char *path);
 int      pgc_delete(pgc_card *c, const char *path);     /* one file, no wildcards */
+/* every file of a directory whose 8.3 name matches a DOS pattern: "\\DIR\\*.TMP" */
+int      pgc_delete_mask(pgc_card *c, const char *pathmask);
 int      pgc_rename(pgc_card *c, const char *from, const char *to);
 /* the long name of the last component of an 8.3 path */
 int      pgc_longname(pgc_card *c, const char *path, char *name, uint16_t max);
@@ -247,6 +250,10 @@ int      pgc_longname(pgc_card *c, const char *path, char *name, uint16_t max);
  * (one more request per entry). PGC_ENOMORE at the end. */
 int      pgc_find_first(pgc_card *c, pgc_find *s, const char *dir, uint8_t attr, int want_long);
 int      pgc_find_next(pgc_card *c, pgc_find *s);
+/* the same with a DOS pattern ("*.TXT", "FILE????.???", "NAME.EXT") that the
+ * card matches against the 8.3 names, with the DOS search rules for attr */
+int      pgc_find_mask(pgc_card *c, pgc_find *s, const char *dir, const char *pattern, uint8_t attr,
+                       int want_long);
 
 /* ---- files ---------------------------------------------------------------- */
 
@@ -295,6 +302,9 @@ void     pgc_memset(void *dst, int v, uint32_t n);
 int      pgc_strcmp(const char *a, const char *b);
 /* "FILE    TXT" -> "FILE.TXT" (dst at least 13 bytes) */
 void     pgc_fcb_to_name(const uint8_t *fcb, char *dst);
+/* "FILE.TXT" / "*.*" -> 11-byte FCB form, upper case, '*' as '?' (what the
+ * card does with a search pattern) */
+void     pgc_name_to_fcb(const char *name, char *fcb);
 /* joins dir and name with one backslash into dst (PGC_PATH_MAX); PGC_ETOOLONG */
 int      pgc_join(char *dst, const char *dir, const char *name);
 /* true for "", "\" */

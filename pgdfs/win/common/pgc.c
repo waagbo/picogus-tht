@@ -94,6 +94,43 @@ void pgc_fcb_to_name(const uint8_t *fcb, char *dst) {
   dst[n] = 0;
 }
 
+static char upper(char ch) {
+  return (ch >= 'a' && ch <= 'z') ? (char)(ch - 32) : ch;
+}
+
+void pgc_name_to_fcb(const char *name, char *fcb) {
+  int i = 0, j = 0;
+  pgc_memset(fcb, ' ', 11);
+  if (name[0] == '.') {                 /* "." and ".." */
+    while (name[j] == '.' && i < 11) fcb[i++] = name[j++];
+    return;
+  }
+  while (i < 8) {
+    char ch = name[j];
+    if (ch == 0 || ch == '.') break;
+    if (ch == '*') {
+      while (i < 8) fcb[i++] = '?';
+      break;
+    }
+    fcb[i++] = upper(ch);
+    j++;
+  }
+  while (name[j] != 0 && name[j] != '.') j++;
+  if (name[j] != '.') return;
+  j++;
+  i = 8;
+  while (i < 11) {
+    char ch = name[j];
+    if (ch == 0 || ch == '.') break;
+    if (ch == '*') {
+      while (i < 11) fcb[i++] = '?';
+      break;
+    }
+    fcb[i++] = upper(ch);
+    j++;
+  }
+}
+
 int pgc_is_root(const char *path) {
   while (*path == '\\' || *path == '/') path++;
   return *path == 0;
@@ -479,6 +516,10 @@ int pgc_delete(pgc_card *c, const char *path) {
   return path_request(c, AL_DELETE, path, 0);
 }
 
+int pgc_delete_mask(pgc_card *c, const char *pathmask) {
+  return path_request(c, AL_DELETE, pathmask, 0);
+}
+
 int pgc_rename(pgc_card *c, const char *from, const char *to) {
   uint16_t a = pgc_strlen(from), b = pgc_strlen(to);
   int r = ready(c);
@@ -531,6 +572,11 @@ static int find_entry(pgc_card *c, pgc_find *s, uint16_t alen) {
 }
 
 int pgc_find_first(pgc_card *c, pgc_find *s, const char *dir, uint8_t attr, int want_long) {
+  return pgc_find_mask(c, s, dir, "????????.???", attr, want_long);
+}
+
+int pgc_find_mask(pgc_card *c, pgc_find *s, const char *dir, const char *pattern, uint8_t attr,
+                  int want_long) {
   char mask[PGC_PATH_MAX];
   uint16_t plen, alen, n;
   int r = ready(c);
@@ -540,7 +586,8 @@ int pgc_find_first(pgc_card *c, pgc_find *s, const char *dir, uint8_t attr, int 
   pgc_memcpy(s->dir, dir, (uint32_t)n + 1);
   s->sattr = attr;
   s->want_long = (uint8_t)(want_long != 0);
-  r = pgc_join(mask, dir, "????????.???");
+  pgc_name_to_fcb(pattern, s->mask);
+  r = pgc_join(mask, dir, pattern);
   if (r != PGC_OK) return r;
   payload(c)[0] = attr;
   r = put_path(c, 1, mask, &plen);
@@ -559,7 +606,7 @@ int pgc_find_next(pgc_card *c, pgc_find *s) {
   put16(p, s->dir_id);
   put16(p + 2, s->pos);
   p[4] = s->sattr;
-  pgc_memset(p + 5, '?', 11);
+  pgc_memcpy(p + 5, s->mask, 11);
   r = request(c, AL_FINDNEXT, 16, &alen);
   if (r != PGC_OK) return r;
   return find_entry(c, s, alen);

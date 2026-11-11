@@ -1,0 +1,51 @@
+; PGDFS.VXD: the USB drive of a PicoGUS as a drive letter on Windows 95/98/ME
+;
+; Install: copy this file and PGDFS.VXD into one folder, right-click this
+; file and choose Install, then restart Windows. The driver is a static VxD
+; listed in the registry; DriveLetter picks the letter (the next free one
+; when it is taken). Do not load PGDFS.EXE in AUTOEXEC.BAT as well.
+; Uninstall: Control Panel, Add/Remove Programs (or remove the registry key
+; HKLM\System\CurrentControlSet\Services\VxD\PGDFS), then restart.
+
+[Version]
+Signature="$CHICAGO$"
+Provider=%PicoGUS%
+
+[DefaultInstall]
+CopyFiles=PGDFS.Files, PGDFS.Inf
+AddReg=PGDFS.Reg, PGDFS.Uninstall.Reg
+
+[PGDFS.Remove]
+DelFiles=PGDFS.Files, PGDFS.Inf
+DelReg=PGDFS.Reg, PGDFS.Uninstall.Reg
+
+[DestinationDirs]
+PGDFS.Files=11
+PGDFS.Inf=17
+
+[SourceDisksNames]
+1=%DiskName%,,1
+
+[SourceDisksFiles]
+pgdfs.vxd=1
+pgdfs9x.inf=1
+
+[PGDFS.Files]
+pgdfs.vxd
+
+[PGDFS.Inf]
+pgdfs9x.inf
+
+[PGDFS.Reg]
+HKLM,System\CurrentControlSet\Services\VxD\PGDFS,StaticVxD,,%11%\pgdfs.vxd
+HKLM,System\CurrentControlSet\Services\VxD\PGDFS,Start,1,00
+HKLM,System\CurrentControlSet\Services\VxD\PGDFS,DriveLetter,,P
+
+[PGDFS.Uninstall.Reg]
+HKLM,Software\Microsoft\Windows\CurrentVersion\Uninstall\PGDFS,DisplayName,,%Uninstall%
+HKLM,Software\Microsoft\Windows\CurrentVersion\Uninstall\PGDFS,UninstallString,,"RunDll setupx.dll,InstallHinfSection PGDFS.Remove 4 %17%\pgdfs9x.inf"
+
+[Strings]
+PicoGUS="PicoGUS"
+DiskName="PicoGUS PGDFS driver"
+Uninstall="PicoGUS PGDFS (USB drive as a drive letter)"
