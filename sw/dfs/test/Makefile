@@ -65,7 +65,7 @@ $(B)/test_server: $(OBJS)
 # ---- RP2040 compile-only check with the firmware FatFs configuration --------
 ARMCC    ?= arm-none-eabi-gcc
 ARMSIZE  ?= arm-none-eabi-size
-ARMFLAGS := -mcpu=cortex-m0plus -mthumb -Os -Wall
+ARMFLAGS := -DPGDFS=1 -mcpu=cortex-m0plus -mthumb -Os -Wall
 ARMINC   := -I$(FATFS) -I$(DFS) -I$(SW) -I$(SW)/../common
 ARMOBJS  := $(B)/arm/dfs_server.o $(B)/arm/dfs_fs.o $(B)/arm/ff.o
 
