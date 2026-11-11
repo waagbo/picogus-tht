@@ -722,6 +722,17 @@ static uint16_t search(uint16_t dir_id, uint32_t start, uint8_t attr, const char
     dots = (path[0] == 0) ? 0 : 2;
     dirs[di].stamp = ++dir_clock;
 
+    /* the dot entries below are made up, so a search that asks for
+     * directories must not find them in a directory that does not exist */
+    if (first && dots && (attr & AM_DIR)) {
+        fr = note(DFS_CALL_STAT, f_stat(path, &fno));
+        if (fr == FR_OK && !(fno.fattrib & AM_DIR)) return DFS_ERR_PATH;
+        if (fr != FR_OK) {
+            uint16_t e = dfs_fr2dos(fr);
+            return (e == DFS_ERR_FILE) ? DFS_ERR_PATH : e;
+        }
+    }
+
     /* synthesized '.' and '..' at positions 0 and 1 of a non-root directory */
     for (; start < dots; start++) {
         if (!(attr & AM_DIR)) continue;

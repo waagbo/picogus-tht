@@ -699,6 +699,12 @@ static void test_find(void) {
     CHECK(ax == 0x12, "no match -> 12h, got %04X", ax);
     ax = op_findfirst(0x00, "\\NOPE\\????????.???", &s);
     CHECK(ax == 3, "missing directory -> 3, got %04X", ax);
+    ax = op_findfirst(0x16, "\\NOPE\\????????.???", &s);
+    CHECK(ax == 3, "missing directory, directories wanted -> 3 (no made-up dot entries), got %04X", ax);
+    ax = op_findfirst(0x10, "\\NOPE\\DEEPER\\????????.???", &s);
+    CHECK(ax == 3, "missing parent directory -> 3, got %04X", ax);
+    ax = op_findfirst(0x10, "\\SUB\\NEW.TXT\\????????.???", &s);
+    CHECK(ax == 3, "a file is not a directory -> 3, got %04X", ax);
     ax = op_findfirst(0x10, "\\FF\\????????.???", &s);
     CHECK(ax == 0 && s.dir_id != 0, "dir id never 0");
     s.dir_id = 0;
