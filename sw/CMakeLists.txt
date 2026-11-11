@@ -48,6 +48,19 @@ project(picogus
 # CMake's project(VERSION) only allows numeric components, so the suffix lives here.
 set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.2")
 
+# Experimental features describe themselves in experimental/<feature>.md (see
+# experimental/README.md). Name the ones this source tree carries in the
+# version, e.g. 4.2.0+pgdfs, so such firmware can be told from the mainline.
+file(GLOB PICOGUS_EXPERIMENTAL_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/experimental/*.md)
+list(SORT PICOGUS_EXPERIMENTAL_FILES)
+foreach(FEATURE_FILE ${PICOGUS_EXPERIMENTAL_FILES})
+    get_filename_component(FEATURE ${FEATURE_FILE} NAME_WE)
+    if(NOT FEATURE STREQUAL "README")
+        string(APPEND PICOGUS_VERSION "+${FEATURE}")
+    endif()
+endforeach()
+message("PicoGUS firmware version: ${PICOGUS_VERSION}")
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 

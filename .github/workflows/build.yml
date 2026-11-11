@@ -1,9 +1,74 @@
 name: Build
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      experimental:
+        description: "Also build the experimental flavor (all experimental feature branches merged in)"
+        type: boolean
+        default: true
+
+# Every run builds the release files (firmware for RP2040, RP2350 and the
+# RP2350B PicoGUS v2.1 board, the DOS tools and their documentation) in up to
+# two flavors:
+#   mainline      the commit as it is
+#   experimental  the commit with the experimental feature branches listed in
+#                 sw/experimental/branches.txt merged in
+# Each flavor ends up as one artifact, picogus-mainline and
+# picogus-experimental, and a version tag attaches both to a draft release.
+# The experimental flavor is left out when that list is empty, when the
+# repository variable PICOGUS_EXPERIMENTAL is "false", or when a manual run
+# turns it off. A failure in the experimental flavor (a feature branch that no
+# longer merges, say) shows up as a failed job but does not hold back the
+# mainline files or a release. See sw/experimental/README.md.
 jobs:
+    plan:
+      runs-on: ubuntu-22.04
+      outputs:
+        flavors: ${{ steps.plan.outputs.flavors }}
+        experimental: ${{ steps.plan.outputs.experimental }}
+      steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Choose the flavors to build
+        id: plan
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_EXPERIMENTAL: ${{ inputs.experimental }}
+          VAR_EXPERIMENTAL: ${{ vars.PICOGUS_EXPERIMENTAL }}
+        run: |
+          FLAVORS='["mainline"]'
+          EXPERIMENTAL=false
+          if [[ "$VAR_EXPERIMENTAL" == "false" ]]; then
+            echo "Experimental flavor is turned off by the PICOGUS_EXPERIMENTAL repository variable"
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$INPUT_EXPERIMENTAL" != "true" ]]; then
+            echo "Experimental flavor is turned off for this run"
+          elif [[ -z "$(sw/scripts/experimental.sh list)" ]]; then
+            echo "No experimental feature branches are listed"
+          else
+            echo "Experimental feature branches:"
+            sw/scripts/experimental.sh list
+            FLAVORS='["mainline","experimental"]'
+            EXPERIMENTAL=true
+          fi
+          echo "flavors=$FLAVORS" >> "$GITHUB_OUTPUT"
+          echo "experimental=$EXPERIMENTAL" >> "$GITHUB_OUTPUT"
+
     build-firmware:
       runs-on: ubuntu-22.04
-      env: 
+      needs: plan
+      continue-on-error: ${{ matrix.flavor == 'experimental' }}
+      strategy:
+        fail-fast: false
+        matrix:
+          flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
+          # rp2040: Pico / Pico W / PicoGUS 2.0. rp2350: Pico 2 / Pico 2 W.
+          # picogus21: PicoGUS v2.1 THT (RP2350B on a Core2350B module).
+          chip: [rp2040, rp2350, picogus21]
+      env:
         BUILD_TYPE: "Release"
         PICOSDK_VER: "2.3.1"
         PICOEXTRA_VER: "sdk-2.3.1"
@@ -18,10 +83,16 @@ jobs:
         if: ${{ env.ACT }}
         run: apt-get update && sudo apt-get install curl build-essential cmake -y
 
+      # The experimental flavor needs the feature branches, so fetch everything for it
       - name: Checkout repo with submodules
         uses: actions/checkout@v7
         with:
             submodules: recursive
+            fetch-depth: ${{ matrix.flavor == 'experimental' && '0' || '1' }}
+
+      - name: Merge experimental features
+        if: matrix.flavor == 'experimental'
+        run: sw/scripts/experimental.sh merge --in-place
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -39,12 +110,12 @@ jobs:
 
       # Since we reference stable versions of Pico-SDK and pico-extras, we can cache their downloads.
       # If this were to reference changing branches (like "master"), this caching step must be removed!!!
-      - name: Cache Pico-SDK and Extras 
+      - name: Cache Pico-SDK and Extras
         id: cache-sdk
         uses: actions/cache@v6
         with:
           path: ${{github.workspace}}/pico/
-          key: ${{ env.PICOSDK_VER }}-${{ env.PICOEXTRA_VER }}          
+          key: ${{ env.PICOSDK_VER }}-${{ env.PICOEXTRA_VER }}
 
       # If we did not find stuff in the cache, download it fresh.
       # Use method recommended by Pico SDK docs: not a full recursive clone
@@ -61,47 +132,42 @@ jobs:
           cd $PICO_EXTRAS_PATH
           git submodule update --init --depth 1
 
-      - name: Create Build Environment
-        run: cmake -E make_directory ${{github.workspace}}/build
-
       # - name: Patch Pico SDK to allow LTO
       #   run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform_compiler/include/pico/platform/compiler.h
 
-      - name: Build Mega Firmware
+      # Mega firmware and NE2000 firmware: picogus.uf2 and pg-ne2k.uf2 for
+      # RP2040, pgus2350.uf2 and ne2k2350.uf2 for RP2350, pgus-v21.uf2 for v2.1
+      - name: Build Firmware
         shell: bash
-        working-directory: ${{github.workspace}}/build
-        run: |
-          mkdir -p $OUTPUT_DIR
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="MULTIFW" #-DUSE_LTO=1
-          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp picogus.uf2 $OUTPUT_DIR/picogus.uf2
+        run: sw/scripts/build_release.sh --platform ${{ matrix.chip }} --no-dos-tools --out $OUTPUT_DIR
 
-      - name: Build NE2000 Firmware
-        shell: bash
-        working-directory: ${{github.workspace}}/build
-        run: |
-          mkdir -p $OUTPUT_DIR
-          cmake $GITHUB_WORKSPACE/sw -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPROJECT_TYPE="NE2K" -DPICO_BOARD=picow_fast #-DUSE_LTO=1
-          cmake --build . --config $BUILD_TYPE --parallel $(nproc)
-          cp pg-ne2k.uf2 $OUTPUT_DIR/pg-ne2k.uf2
-
-      # will generate PicoGUS Firmwares.zip as downloadable artifact with all .uf2 files
-      - name: Upload All Firmwares
+      - name: Upload Firmware
         uses: actions/upload-artifact@v7
         with:
-          name: PicoGUS Firmwares
+          name: ${{ matrix.flavor }}-firmware-${{ matrix.chip }}
           path: ${{env.OUTPUT_DIR}}
 
-    build-pgusinit:
+    # pgusinit.exe, the DOS programs of experimental features, and their documentation
+    build-dos-tools:
       runs-on: ubuntu-22.04
-      env: 
+      needs: plan
+      continue-on-error: ${{ matrix.flavor == 'experimental' }}
+      strategy:
+        fail-fast: false
+        matrix:
+          flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
+      env:
         BUILD_TYPE: "Release"
         OUTPUT_DIR: ${{github.workspace}}/binaries
       steps:
-      - name: Checkout repo with submodules
+      - name: Checkout repo
         uses: actions/checkout@v7
         with:
-            submodules: recursive
+            fetch-depth: ${{ matrix.flavor == 'experimental' && '0' || '1' }}
+
+      - name: Merge experimental features
+        if: matrix.flavor == 'experimental'
+        run: sw/scripts/experimental.sh merge --in-place
 
       - name: Install OpenWatcom 2.0
         uses: open-watcom/setup-watcom@v1
@@ -109,33 +175,90 @@ jobs:
           version: "2.0-64"
           tag: "2025-07-01-Build"
 
-      - name: Build pgusinit
-        working-directory: ${{github.workspace}}/pgusinit
-        run: |
-          mkdir -p $OUTPUT_DIR
-          make INCLUDE="$WATCOM"/h
-          cp pgusinit.exe $OUTPUT_DIR
+      - name: Build DOS tools
+        shell: bash
+        run: sw/scripts/build_release.sh --no-firmware --require-dos-tools --out $OUTPUT_DIR
 
-      # will generate pgusinit.zip as downloadable artifact with pgusinit.exe
-      - name: Upload pgusinit
+      - name: Upload DOS tools
         uses: actions/upload-artifact@v7
         with:
-          name: pgusinit
-          path: ${{env.OUTPUT_DIR}}/pgusinit.exe
+          name: ${{ matrix.flavor }}-dos-tools
+          path: ${{env.OUTPUT_DIR}}
+
+    # Unit tests that run on the build machine: every sw/<module>/test with a Makefile
+    host-tests:
+      runs-on: ubuntu-22.04
+      needs: plan
+      continue-on-error: ${{ matrix.flavor == 'experimental' }}
+      strategy:
+        fail-fast: false
+        matrix:
+          flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
+      steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+            fetch-depth: ${{ matrix.flavor == 'experimental' && '0' || '1' }}
+
+      - name: Merge experimental features
+        if: matrix.flavor == 'experimental'
+        run: sw/scripts/experimental.sh merge --in-place
+
+      - name: Run host tests
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for makefile in sw/*/test/Makefile; do
+            echo "::group::$(dirname "$makefile")"
+            make -C "$(dirname "$makefile")" test
+            echo "::endgroup::"
+          done
+
+    # One download per flavor with everything needed to use it: the firmware
+    # .uf2 files for every platform, the DOS tools and the documentation.
+    bundle:
+      runs-on: ubuntu-22.04
+      needs: [plan, build-firmware, build-dos-tools, host-tests]
+      continue-on-error: ${{ matrix.flavor == 'experimental' }}
+      strategy:
+        fail-fast: false
+        matrix:
+          flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
+      env:
+        STAGING_DIR: ${{github.workspace}}/bundle
+      steps:
+      - name: Download firmware and DOS tools
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "${{ matrix.flavor }}-*"
+          path: ${{env.STAGING_DIR}}
+          merge-multiple: true
+      # A flavor is all of its files or nothing
+      - name: Check that the set is complete
+        shell: bash
+        run: |
+          ls -la $STAGING_DIR
+          for f in picogus.uf2 pg-ne2k.uf2 pgus2350.uf2 ne2k2350.uf2 pgus-v21.uf2 pgusinit.exe README.md; do
+            if [ ! -s "$STAGING_DIR/$f" ]; then
+              echo "::error::$f is missing from the ${{ matrix.flavor }} files"
+              exit 1
+            fi
+          done
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: picogus-${{ matrix.flavor }}
+          path: ${{env.STAGING_DIR}}
 
     create-release:
       if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
       runs-on: ubuntu-22.04
-      needs: [build-firmware, build-pgusinit]
-      env: 
+      needs: [plan, bundle]
+      env:
         STAGING_DIR: ${{github.workspace}}/release-staging-dir
       steps:
       - name: Checkout repo
         uses: actions/checkout@v7
-      - name: Copy README
-        run: |
-          mkdir -p $STAGING_DIR
-          cp pgusinit/README.md $STAGING_DIR/README.md
       - name: Classify release
         id: relinfo
         shell: bash
@@ -158,26 +281,36 @@ jobs:
           if [ ! -s release-body.md ] && [ "$VERSION" != "$BASE" ]; then
             awk -v ver="$BASE" '$0 ~ "^# v" ver "$" {a=1;next} /^# /{a=0} a' sw/CHANGELOG.md > release-body.md
           fi
-      - name: Download firmware artifact
+      - name: Download mainline bundle
         uses: actions/download-artifact@v8
         with:
-          name: PicoGUS Firmwares
-          path: ${{env.STAGING_DIR}}
-      - name: Download pgusinit artifact
+          name: picogus-mainline
+          path: ${{env.STAGING_DIR}}/mainline
+      # Not there if the experimental flavor failed to build: release without it then
+      - name: Download experimental bundle
+        if: needs.plan.outputs.experimental == 'true'
+        continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          name: pgusinit
-          path: ${{env.STAGING_DIR}}
+          name: picogus-experimental
+          path: ${{env.STAGING_DIR}}/experimental
       - name: Install zip
         uses: montudor/action-zip@v1
+      # picogus-v<version>.zip is the release; picogus-v<version>-experimental.zip
+      # is the same set of files built with the experimental features
       - name: Zip release
+        shell: bash
         run: |
-          zip -9 -r ../picogus-v${{ steps.relinfo.outputs.version }}.zip .
+          VERSION="${{ steps.relinfo.outputs.version }}"
+          (cd mainline && zip -9 -r ../../picogus-v$VERSION.zip .)
+          if [ -f experimental/picogus.uf2 ]; then
+            (cd experimental && zip -9 -r ../../picogus-v$VERSION-experimental.zip .)
+          fi
         working-directory: ${{env.STAGING_DIR}}
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
           body_path: release-body.md
-          files: picogus-v${{ steps.relinfo.outputs.version }}.zip
+          files: picogus-v${{ steps.relinfo.outputs.version }}*.zip
           draft: true
           prerelease: ${{ steps.relinfo.outputs.prerelease }}
