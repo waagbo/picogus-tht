@@ -1,0 +1,14 @@
+(version 1)
+
+# J6, GCT USB4085-GF-A through-hole USB-C: 0.7 mm pads with 0.4 mm holes on a 0.85 mm pitch,
+# so 0.15 mm between neighbouring pads and 0.45 mm between holes (GCT's recommended land pattern).
+(rule "USB4085 contacts"
+	(condition "A.Parent == 'J6' && B.Parent == 'J6'")
+	(constraint clearance (min 0.13mm))
+	(constraint hole_to_hole (min 0.4mm)))
+
+# The board minimum clearance (Board Setup > Constraints) is 0.13 mm only so that the rule above can apply;
+# every other item keeps the 0.2 mm netclass clearance. This rule makes that explicit.
+(rule "0.2 mm everywhere else"
+	(condition "!(A.Parent == 'J6' && B.Parent == 'J6')")
+	(constraint clearance (min 0.2mm)))

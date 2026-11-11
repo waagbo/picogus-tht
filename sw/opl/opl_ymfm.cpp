@@ -19,6 +19,8 @@
  *   base is 0x00 (vs 0x06 for OPL2).
  */
 
+#include <cstdlib>
+
 #include "opl.h"
 #include "hardware/sync.h"
 #include "hardware/timer.h"
@@ -29,6 +31,14 @@
 #include "include/cmd_buffers.h"
 extern cms_buffer_t opl_cmd_buffer;
 #endif
+
+// ymfm's use of the standard library links in libstdc++'s verbose terminate
+// handler, whose C++ name demangler calls snprintf. printf is stripped from
+// release builds (see scripts/check_printf_leak.py), so replace the handler
+// with a plain abort, which is where it ends up anyway.
+namespace __gnu_cxx {
+void __verbose_terminate_handler() { std::abort(); }
+}
 
 // ---------------------------------------------------------------------------
 // Chip selection

@@ -26,6 +26,7 @@
 #define UF2_FLAG_MD5_PRESENT        0x00004000u
 
 #define RP2040_FAMILY_ID 0xe48bff56
+#define RP2350_ARM_S_FAMILY_ID 0xe48bff59
 
 struct uf2_block
 {

@@ -46,36 +46,47 @@ extern Settings settings;
 extern uint LED_PIN;
 
 
+// Bring up WiFi. The CYW43 driver then does its background work in a low
+// priority IRQ on the calling core, so this must run on core 1.
+void ne2000_core1_init() {
+    DBG_PUTS("starting core 1 ne2000");
+    PG_EnableWifi();
+    PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
+}
+
+// Handle requests from core 0 and keep the WiFi connection up. Call this
+// regularly from the core 1 main loop.
+void ne2000_core1_task() {
+    static bool flag = false;
+    if (multicore_fifo_rvalid()) {
+        switch(multicore_fifo_pop_blocking()) {
+        case FIFO_NE2K_SEND:
+            ne2000_initiate_send();
+            break;
+        case FIFO_WIFI_STATUS:
+            PG_Wifi_GetStatus();
+            break;
+        default:
+            break;
+        }
+    }
+    if (((time_us_32() >> 21) & 0x1) == 0x1) {
+        if (flag == false) {
+            DBG_PUTCHAR('=');
+            PG_Wifi_Reconnect();
+            flag = true;
+        }
+    } else {
+        flag = false;
+    }
+}
+
 void play_ne2000() {
     // Init PIC on this core so it handles timers
     PIC_Init();
 
-    DBG_PUTS("starting core 1 ne2000");
-    PG_EnableWifi();
-    PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
-
-    static bool flag = false;
+    ne2000_core1_init();
     while(1) {
-        if (multicore_fifo_rvalid()) {
-            switch(multicore_fifo_pop_blocking()) {
-            case FIFO_NE2K_SEND:
-                ne2000_initiate_send();
-                break;
-            case FIFO_WIFI_STATUS:
-                PG_Wifi_GetStatus();
-                break;
-            default:
-                break;
-            }
-        }
-        if (((time_us_32() >> 21) & 0x1) == 0x1) { 
-            if (flag == false) {
-                DBG_PUTCHAR('=');
-                PG_Wifi_Reconnect();
-                flag = true;
-            }
-        } else {
-            flag = false;
-        }
+        ne2000_core1_task();
     }
 }

@@ -27,7 +27,7 @@
 
 #include "hardware/gpio.h"
 #ifdef PSRAM
-#include "psram_spi.h"
+#include "system/psram.h"
 extern psram_spi_inst_t psram_spi;
 #endif
 

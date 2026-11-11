@@ -3,8 +3,28 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards)
+# Chip selection: build for RP2350 (Raspberry Pi Pico 2 / Pico 2 W) with
+# -DPICO_PLATFORM=rp2350, or pick an RP2350 board directly with -DPICO_BOARD.
+# The default is RP2040. PICO_PLATFORM may also come from the environment,
+# as it does for the Pico SDK itself.
+if(NOT PICO_PLATFORM AND DEFINED ENV{PICO_PLATFORM})
+    set(PICO_PLATFORM $ENV{PICO_PLATFORM})
+endif()
+if(PICO_PLATFORM MATCHES "riscv")
+    message(FATAL_ERROR "PicoGUS runs on the RP2350 Arm cores only (it contains Arm assembly): use PICO_PLATFORM=rp2350")
+endif()
 if(NOT PICO_BOARD)
-    set(PICO_BOARD "picogus2")
+    if(PICO_PLATFORM MATCHES "^rp2350")
+        if(PROJECT_TYPE MATCHES "NE2K")
+            set(PICO_BOARD "pico2w_fast")
+        else()
+            set(PICO_BOARD "pico2_fast")
+        endif()
+    elseif(PROJECT_TYPE MATCHES "NE2K")
+        set(PICO_BOARD "picow_fast")
+    else()
+        set(PICO_BOARD "picogus2")
+    endif()
     message("PICO_BOARD not set, defaulting to ${PICO_BOARD}")
 endif()
 set(PICO_COPY_TO_RAM 1)
@@ -47,10 +67,21 @@ set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# Chip-specific settings (PICO_PLATFORM is final once the board has been processed)
+if(PICO_PLATFORM MATCHES "^rp2350")
+    set(PICOGUS_CHIP "rp2350")
+    set(PICOGUS_UF2_FAMILY_ID "0xe48bff59") # RP2350, Arm Secure
+else()
+    set(PICOGUS_CHIP "rp2040")
+    set(PICOGUS_UF2_FAMILY_ID "0xe48bff56")
+endif()
+message("Building PicoGUS firmware for ${PICOGUS_CHIP} on board ${PICO_BOARD}")
+
 ################################################################################
 # Helper function for setting linker script
 function(set_linker_script TARGET script)
-    target_link_directories(${TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/multifw)
+    # fw_memmap_c2ram.ld, included by the generated script, is chip-specific
+    target_link_directories(${TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/multifw/${PICOGUS_CHIP})
     pico_set_linker_script(${TARGET} ${script})
 
     # Add dependencies on the 'included' linker scripts so that the target gets
@@ -309,6 +340,12 @@ function(build_gus TARGET_NAME MULTIFW)
         SCALE_22K_TO_44K=1
         # FORCE_28CH_27CH=1
     )
+    if(PICO_BOARD STREQUAL "picogus21")
+        # PicoGUS v2.1 THT: GUS sample RAM in the Core2350B2's PSRAM on the RP2350B's
+        # QMI (CS1 = GPIO47) instead of an APS6404L on PIO SPI (GPIO0-3)
+        target_compile_definitions(${TARGET_NAME} PRIVATE PSRAM_QMI=1)
+        target_sources(${TARGET_NAME} PRIVATE system/psram_qmi.c)
+    endif()
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
 endfunction()
@@ -316,7 +353,7 @@ endfunction()
 option(SOUND_WSS "Build SB firmware with WSS (AD1848) support instead of SB16 DSP" OFF)
 ################################################################################
 # Build SB firmware
-function(build_sb_8950 TARGET_NAME MULTIFW)
+function(build_sb_emu8950 TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
@@ -378,6 +415,7 @@ endfunction()
 
 ################################################################################
 # Build SB firmware — DOSBox OPL3 core
+# Optional third argument: program name, for firmwares built on top of this one
 function(build_sb_dbopl3 TARGET_NAME MULTIFW)
     set(USE_DBOPL_OPL TRUE)
     set(USB_JOYSTICK TRUE)
@@ -385,7 +423,11 @@ function(build_sb_dbopl3 TARGET_NAME MULTIFW)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
-    pico_set_program_name(${TARGET_NAME} "picogus-sb-dbopl3")
+    if(ARGC GREATER 2)
+        pico_set_program_name(${TARGET_NAME} ${ARGV2})
+    else()
+        pico_set_program_name(${TARGET_NAME} "picogus-sb-dbopl3")
+    endif()
     target_sources(${TARGET_NAME} PRIVATE
         audio/volctrl.cpp
         sbdsp/sbdsp.cpp
@@ -446,7 +488,7 @@ endfunction()
 ################################################################################
 # Build AdLib firmware — DOSBox OPL3 core
 function(build_adlib_dbopl3 TARGET_NAME MULTIFW)
-    set(USE_DBOPL3_OPL TRUE)
+    set(USE_DBOPL_OPL TRUE)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
@@ -566,14 +608,20 @@ function(build_usb TARGET_NAME MULTIFW)
 endfunction()
 
 
-function(build_ne2k TARGET_NAME MULTIFW)
-    config_target(${TARGET_NAME} ${MULTIFW})
-    pico_set_program_name(${TARGET_NAME} "picogus-ne2k")
+# NE2000 emulation over the CYW43 WiFi chip of a Pico W / Pico 2 W
+function(add_ne2000 TARGET_NAME)
+    # The CYW43 PIO SPI takes 2 PIO cycles per bit. On RP2350 keep the clock
+    # within the CYW43439's 50MHz gSPI limit: 370MHz / 4 / 2 = 46.25MHz.
+    if(PICOGUS_CHIP STREQUAL "rp2350")
+        set(CYW43_CLKDIV 4)
+    else()
+        set(CYW43_CLKDIV 3)
+    endif()
     target_compile_definitions(${TARGET_NAME} PRIVATE
        NE2000=1
        PICOW=1
        CYW43_CONFIG_FILE="cyw43_firmware.h"
-       CYW43_PIO_CLOCK_DIV_INT=3
+       CYW43_PIO_CLOCK_DIV_INT=${CYW43_CLKDIV}
     )
     target_sources(${TARGET_NAME} PRIVATE
         ne2000play.cpp
@@ -582,6 +630,28 @@ function(build_ne2k TARGET_NAME MULTIFW)
         ${TARGET_NAME}
         ne2000        
     )
+endfunction()
+
+function(build_ne2k TARGET_NAME MULTIFW)
+    config_target(${TARGET_NAME} ${MULTIFW})
+    pico_set_program_name(${TARGET_NAME} "picogus-ne2k")
+    add_ne2000(${TARGET_NAME})
+endfunction()
+
+################################################################################
+# Build SB + NE2000 firmware (experimental, see docs/sb-ne2000-rp2350.md)
+# Needs a Pico 2 W. The card has one IRQ output, which the NE2000 shares with
+# the SB unless SB_NE2K_IRQ_PIN names a GPIO wired to a second ISA IRQ line.
+set(SB_NE2K_IRQ_PIN "" CACHE STRING "GPIO driving a dedicated NE2000 IRQ line in SB_NE2K builds (empty: share the card IRQ)")
+function(build_sb_ne2k TARGET_NAME MULTIFW)
+    if(NOT PICOGUS_CHIP STREQUAL "rp2350")
+        message(FATAL_ERROR "SB_NE2K needs an RP2350 (Pico 2 W)")
+    endif()
+    build_sb_dbopl3(${TARGET_NAME} ${MULTIFW} "picogus-sb-ne2k")
+    add_ne2000(${TARGET_NAME})
+    if(NOT SB_NE2K_IRQ_PIN STREQUAL "")
+        target_compile_definitions(${TARGET_NAME} PRIVATE NE2K_IRQ_PIN=${SB_NE2K_IRQ_PIN})
+    endif()
 endfunction()
 
 
@@ -758,6 +828,9 @@ elseif(PROJECT_TYPE STREQUAL "USB")
 elseif(PROJECT_TYPE STREQUAL "NE2K")
     set(FW_TARGET pg-ne2k)
     build_ne2k(pg-ne2k FALSE)
+elseif(PROJECT_TYPE STREQUAL "SB_NE2K")
+    set(FW_TARGET pg-sb-ne2k)
+    build_sb_ne2k(pg-sb-ne2k FALSE)
 elseif(PROJECT_TYPE STREQUAL "ANALYZER")
     set(FW_TARGET pg-analyzer)
     add_executable(pg-analyzer isa_analyzer.cpp)
@@ -786,5 +859,5 @@ endif()
 add_custom_target(
     program
     DEPENDS ${FW_TARGET}
-    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
+    COMMAND openocd -f interface/cmsis-dap.cfg -f target/${PICOGUS_CHIP}.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
 )

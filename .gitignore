@@ -6,6 +6,7 @@
 *.obj
 *.o
 build/
+binaries/
 *.kicad_prl
 fp-info-cache
 .vscode
@@ -13,3 +14,4 @@ fp-info-cache
 firmware.ld
 flash_firmware.h
 __pycache__/
+~*.lck

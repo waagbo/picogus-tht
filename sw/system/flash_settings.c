@@ -25,6 +25,7 @@
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
+#include "overclock.h"
 
 static const Settings defaultSettings = {
     .magic = SETTINGS_MAGIC,
@@ -205,14 +206,24 @@ void saveSettings(const Settings* settings)
     DBG_PRINTF("doing settings save: ");
     // Pause the 2nd core while flash is busy if it reads flash. Currently only emu8950's TLL table uses flashdata
     // so firmwares with that enabled register core 1 as a lockout victim.
+#if PSRAM_QMI
+    // PicoGUS v2.1: GUS core 1 (audio, ISA DMA) also registers, as it reads and writes the QMI PSRAM, which is
+    // not usable while the flash is written. Wait for it however long it takes: running on would hit the PSRAM.
+    const bool locked_out = multicore_lockout_ready();
+    if (locked_out) {
+        multicore_lockout_start_blocking();
+    }
+#else
     // Time out rather than hang core 0 if core 1 doesn't respond
     const bool locked_out = multicore_lockout_ready() && multicore_lockout_start_timeout_us(1000);
+#endif
 
     DBG_PUTCHAR('/');
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(SETTINGS_SECTOR, FLASH_SECTOR_SIZE);    // last sector
     DBG_PUTCHAR('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
+    overclock_flash_write_done();
     restore_interrupts(ints);
     if (locked_out) {
         multicore_lockout_end_blocking();

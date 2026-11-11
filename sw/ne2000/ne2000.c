@@ -202,6 +202,11 @@ uint8_t PG_EnableWifi(void) {
            PG_Wifi_info.cyw43_mac[3], PG_Wifi_info.cyw43_mac[4], PG_Wifi_info.cyw43_mac[5]);    
     cyw43_wifi_pm(&cyw43_state, cyw43_pm_value(CYW43_NO_POWERSAVE_MODE, 20, 1, 1, 1));
 
+#ifdef NE2K_IRQ_PIN
+    gpio_init(NE2K_IRQ_PIN);
+    gpio_set_dir(NE2K_IRQ_PIN, GPIO_OUT);
+    gpio_set_drive_strength(NE2K_IRQ_PIN, GPIO_DRIVE_STRENGTH_12MA);
+#endif
     nic = ne2000_init();
     DBG_PRINTF("Inited\n");
     return 0;
@@ -254,12 +259,23 @@ struct pbuf;
 uint16_t pbuf_copy_partial(const struct pbuf *p, void *dataptr, uint16_t len, uint16_t offset) {}
 
 
+#ifdef NE2K_IRQ_PIN
+// The NE2000 drives an ISA IRQ line of its own instead of the card's IRQ
+// output, so it can run alongside another device that needs an interrupt
+static void ne2000_raise_irq(ne2000_t *ne2000) {
+        gpio_put(NE2K_IRQ_PIN, 1);
+}
+static void ne2000_lower_irq(ne2000_t *ne2000) {
+        gpio_put(NE2K_IRQ_PIN, 0);
+}
+#else
 static void ne2000_raise_irq(ne2000_t *ne2000) {                
         PIC_ActivateIRQ();        
 }
 static void ne2000_lower_irq(ne2000_t *ne2000) {
         PIC_DeActivateIRQ();        
 }
+#endif
 
 //
 // reset - restore state to power-up, cancelling all i/o

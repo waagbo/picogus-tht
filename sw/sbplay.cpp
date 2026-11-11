@@ -76,6 +76,18 @@ extern Settings settings;
 
 extern uint LED_PIN;
 
+#ifdef NE2000
+// SB + NE2000: core 1 services the WiFi chip as well as the sound
+void ne2000_core1_init(void);
+void ne2000_core1_task(void);
+// The CYW43 driver works in a PICO_LOWEST_IRQ_PRIORITY IRQ, and moving a
+// frame to the chip takes hundreds of µs. The sample IRQ must run every
+// 22.7µs (a late one loses a sample), so it has to preempt the WiFi work.
+#define AUDIO_IRQ_PRIORITY PICO_DEFAULT_IRQ_PRIORITY
+#else
+#define AUDIO_IRQ_PRIORITY PICO_LOWEST_IRQ_PRIORITY
+#endif
+
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
@@ -268,6 +280,10 @@ void play_adlib() {
     sbdsp_set_options(settings.SB16.options);
 #endif
 #endif
+#ifdef NE2000
+    // Before audio starts: loading the CYW43 firmware takes a while
+    ne2000_core1_init();
+#endif
     init_audio();
 
 #ifdef USE_LINEAR_RESAMPLER
@@ -293,7 +309,7 @@ void play_adlib() {
     pwm_init(pwm_slice_num, &pwm_c, false);
     pwm_set_irq_enabled(pwm_slice_num, true);
     irq_set_exclusive_handler(PWM_IRQ_WRAP, audio_sample_handler);
-    irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY);
+    irq_set_priority(PWM_IRQ_WRAP, AUDIO_IRQ_PRIORITY);
     irq_set_enabled(PWM_IRQ_WRAP, true);
     pwm_set_enabled(pwm_slice_num, true);
 #endif
@@ -355,6 +371,9 @@ void play_adlib() {
 #endif
 #ifdef CDROM
         cdrom_tasks(&cdrom);
+#endif
+#ifdef NE2000
+        ne2000_core1_task();
 #endif
     }
 }

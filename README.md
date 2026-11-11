@@ -88,6 +88,8 @@ Want to make your own PicoGUS? See the [build guide](https://github.com/polpo/pi
 
 Have a PicoGUS and want to use it? See the [configuring and using your PicoGUS guide](https://github.com/polpo/picogus/wiki/Configuring-and-using-your-PicoGUS).
 
+Firmware can also be built for Pico-based PicoGUS boards fitted with an RP2350 Raspberry Pi Pico 2 or Pico 2 W instead of a Pico or Pico W. This is new and not yet hardware tested: see [RP2350 support](sw/docs/rp2350.md).
+
 Want to support PicoGUS? I have a limited number of machines to test PicoGUS in and donating either money or motherboards would be greatly appreciated and help increase the compatibility of PicoGUS.
 
 You can donate via [PayPal](https://paypal.me/ianpolpo) or Ko-Fi: [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U6IZTCB)
