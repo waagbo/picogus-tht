@@ -837,8 +837,10 @@ python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT-sockets.csv docs/BOM-THT-
 * **U9 is the PCM5102A** (112 dB). DigiKey's line is the automotive PCM5102AQPWRQ1, in stock when the PCM5102APWR
   was not; LCSC's line is the PCM5102APWR. The PCM5100A (100 dB) is the budget choice: with the firmware's 16-bit
   output the grades sound the same. All three are pin-compatible.
-* **J9 is gold-plated** (Amphenol 77313-118-26LF, 30 µin) with the same pin lengths as the tin Sullins PEC13DAAN,
-  which stays as the cheaper alternative. LCSC's "gold 2x13 header" C9040 is a shrouded box header: don't use it.
+* **The pin headers are gold-plated** (30 µin): Amphenol 77313-118-26LF for J9, 77313-118-18LF for J1 and
+  77311-118-02LF for J6/J7, with the same pin lengths as the parts they replace (the tin Sullins PEC13DAAN for J9,
+  the Amphenol 10129381-918001BLF for J1, which DigiKey lists with only 1 µin gold, and a tin Sullins 1x40 strip cut
+  into 1x2s for J6/J7). LCSC's "gold 2x13 header" C9040 is a shrouded box header: don't use it.
 * **C15/C24**: DigiKey now sells Murata's direct replacement RCER71H106MWK1H03B; LCSC still has the
   RCER71H106MWM1H03A. **C22/C23** (Panasonic ECE-A1HN100U): DigiKey had none on 2026-11-07 (200 due 2026-11-16,
   orderable as a backorder); LCSC had stock. **R14/R15/R18, R21/R22**: LCSC's Yageo lines were out of stock, so
@@ -847,9 +849,9 @@ python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT-sockets.csv docs/BOM-THT-
   the front. Solder them before the through-hole parts, the TSSOPs first; then check each pin against its neighbours
   on the test pads (a bridge shows as a short between two pads) and ring each test pad through to the part it
   connects to.
-* **DigiKey BOM cost**: about 562 kr excl. MVA for one board at digikey.no's single-piece prices of 2026-11-07
+* **DigiKey BOM cost**: about 560 kr excl. MVA for one board at digikey.no's single-piece prices of 2026-11-07
   (parts only, no PCB, no shipping; price breaks lower it a little). The PCM5102A-Q1 is 60 kr of that: with the
-  PCM5100A the board is about 526 kr. The optional machined socket set was ~80 kr on rev B, plus ~21 kr for the
+  PCM5100A the board is about 524 kr. The optional machined socket set was ~80 kr on rev B, plus ~21 kr for the
   Pico sockets.
 * **Ceramic capacitors must have 5.0 mm (or 5.08 mm) lead pitch.** 2.5 mm parts don't fit (e.g. TDK FG1x, Vishay K…L2).
 
@@ -878,8 +880,7 @@ run the script): outline to x 218.29 (102.0 mm), 422 vias, 756 plated holes. It 
   JLCPCB's placement preview (a correction worked out for v1.3.1's U8, −90°, does not carry over). The TSSOPs' test
   pads are part of their footprints, so JLCPCB can place U3/U4/U9 too.
   The BOM takes the LCSC part from each part's LCSC field (any note after the number dropped; the MPN column then
-  names the part LCSC sells). `PicoGUS-THT-jlcpcb-parts.csv` overrides J6/J7 for assembly with a 1x2 header
-  (Amphenol 77311-118-02LF, C599036): the hand build cuts them from the 1x40 strip instead. JLCPCB fits no jumper
+  names the part LCSC sells). JLCPCB fits no jumper
   shunts: add the four by hand. On 2026-11-07 LCSC had none of U2, U5 and U10, and the Pico (C7203002) is only in
   JLCPCB's assembly library.
 * `PicoGUS-THT-drc.rpt`: the DRC report.
