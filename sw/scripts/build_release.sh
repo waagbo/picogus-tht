@@ -115,6 +115,9 @@ collect_docs() {
         [[ "${dir}" != pgusinit && -f "${tree}/${dir}/README.md" ]] || continue
         cp "${tree}/${dir}/README.md" "${out}/$(echo "${dir}" | tr '[:lower:]' '[:upper:]').md"
     done
+    for file in "${!FEATURE_DOCS[@]}"; do
+        [[ -f "${tree}/${file}" ]] && cp "${tree}/${file}" "${out}/${FEATURE_DOCS[$file]}"
+    done
     for file in "${tree}"/sw/experimental/*.md; do
         [[ -f "${file}" && "$(basename "${file}")" != README.md ]] && features+=("${file}")
     done
@@ -142,13 +145,19 @@ collect_docs() {
     } > "${out}/EXPERIMENTAL.md"
 }
 
+# Documents of experimental features that go with the files, where a source
+# tree has them: path in the tree and the name it gets
+declare -A FEATURE_DOCS=([sw/web/README.md]=WEBSERVER.md)
+
 # build_set <source tree> <output dir> <build dir>
+# The firmware images are build_variants.sh's default set: all modes and
+# NE2000, plus what the tree's experimental features add
 build_set() {
     local tree="$1" out="$2" build="$3"
     mkdir -p "${out}" "${build}"
     if [[ ${FIRMWARE} -eq 1 ]]; then
         "${tree}/sw/scripts/build_variants.sh" --platform "${PLATFORM}" --out "${out}" --build-dir "${build}" \
-            ${VARIANT_ARGS[@]+"${VARIANT_ARGS[@]}"} multifw ne2k
+            ${VARIANT_ARGS[@]+"${VARIANT_ARGS[@]}"}
     fi
     if [[ ${DOS_TOOLS} -eq 1 ]]; then
         build_dos_tools "${tree}" "${out}"
