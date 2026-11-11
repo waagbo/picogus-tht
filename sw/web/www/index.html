@@ -138,8 +138,8 @@ code{font-family:ui-monospace,monospace;font-size:13px}
 <h2>Firmware update</h2>
 <div class="row"><input type="file" id="uf2" accept=".uf2"><button class="pri" data-act="uf2">Upload &amp; install</button></div>
 <progress id="uf2-p" value="0" max="1" class="hide"></progress>
-<p class="note">Use <code>picogus.uf2</code> built for <b>Pico W</b> boards to keep this web page. Sound stutters while flashing and the card restarts when done.</p>
-<p class="note warn">Do not power off during the update. If it fails, upload again before restarting; as a last resort the Pico W can be flashed over USB with BOOTSEL.</p>
+<p class="note">Use <code id="fw-file">picogusw.uf2</code>, the firmware for <b id="fw-board">Pico W</b> boards with this web page. Sound stutters while flashing and the card restarts when done.</p>
+<p class="note warn">Do not power off during the update. If it fails, upload again before restarting; as a last resort the <span id="fw-board2">Pico W</span> can be flashed over USB with BOOTSEL.</p>
 <p id="up-msg" class="note"></p>
 </section>
 
@@ -219,7 +219,10 @@ function apply(j){
   $("conn").className="dot ok";
   $("fw").textContent=j.fw;$("i-fw").textContent=j.fw;
   $("i-mode").textContent=MODES[j.mode]||("#"+j.mode);
-  $("i-board").textContent=j.board?"PicoGUS v2.0":"PicoGUS v1.x / Femto with Pico W";
+  const pico=j.chip=="RP2350"?"Pico 2 W":"Pico W";
+  $("i-board").textContent=j.board?"PicoGUS v2.0":"PicoGUS v1.x / Femto with "+pico;
+  $("fw-file").textContent=j.chip=="RP2350"?"pg2350w.uf2":"picogusw.uf2";
+  $("fw-board").textContent=pico;$("fw-board2").textContent=pico;
   $("i-up").textContent=uptime(j.uptime);
   const n=j.net;$("i-wifi").textContent=n.ssid?(n.ssid+(n.rssi?`, ${n.rssi} dBm`:"")):"-";
   $("i-ip").textContent=`${n.ip}${feats.has("mdns")?" (picogus.local)":""}, MAC ${n.mac}`;

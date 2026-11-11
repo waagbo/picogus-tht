@@ -256,6 +256,12 @@ void json_status(Json &j) {
     j.kvs("fw", firmware_string);
     j.kv("mode", settings.startupMode);
     j.kv("board", BOARD_TYPE);
+    // the chip this firmware is for, as firmware files are per chip
+#if PICO_RP2350
+    j.kvs("chip", "RP2350");
+#else
+    j.kvs("chip", "RP2040");
+#endif
     j.kv("uptime", (int32_t)(to_ms_since_boot(get_absolute_time()) / 1000));
     json_features(j);
 
