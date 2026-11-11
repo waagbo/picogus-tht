@@ -126,6 +126,7 @@ const SettingDef setting_defs[] = {
     {"mpuport",    CMD_MPUPORT,    K_PORT, 0, 0x3ff},
     {"mpudelay",   CMD_MPUDELAY,   K_BOOL, 0, 1},
     {"mpufake",    CMD_MPUFAKE,    K_BOOL, 0, 1},
+    {"mpuwait",    CMD_MPUWAIT,    K_BOOL, 0, 1},
     {"tandyport",  CMD_TANDYPORT,  K_PORT, 0, 0x3ff},
     {"cmsport",    CMD_CMSPORT,    K_PORT, 0, 0x3ff},
     {"mouseport",  CMD_MOUSEPORT,  K_PORT, 0, 0x3ff},
@@ -164,6 +165,7 @@ int32_t setting_value(const SettingDef &d) {
     case CMD_MPUPORT:    return port_value(settings.MPU.basePort);
     case CMD_MPUDELAY:   return settings.MPU.delaySysex;
     case CMD_MPUFAKE:    return settings.MPU.fakeAllNotesOff;
+    case CMD_MPUWAIT:    return settings.MPU.waitBusyStatus;
     case CMD_TANDYPORT:  return port_value(settings.Tandy.basePort);
     case CMD_CMSPORT:    return port_value(settings.CMS.basePort);
     case CMD_MOUSEPORT:  return port_value(settings.Mouse.basePort);

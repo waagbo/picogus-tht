@@ -13,6 +13,8 @@ static int failures;
 
 uint64_t test_now_us = 1000000;
 uart_inst_t *uart0;
+unsigned int LED_PIN;
+void MPU401_FlushDeferred(void) {}
 static uint8_t wire[4096];
 static size_t wire_len;
 void uart_write_blocking(uart_inst_t *u, const uint8_t *src, size_t len) { (void)u; memcpy(wire + wire_len, src, len); wire_len += len; }
@@ -133,6 +135,74 @@ int main(void) {
         static const uint8_t want[] = {0xF0, 0x41, 0x10, 0x16, 0x80, 0x3C, 0x00, 0x90, 0x3C, 0x7F};
         CHECK(wire_is(want, sizeof(want)), "rest of the cut sysex dropped, next message intact");
     }
+
+    // In UART mode the host's bytes go out as they arrive. A message the host
+    // has only written part of is not split by an injected one
+    reset();
+    host(note, 2);
+    run(5);
+    CHECK(MIDI_Inject(sx, sizeof(sx)), "inject");
+    run(20);
+    CHECK(wire_len == 2, "injected sysex waits for the rest of the host message (%zu)", wire_len);
+    host(note + 2, 1);
+    run(10);
+    {
+        static const uint8_t want[] = {0x90, 0x3C, 0x7F, 0xF0, 0x7D, 0x03, 0x01, 0xF7};
+        CHECK(wire_is(want, sizeof(want)), "host message whole, then the injected one");
+    }
+
+    // ...nor a message sent with running status, of which the first data byte is out
+    reset();
+    host(note, 3);
+    run(5);
+    static const uint8_t running[] = {0x40, 0x7F};
+    host(running, 1);
+    run(5);
+    static const uint8_t prog[] = {0xC1, 0x05};
+    CHECK(MIDI_Inject(prog, sizeof(prog)), "inject");
+    run(20);
+    CHECK(wire_len == 4, "injected message waits for the running status message (%zu)", wire_len);
+    host(running + 1, 1);
+    run(10);
+    {
+        static const uint8_t want[] = {0x90, 0x3C, 0x7F, 0x40, 0x7F, 0xC1, 0x05};
+        CHECK(wire_is(want, sizeof(want)), "running status message whole, then the injected one");
+    }
+    // After the injected message the host's running status is gone from the
+    // wire: its next message gets its status byte again
+    host(running, 2);
+    run(10);
+    {
+        static const uint8_t want[] = {0x90, 0x3C, 0x7F, 0x40, 0x7F, 0xC1, 0x05, 0x90, 0x40, 0x7F};
+        CHECK(wire_is(want, sizeof(want)), "status byte resent after an injected message");
+    }
+    // and running status carries on from there
+    host(note + 1, 2);
+    run(10);
+    CHECK(wire_len == 12 && wire[10] == 0x3C && wire[11] == 0x7F, "running status continues (%zu)", wire_len);
+
+    // A message the host never finishes holds injected ones up for a second only
+    reset();
+    host(note, 1);
+    run(5);
+    CHECK(MIDI_Inject(prog, sizeof(prog)), "inject");
+    run(900);
+    CHECK(wire_len == 1, "still waiting for the host (%zu)", wire_len);
+    run(200);
+    {
+        static const uint8_t want[] = {0x90, 0xC1, 0x05};
+        CHECK(wire_is(want, sizeof(want)), "injected message sent after the host gave up");
+    }
+
+    // A reset of the MPU-401 in the middle of a host message frees the line too
+    reset();
+    host(note, 2);
+    run(5);
+    MIDI_ClearBuffer();
+    wire_len = 0;
+    CHECK(MIDI_Inject(prog, sizeof(prog)), "inject");
+    run(10);
+    CHECK(wire_is(prog, sizeof(prog)), "injected message sent after a reset");
 
     printf("%s: %d failure(s)\n", failures ? "FAILED" : "OK", failures);
     return failures ? 1 : 0;

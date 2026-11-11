@@ -37,7 +37,7 @@ typedef uint32_t Bitu;
 typedef enum EventID {MPU_EVENT,RESET_DONE,EOI_HANDLER,NUM_EVENTS} EventID;
 
 /* Interface functions */
-void MPU401_Init(bool delaysysex, bool fakeallnotesoff);
+void MPU401_Init(bool delaysysex, bool fakeallnotesoff, bool waitbusystatus);
 void MPU401_WriteCommand(Bit8u val, bool crit);
 Bit8u MPU401_ReadData(void);
 Bit8u MPU401_ReadStatus(void);
@@ -45,7 +45,9 @@ void MPU401_WriteData(Bit8u val, bool crit);
 Bit8u QueueUsed();
 void send_midi_bytes(int maxbytes);
 uint32_t MIDI_BufferFree(void);
+void MIDI_ClearBuffer(void);
 void MIDI_RawOutByte(Bit8u data);
+void MPU401_FlushDeferred(void);
 #ifdef WEBSERVER
 /* Queue complete MIDI message(s) from the web UI. All or nothing. */
 bool MIDI_Inject(const uint8_t *msg, uint32_t len);

@@ -40,7 +40,7 @@
 #include "web.h"
 #include "web_internal.h"
 #include "web_xip_sram.h"
-#include "hardware/structs/xip_ctrl.h"
+#include "../system/platform.h"
 #include "hardware/structs/rosc.h"
 
 extern Settings settings;
@@ -155,7 +155,7 @@ unsigned int web_rand(void) {
 // ---- XIP cache SRAM ----------------------------------------------------------
 
 void web_xip_cache_off(void) {
-    hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
+    platform_disable_xip_cache();
 }
 
 const void *web_flash_uncached(const void *p) {
@@ -167,6 +167,11 @@ const void *web_flash_uncached(const void *p) {
 }
 
 static uint32_t xip_used;
+#ifndef WEB_XIP_SRAM_BASE
+// RP2350: ordinary memory instead of the RP2040's XIP cache SRAM (web_xip_sram.h)
+static uint32_t web_buffers[WEB_XIP_WEB_SIZE / 4];
+#define WEB_XIP_SRAM_BASE ((uintptr_t)web_buffers)
+#endif
 
 void *web_xip_alloc(size_t size) {
     size = (size + 3) & ~3u;
@@ -361,12 +366,14 @@ static void update_status_string(void) {
 }
 
 static bool web_start_locked(void) {
+#if PICO_RP2040
     // The network buffers live in the XIP cache's memory (web_xip_sram.h),
     // usable as SRAM only while the cache is off, as PicoGUS always has it
     if (xip_ctrl_hw->ctrl & XIP_CTRL_EN_BITS) {
         DBG_PUTS("web: XIP cache is enabled, no memory for the network");
         return false;
     }
+#endif
     if (!web_http_init() || !web_upload_init()) {
         DBG_PUTS("web: out of XIP SRAM");
         return false;

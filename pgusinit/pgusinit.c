@@ -93,6 +93,7 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
     pageprintf("   /mpudelay 1|0 - delay SYSEX (for rev.0 Roland MT-32)\n");
     pageprintf("   /mpufake 1|0  - fake all notes off (for Roland RA-50)\n");
+    pageprintf("   /mpuwait 1|0  - extra wait on busy status reads (for fast PCs)\n");
     if (mode == GUS_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("GUS settings:\n");
@@ -594,6 +595,75 @@ void print_progress_bar(uint16_t current, uint16_t total)
     }
 }
 
+#define UF2_FLAG_FAMILY_ID_PRESENT 0x00002000ul
+#define UF2_FAMILY_RP2040          0xe48bff56ul
+#define UF2_FAMILY_RP2350_ARM_S    0xe48bff59ul
+
+static const char* chip_name(chip_type_t chip)
+{
+    switch (chip) {
+    case CHIP_RP2350:
+        return "RP2350 (Pico 2)";
+    case CHIP_RP2350B_V21:
+        return "RP2350B (PicoGUS v2.1)";
+    default:
+        return "RP2040";
+    }
+}
+
+// Firmware files for a card with this microcontroller
+static const char* chip_firmware_files(chip_type_t chip)
+{
+    switch (chip) {
+    case CHIP_RP2350:
+        return "pgus2350.uf2 (ne2k2350.uf2 for NE2000 on a Pico 2 W)";
+    case CHIP_RP2350B_V21:
+        return "core2350.uf2";
+    default:
+        return "picogus.uf2 (pg-ne2k.uf2 for NE2000 on a Pico W)";
+    }
+}
+
+// Microcontroller on the card. Firmware from before RP2350 support doesn't have the register and returns 0xFF: those
+// cards all have an RP2040.
+static chip_type_t get_chip_type(void)
+{
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, CMD_CHIPTYPE); // Select microcontroller type register
+    uint8_t chip = inp(DATA_PORT_HIGH);
+    // Firmware that doesn't know the register stops listening to the control port when it is selected, and the
+    // commands that follow don't all knock first, so knock again
+    outp(CONTROL_PORT, 0xCC);
+    return (chip == CHIP_RP2350 || chip == CHIP_RP2350B_V21) ? (chip_type_t)chip : CHIP_RP2040;
+}
+
+// Check that a firmware file is for the card's microcontroller, going by the family ID in its first UF2 block. Firmware
+// for the other chip would leave the card unable to start until it is reprogrammed over USB. (The Pico 2 and PicoGUS
+// v2.1 firmware files are both RP2350 files and can't be told apart here.)
+static bool firmware_matches_card(const char* fw_filename, uint32_t flags, uint32_t family)
+{
+    chip_type_t card_chip = get_chip_type();
+    chip_type_t fw_chip;
+    if (!(flags & UF2_FLAG_FAMILY_ID_PRESENT)) {
+        // Only RP2040 firmware files predate family IDs
+        fw_chip = CHIP_RP2040;
+    } else if (family == UF2_FAMILY_RP2040) {
+        fw_chip = CHIP_RP2040;
+    } else if (family == UF2_FAMILY_RP2350_ARM_S) {
+        fw_chip = CHIP_RP2350;
+    } else {
+        fprintf(stderr, "ERROR: file %s is not a PicoGUS firmware file\n", fw_filename);
+        return false;
+    }
+    if ((fw_chip == CHIP_RP2040) != (card_chip == CHIP_RP2040)) {
+        fprintf(stderr, "ERROR: file %s is firmware for the %s,\n", fw_filename, (fw_chip == CHIP_RP2040) ? "RP2040" : "RP2350");
+        fprintf(stderr, "but this PicoGUS has an %s. Nothing was changed on the card.\n", chip_name(card_chip));
+        fprintf(stderr, "Firmware for this card is in %s\n", chip_firmware_files(card_chip));
+        return false;
+    }
+    return true;
+}
+
 static int write_firmware(const char* fw_filename)
 {
     union {
@@ -640,6 +710,11 @@ static int write_firmware(const char* fw_filename)
         if (i == 0) {
             numBlocks = uf2_buf.uf2.numBlocks;
 
+            if (!firmware_matches_card(fw_filename, uf2_buf.uf2.flags, uf2_buf.uf2.fileSize)) {
+                fclose(fp);
+                return 16;
+            }
+
             // Put card into programming mode
             outp(CONTROL_PORT, 0xCC); // Knock on the door...
             outp(CONTROL_PORT, CMD_FLASH); // Select firmware programming mode
@@ -654,7 +729,7 @@ static int write_firmware(const char* fw_filename)
         }
 
         if (i != uf2_buf.uf2.blockNo) {
-            fprintf(stderr, "\nERROR: file %s is not a valid UF2 file - block mismatch\n", fw_filename);
+            fprintf(stderr, "\nERROR: file %s is not a valid UF2 file - block mismatch (block %u of %u)\n", fw_filename, i, numBlocks);
             return 14;
         }
 
@@ -673,12 +748,12 @@ static int write_firmware(const char* fw_filename)
             }
             if (i < (numBlocks - 1) || b < 511) { // If it's not the very last byte
                 if (!wait_for_read(PICO_FIRMWARE_WRITING)) {
-                    fprintf(stderr, "\nERROR: Card is not in firmware writing mode?\n");
+                    fprintf(stderr, "\nERROR: Card is not in firmware writing mode? (block %u of %u)\n", i, numBlocks);
                     return 15;
                 }
             } else if (protocol > 1) {
                 if (!wait_for_read(PICO_FIRMWARE_DONE)) {
-                    fprintf(stderr, "\nERROR: Card has written last firmware byte but is not done\n");
+                    fprintf(stderr, "\nERROR: Card has written last firmware byte but is not done (block %u of %u)\n", i, numBlocks);
                     return 15;
                 }
                 outp(CONTROL_PORT, 0xCC); // Knock on the door...
@@ -1057,6 +1132,7 @@ ParseCommand parseCommands[] = {
     {"/mpuport", cmdSendPort, CMD_MPUPORT, ARG_REQUIRE, "330"},
     {"/mpudelay", cmdSendBool, CMD_MPUDELAY, ARG_REQUIRE, "false"},
     {"/mpufake", cmdSendBool, CMD_MPUFAKE, ARG_REQUIRE, "false"},
+    {"/mpuwait", cmdSendBool, CMD_MPUWAIT, ARG_REQUIRE, "false"},
     {"/tandyport", cmdSendPort, CMD_TANDYPORT, ARG_REQUIRE, "2c0"},
     {"/cmsport", cmdSendPort, CMD_CMSPORT, ARG_REQUIRE, "220"},
     {"/mousecom", cmdSendMousePort, CMD_MOUSEPORT, ARG_REQUIRE, "0"},
@@ -1155,7 +1231,8 @@ static void printPicoGus()
     uint16_t mpuPort = ctrlGetUint16(CMD_MPUPORT);
     if (mpuPort) {
         printf("MPU-401: port %x; sysex delay: %s, ", mpuPort, ctrlGetUint8(CMD_MPUDELAY) ? "on" : "off");
-        printf("fake all notes off: %s\n", ctrlGetUint8(CMD_MPUFAKE) ? "on" : "off");
+        printf("fake all notes off: %s, ", ctrlGetUint8(CMD_MPUFAKE) ? "on" : "off");
+        printf("extra wait: %s\n", ctrlGetUint8(CMD_MPUWAIT) ? "on" : "off");
     } else {
         printf("MPU-401 disabled\n");
     }
@@ -1328,13 +1405,21 @@ static init_status initPicoGUS()
 
     outp(CONTROL_PORT, CMD_HWTYPE); // Select hardware type register
     board_type = inp(DATA_PORT_HIGH);
-    if (board_type == PICO_BASED) {
-        printf("Hardware: PicoGUS v1.x or PicoGUS Femto\n");
+    chip_type_t chip_type = get_chip_type();
+    if (chip_type == CHIP_RP2350B_V21) {
+        // Reports itself as a PicoGUS 2.0, whose circuit it has
+        printf("Hardware: PicoGUS v2.1 THT (RP2350B)");
+    } else if (board_type == PICO_BASED) {
+        printf("Hardware: PicoGUS v1.x or PicoGUS Femto");
     } else if (board_type == PICOGUS_2) {
-        printf("Hardware: PicoGUS v2.0\n");
+        printf("Hardware: PicoGUS v2.0");
     } else {
-        printf("Hardware: Unknown\n");
+        printf("Hardware: Unknown");
     }
+    if (chip_type == CHIP_RP2350) {
+        printf(", %s", chip_name(chip_type));
+    }
+    printf("\n");
     printf("\n");
     return INIT_OK;
 }

@@ -22,7 +22,9 @@
 #define MEM_LIBC_MALLOC             0
 #define MEMP_MEM_MALLOC             1
 #define MEM_ALIGNMENT               4
+#ifdef WEB_XIP_LWIP_BASE
 #define LWIP_RAM_HEAP_POINTER       ((void *)WEB_XIP_LWIP_BASE)
+#endif
 #define MEM_SIZE                    (WEB_XIP_LWIP_SIZE - 64)
 #define PBUF_POOL_BUFSIZE           512
 #define MEMP_NUM_TCP_PCB            4

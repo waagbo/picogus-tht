@@ -20,10 +20,10 @@
 
 #include "flash_settings.h"
 #include "../include/pg_debug.h"
-#include "overclock.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/clocks.h"
+#include "pico/multicore.h"
 #include "pico/stdlib.h"
 
 static const Settings defaultSettings = {
@@ -50,7 +50,8 @@ static const Settings defaultSettings = {
     .MPU = {
         .basePort = 0x330,
         .delaySysex = false,
-        .fakeAllNotesOff = false
+        .fakeAllNotesOff = false,
+        .waitBusyStatus = false
     },
     .CMS = {
         .basePort = 0x220
@@ -202,10 +203,19 @@ void saveSettings(const Settings* settings)
     static_assert(sizeof(Settings) < FLASH_PAGE_SIZE, "Settings struct doesn't fit inside one flash page");
     memcpy(data, settings, sizeof(Settings));
     DBG_PRINTF("doing settings save: ");
-    // No need for flash_safe_execute or stop second core, since it will not touch flash
-    // If the 2nd core will ever touch flash, reconsider this approach!
-    // Clock down the RP2040 so the flash at its default 1/2 clock divider is within spec (<=133MHz)
-    set_sys_clock_khz(240000, true);
+    // Pause the 2nd core while flash is busy if it reads flash. Currently only emu8950's TLL table uses flashdata
+    // so firmwares with that enabled register core 1 as a lockout victim.
+#if PSRAM_QMI
+    // PicoGUS v2.1: GUS core 1 (audio, ISA DMA) also registers, as it reads and writes the QMI PSRAM, which is
+    // not usable while the flash is written. Wait for it however long it takes: running on would hit the PSRAM.
+    const bool locked_out = multicore_lockout_ready();
+    if (locked_out) {
+        multicore_lockout_start_blocking();
+    }
+#else
+    // Time out rather than hang core 0 if core 1 doesn't respond
+    const bool locked_out = multicore_lockout_ready() && multicore_lockout_start_timeout_us(1000);
+#endif
 
     DBG_PUTCHAR('/');
     uint32_t ints = save_and_disable_interrupts();
@@ -213,7 +223,9 @@ void saveSettings(const Settings* settings)
     DBG_PUTCHAR('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
     restore_interrupts(ints);
-    overclock_370mhz();
+    if (locked_out) {
+        multicore_lockout_end_blocking();
+    }
     DBG_PRINTF("settings saved");
 }
 

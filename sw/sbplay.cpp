@@ -19,6 +19,7 @@
 #include <math.h>
 
 #include "include/pg_debug.h"
+#include "pico/multicore.h"
 
 #if PICO_ON_DEVICE
 
@@ -230,6 +231,10 @@ void audio_sample_handler(void) {
 void play_adlib() {
     DBG_PUTS("starting core 1");
     // flash_safe_execute_core_init();
+#if EMU8950_TLL_FLASH
+    // The emu8950 TLL table lives in flash, so saveSettings() on core 0 must pause this core while it writes flash
+    multicore_lockout_victim_init();
+#endif
     uint32_t start, end;
     set_volume(CMD_OPLVOL);
 
@@ -253,7 +258,7 @@ void play_adlib() {
 #endif
 
 #ifdef SOUND_MPU
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 #endif
 
 #if SOUND_SB
@@ -297,7 +302,18 @@ void play_adlib() {
     pwm_set_enabled(pwm_slice_num, true);
 #endif
 
+#if OPL_CMD_BUFFER
+    uint8_t opl_led_head = opl_cmd_buffer.head;
+#endif
+
     for (;;) {
+#if OPL_CMD_BUFFER
+        // Toggle LED on OPL activity
+        if (opl_cmd_buffer.head != opl_led_head) {
+            opl_led_head = opl_cmd_buffer.head;
+            gpio_xor_mask(LED_PIN);
+        }
+#endif
 #if CDROM
         cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - STEREO_SAMPLES_PER_SECTOR);
 #endif
@@ -338,18 +354,18 @@ void play_adlib() {
         // uart emulation task
         uartemu_core1_task();
 #endif
-#ifdef SOUND_MPU
-        send_midi_bytes(8);
-#endif
-#ifdef CDROM
-        cdrom_tasks(&cdrom);
-#endif
 #ifdef WEBSERVER
         // Lowest priority work, and only while at least half of the OPL output
         // FIFO (~2.9ms of audio) is buffered so the network can't starve it
         if (opl_fifo_free_space() <= OPL_FIFO_SIZE / 2) {
             web_task();
         }
+#endif
+#ifdef SOUND_MPU
+        send_midi_bytes(8);
+#endif
+#ifdef CDROM
+        cdrom_tasks(&cdrom);
 #endif
     }
 }

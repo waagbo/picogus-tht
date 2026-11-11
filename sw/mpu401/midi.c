@@ -38,7 +38,9 @@
 #include <util/delay.h>
 */
 #include "hardware/timer.h"
+#include "hardware/gpio.h"
 #include "pico/critical_section.h"
+extern uint LED_PIN;
 static critical_section_t midi_crit;
 
 /* SOFTMPU: Additional defines, typedefs etc. for C */
@@ -61,6 +63,10 @@ typedef struct ring_buffer {
 static ring_buffer midi_out_buff = { {0}, 0, 0 };
 
 volatile bool midi_output_busy = false;
+/* Host sees DRR busy once this many bytes are buffered. This threshold is
+ * lowered when fake all notes off is enabled, because one host message can
+ * expand to MAX_TRACKED_NOTES note-off commands */
+static uint32_t midi_busy_threshold = RAWBUF - 2;
 
 uint32_t MIDI_BufferFree(void) {
     uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
@@ -109,6 +115,7 @@ channel tracked_channels[MAX_TRACKED_CHANNELS];
 
 static struct {
     Bit8u status;
+    Bit8u wire_status;  // last channel status byte actually sent, for running status
     Bit8u cmd_len;
     Bit8u cmd_pos;
     Bit8u cmd_buf[8];
@@ -127,6 +134,27 @@ static struct {
     bool available;
     /*MidiHandler * handler;*/ /* SOFTMPU */
 } midi;
+
+#ifdef WEBSERVER
+/* PicoGUS web UI: in UART mode the host's bytes go to the output as they
+   arrive, so a message from the web UI (see MIDI_Inject() below) must not
+   start while the host is part way through one of its own. Tracked here, as
+   the host writes its bytes, under midi_crit. */
+static struct {
+    bool open;          // the host has started a message and not finished it
+    Bit32u time;        // when its last byte arrived
+} host_msg;
+/* A program that stops in the middle of a message (it crashed, or it was
+   quit) must not block the web UI's MIDI for good */
+#define HOST_MSG_TIMEOUT_US 1000000u
+
+__force_inline static void host_msg_set(bool open) {
+    critical_section_enter_blocking(&midi_crit);
+    host_msg.open = open;
+    host_msg.time = time_us_32();
+    critical_section_exit(&midi_crit);
+}
+#endif
 
 /* SOFTMPU: Sysex delay is decremented from PIC_Update */
 //volatile Bitu MIDI_sysex_delaytime;
@@ -163,7 +191,7 @@ __force_inline static void PlayMsg(Bit8u* msg, Bitu len)
         critical_section_exit(&midi_crit);
     }
     uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
-    midi_output_busy = used >= (RAWBUF - 2);
+    midi_output_busy = used >= midi_busy_threshold;
 }
 
 __force_inline static void send_midi_byte_now(Bit8u byte) {
@@ -187,6 +215,7 @@ __force_inline static void FakeAllNotesOff(Bit8u chan)
         MIDI_note_off[1]=pChan->notes[note];
         PlayMsg(MIDI_note_off,3);
     }
+    if (pChan->used) midi.wire_status=0;    // injected note-offs broke the host's running status
 
     pChan->used=0;
     pChan->next=0;
@@ -206,7 +235,26 @@ void MIDI_RawOutByte(Bit8u data) {
         midi.cmd_pos=0;
         midi.cmd_len=MIDI_evt_len[data];
     }
+    /* PicoGUS: act like a real MPU-401 in UART mode: every byte goes straight to the output buffer.
+     * But still parse messages into cmd_buf to support fake all notes off note tracking */
     if (midi.cmd_len) {
+#ifdef WEBSERVER
+        /* Before anything of this byte is queued: once the message is open no
+           web UI message can start, and one that started already has cleared
+           wire_status, so a running status is resent below */
+        host_msg_set(midi.cmd_pos + 1 < midi.cmd_len);
+#endif
+        if (midi.cmd_pos==0) {
+            midi.wire_status=data;
+        } else if (midi.cmd_pos==1 && midi.wire_status!=midi.status) {
+            /* Host is using running status but the status on the wire differs
+               (fake "All Notes Off" injected note-offs): resend it */
+            midi.rt_buf[0]=midi.status;
+            PlayMsg(midi.rt_buf,1);
+            midi.wire_status=midi.status;
+        }
+        midi.rt_buf[0]=data;
+        PlayMsg(midi.rt_buf,1);
         midi.cmd_buf[midi.cmd_pos++]=data;
         if (midi.cmd_pos >= midi.cmd_len) {
             /*if (CaptureState & CAPTURE_MIDI) {
@@ -225,45 +273,60 @@ void MIDI_RawOutByte(Bit8u data) {
                         if (pChan->next==MAX_TRACKED_NOTES) pChan->next=0;
                         if (pChan->used<MAX_TRACKED_NOTES) pChan->used++;
                     }
-
-                    PlayMsg(midi.cmd_buf,midi.cmd_len);
                 }
-                /* SOFTMPU: Test for "All Notes Off" */
+                /* PicoGUS: Test for "All Notes Off": The message itself has
+                   already been sent, and the explicit note-offs follow it. */
                 else if (((midi.status&0xf0)==0xb0) &&
                         (midi.cmd_buf[1]>=0x7b) &&
                         (midi.cmd_buf[1]<=0x7f))
                 {
                     FakeAllNotesOff(midi.status&0x0f);
                 }
-                else
-                {
-                    PlayMsg(midi.cmd_buf,midi.cmd_len);
-                }
-            }
-            else
-            {
-                PlayMsg(midi.cmd_buf,midi.cmd_len);
             }
             midi.cmd_pos=1;         //Use Running status
         }
     }
-    else 
+    else
     {
+#ifdef WEBSERVER
+        /* Sysex: open from 0xf0 until the status byte that ends it */
+        if (data&0x80) host_msg_set(data==0xf0);
+        else if (midi.status==0xf0) host_msg_set(true);
+#endif
         midi.rt_buf[0] = data;
         PlayMsg(midi.rt_buf,1);
     }
+}
+
+/* Discard buffered MIDI output like a real MPU-401 at reset */
+void MIDI_ClearBuffer(void) {
+    critical_section_enter_blocking(&midi_crit);
+    /* If the sysex delay option is holding output back, what's buffered may be
+     * bytes a real MPU-401 would already have sent, so keep them. */
+    if (!midi.sysex.start || (time_us_32() - midi.sysex.start) >= midi.sysex.delay) {
+        midi_out_buff.tail = midi_out_buff.head;
+        midi_output_busy = false;
+    }
+#ifdef WEBSERVER
+    host_msg.open = false;
+#endif
+    critical_section_exit(&midi_crit);
+    midi.status=0;
+    midi.wire_status=0;
+    midi.cmd_pos=0;
+    midi.cmd_len=0;
 }
 
 #ifdef WEBSERVER
 /* PicoGUS web UI: MIDI messages injected from the web server (core 1).
    Every queued message is complete (checked by the web server). A message is
    only started from the core 1 main loop, between complete messages of the
-   host's MIDI stream, and while the MPU-401 is in UART mode.
+   host's MIDI stream (host_msg above), and while the MPU-401 is in UART mode.
 
-   send_midi_bytes() is also called from MPU-401 intelligent mode, on core 0
-   (ISA writes) and in the core 1 timer interrupt, where it busy-waits for
-   room in the host buffer. Those callers must never wait for injected data:
-   if an injected message is being sent, they drop the rest of it instead.
+   send_midi_bytes() runs in the core 1 main loop of every mode. Should it ever
+   be called from core 0 or an interrupt again, as MPU-401 intelligent mode
+   used to, such a caller must never wait for injected data: if an injected
+   message is being sent, it drops the rest of it instead.
    All injection state is guarded by midi_crit, which covers both cores. */
 #include "hardware/sync.h"
 bool MPU401_IsIntelligent(void);
@@ -337,13 +400,20 @@ static bool send_inject_byte(void) {
     }
     if (inject.remaining == 0) {
         // Only start a new message when the host has nothing queued and is not
-        // in the middle of a sysex, and after any pending sysex delay
+        // in the middle of a message or a sysex, and after any pending sysex delay
         if (midi_out_buff.head != midi_out_buff.tail) return false;
         if (midi.sysex.status == 0xf0) return false;
+        if (host_msg.open) {
+            if ((time_us_32() - host_msg.time) < HOST_MSG_TIMEOUT_US) return false;
+            host_msg.open = false;  // abandoned by the host
+        }
         if (MPU401_IsIntelligent()) return false;
         if (midi.sysex.start && (time_us_32() - midi.sysex.start) < midi.sysex.delay) return false;
         if (inject.delay && (time_us_32() - inject.delay_start) < inject.delay) return false;
         inject.delay = 0;
+        // The host's running status no longer holds on the wire after this
+        // message: MIDI_RawOutByte() then sends its status byte again
+        midi.wire_status = 0;
         uint8_t status = inject.buffer[inject.tail];
         if (status == 0xf0) {
             inject.in_sysex = true;
@@ -418,6 +488,10 @@ __force_inline static bool send_midi_byte() {
     if (midi_out_buff.head == midi_out_buff.tail) return false; // nothing to send
     /* putchar('s'); */
     critical_section_enter_blocking(&midi_crit);
+    if (midi_out_buff.head == midi_out_buff.tail) { // re-check, MIDI_ClearBuffer may be racing us
+        critical_section_exit(&midi_crit);
+        return false;
+    }
     if (midi.sysex.start) {
         Bit32u passed_ticks = time_us_32() - midi.sysex.start;
         if (passed_ticks < midi.sysex.delay) { // still waiting for sysex delay
@@ -428,7 +502,7 @@ __force_inline static bool send_midi_byte() {
     Bit8u data = midi_out_buff.buffer[midi_out_buff.tail];
     midi_out_buff.tail = (midi_out_buff.tail + 1) & RAWBUF_BITS;
     uint32_t used = (midi_out_buff.head - midi_out_buff.tail) & RAWBUF_BITS;
-    midi_output_busy = used >= (RAWBUF - 2);
+    midi_output_busy = used >= midi_busy_threshold;
     critical_section_exit(&midi_crit);
 
     if (midi.sysex.status==0xf0) { // Start
@@ -493,11 +567,18 @@ __force_inline static bool send_midi_byte() {
 }
 
 void send_midi_bytes(int maxbytes) {
-    for(int i = 0; i < maxbytes; ++i) {
+    int i;
+    for(i = 0; i < maxbytes; ++i) {
         if (!send_midi_byte()) {
             break;
         }
     }
+    // Toggle LED once per call that sent MIDI bytes
+    if (i) {
+        gpio_xor_mask(LED_PIN);
+    }
+    /* Flush any MPU-401 output that was deferred for lack of buffer room */
+    MPU401_FlushDeferred();
 }
 
 
@@ -516,6 +597,7 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     }
 
     midi.status=0x00;
+    midi.wire_status=0x00;
     midi.sysex.status=0x00;
     midi.sysex.delay = 0;
     midi.sysex.start = delaysysex ? time_us_32() : 0; // PicoGUS
@@ -523,10 +605,15 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     /* midi.sysex.start = time_us_32(); // PicoGUS */
     midi.cmd_pos=0;
     midi.cmd_len=0;
+#ifdef WEBSERVER
+    host_msg.open = false;
+#endif
     midi.fakeallnotesoff = fakeallnotesoff;
+    midi_busy_threshold = RAWBUF - 2 - (fakeallnotesoff ? 3 * MAX_TRACKED_NOTES : 0);
     midi.available=true;
 
     midi_out_buff.head = midi_out_buff.tail = 0;
+    midi_output_busy = false;
         
     /* SOFTMPU: Display welcome message on MT-32 */
     for (i=0;i<30;i++)

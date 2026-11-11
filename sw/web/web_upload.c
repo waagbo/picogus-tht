@@ -70,7 +70,15 @@ static void upload_fail(const char *error) {
 #define UF2_MAGIC_END               0x0AB16F30u
 #define UF2_FLAG_NOT_MAIN_FLASH     0x00000001u
 #define UF2_FLAG_FAMILY_ID_PRESENT  0x00002000u
-#define RP2040_FAMILY_ID            0xe48bff56u
+// Firmware for the chip this runs on (as PLATFORM_UF2_FAMILY_ID in
+// system/platform.h, which the host tests can't include)
+#if PICO_RP2350
+#define FW_FAMILY_ID                0xe48bff59u     // RP2350, Arm Secure
+#define FW_CHIP_NAME                "RP2350"
+#else
+#define FW_FAMILY_ID                0xe48bff56u     // RP2040
+#define FW_CHIP_NAME                "RP2040"
+#endif
 
 // The last flash sector holds the settings: never overwritten by an upload
 #define FW_SETTINGS_SECTOR  (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
@@ -167,7 +175,7 @@ static void fw_process_block(void) {
         return;
     }
     if ((b->flags & UF2_FLAG_NOT_MAIN_FLASH) ||
-        !(b->flags & UF2_FLAG_FAMILY_ID_PRESENT) || b->family_id != RP2040_FAMILY_ID) {
+        !(b->flags & UF2_FLAG_FAMILY_ID_PRESENT) || b->family_id != FW_FAMILY_ID) {
         // Not for us (e.g. a block for another chip family in a combined UF2)
         return;
     }
@@ -227,7 +235,7 @@ void web_fw_finish(http_conn_t *c) {
     fw_release();
     owner = NULL;
     if (info.state == UP_RUNNING && fw.written == 0) {
-        upload_fail("no RP2040 firmware found in file");
+        upload_fail("no " FW_CHIP_NAME " firmware found in file");
     }
     if (info.state != UP_RUNNING) {
         http_send_error(c, 400, info.error ? info.error : "upload failed");

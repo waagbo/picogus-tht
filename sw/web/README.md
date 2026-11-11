@@ -1,8 +1,8 @@
-# PicoGUS web server (Pico W)
+# PicoGUS web server (Pico W, Pico 2 W)
 
-PicoGUS boards with a **Raspberry Pi Pico W** (PicoGUS v1.x and PicoGUS Femto
-with a Pico W fitted) can run a small web server next to the sound card
-emulation. Open the card's address in a browser to:
+PicoGUS boards with a **Raspberry Pi Pico W or Pico 2 W** (PicoGUS v1.x and
+PicoGUS Femto with one fitted) can run a small web server next to the sound
+card emulation. Open the card's address in a browser to:
 
 * see what the card is doing: mode, firmware, WiFi, loaded CD image, and how
   much time the web server takes from the sound card
@@ -16,9 +16,14 @@ emulation. Open the card's address in a browser to:
 * upload files: a SysEx file (`.syx`) to send to MIDI out, or a firmware
   update (`.uf2`)
 
-All sound modes include it when built for a Pico W board (`PICO_BOARD=picow_fast`).
-The NE2000 firmware does not: it hands the WiFi chip to DOS. PicoGUS 2.0
-boards have no WiFi chip.
+All sound modes include it when built for a Pico W board (`PICO_BOARD=picow_fast`,
+or `pico2w_fast` for the RP2350-based Pico 2 W). The NE2000 firmware does not:
+it hands the WiFi chip to DOS. PicoGUS 2.0 and v2.1 boards have no WiFi chip.
+
+The release files are `picogusw.uf2` for a Pico W and `pg2350w.uf2` for a
+Pico 2 W (`sw/scripts/build_variants.sh web`). The web server is an
+experimental feature (`sw/experimental/README.md`), so they are part of the
+experimental set of release files.
 
 ## Setting up
 
@@ -65,11 +70,12 @@ The ISA bus and the sound emulation always come first:
   alarms whose interrupts fire on core 0.
 * **Flash is shared safely.** The WiFi firmware and the web page are read from
   flash, and firmware updates write it. A hardware spinlock keeps core 0 from
-  saving settings (which erases flash) at the same time. The save is then done
-  on a later ISA write, exactly like `pgusinit /save`. The boot ROM's flash
-  routines turn the XIP cache back on, so it is turned off again after every
-  flash write, and flash data is read through the cache-bypassing alias (see
-  Memory below).
+  saving settings (which erases flash) at the same time: `pgusinit /save`
+  normally saves at once, and waits for a later ISA write if core 1 has the
+  flash just then. A save asked for on the web page is done by core 0 on its
+  next ISA write as well. The boot ROM's flash routines turn the XIP cache
+  back on, so it is turned off again after every flash write, and flash data
+  is read through the cache-bypassing alias (see Memory below).
 * **WiFi reconnects are rare.** Joining a network keeps core 1 busy for a few
   milliseconds. While the network can't be reached, retries back off from
   every 20 seconds to every ~5 minutes.
@@ -81,12 +87,14 @@ The ISA bus and the sound emulation always come first:
   Messages from the web UI (`MIDI_Inject()` in `mpu401/midi.c`) are sent from
   the core 1 main loop only:
   * only when the DOS program's MIDI stream is between messages and not inside
-    a SysEx;
+    a SysEx. In UART mode the program's bytes go to the MIDI output as it
+    writes them, so the firmware keeps track of whether it is part way through
+    a message. A message the program never finishes holds web MIDI up for one
+    second at most;
+  * after a web message the program's running status is no longer what is on
+    the wire, so the status byte of its next message is sent again;
   * SysEx is paced like the MPU-401's SysEx delay;
-  * while a program uses MPU-401 intelligent mode, they wait. That mode also
-    sends MIDI from core 0 and from an interrupt, which must never wait for
-    web data; if it needs the line in the middle of a web message, the rest of
-    that message is dropped.
+  * while a program uses MPU-401 intelligent mode, they wait.
 
   SysEx messages from files may be up to 512 bytes.
 
@@ -96,7 +104,11 @@ The status page shows how much of core 1 the web server used over the last
 ### Memory
 
 PicoGUS runs entirely from RAM. The web server adds about 55KB of code and data
-to each mode (Sound Blaster mode keeps ~39KB free):
+to each mode. On the RP2040 that leaves Sound Blaster mode, the largest, with
+about 23KB free for CD images and the USB stack; the other modes keep 65KB or
+more, and on the RP2350 every mode has over 260KB free. Because of this, the
+RP2040's Sound Blaster mode is built without the PGDFS file service when a
+source tree has both features (the other modes, and the RP2350, have both).
 
 | Part | RAM |
 | --- | --- |
@@ -104,25 +116,29 @@ to each mode (Sound Blaster mode keeps ~39KB free):
 | CYW43 WiFi driver and SDK glue | ~20KB |
 | web server and MIDI queue | ~13KB |
 
-All network *buffers* (lwIP's heap, HTTP connections, upload buffers; 16KB in
-total) live in the RP2040's XIP cache memory. PicoGUS turns the flash cache off
-at boot, after which that memory can be used as ordinary SRAM at `0x15000000`
-(see `web_xip_sram.h`).
+On the RP2040 all network *buffers* (lwIP's heap, HTTP connections, upload
+buffers; 16KB in total) live in the XIP cache memory. PicoGUS turns the flash
+cache off at boot, after which that memory can be used as ordinary SRAM at
+`0x15000000` (see `web_xip_sram.h`).
 
 A cached flash read would overwrite those buffers, so in these firmwares
 everything that reads flash at run time uses the cache-bypassing alias
-`0x13000000` instead: the web page, the shared WiFi firmware, and AdLib mode's
-OPL level table.
+(`XIP_NOCACHE_NOALLOC_BASE`) instead: the web page, the shared WiFi firmware,
+and AdLib mode's OPL level table.
 
-The ~225KB WiFi chip firmware stays in flash. In the multi-mode `picogus.uf2`,
+The RP2350's XIP cache can't be used that way, and it has twice the RAM: there
+the buffers are ordinary memory.
+
+The ~225KB WiFi chip firmware stays in flash. In the multi-mode firmware file,
 all modes share a single copy, stored right after the bootloader
 (`web_cyw43_fw_shared.h`, `multifw/uf2create`).
 
 ## Firmware update
 
-Upload a `picogus.uf2` built for Pico W boards to keep the web page. The file
-is checked block by block and written straight to flash. Blocks for other
-chips are skipped, and the settings sector is never touched. Sound stutters
+Upload `picogusw.uf2` (Pico W) or `pg2350w.uf2` (Pico 2 W) to keep the web
+page. The file is checked block by block and written straight to flash.
+Blocks for the other chip are skipped, so a file for it is refused with
+nothing written, and the settings sector is never touched. Sound stutters
 while flash is erased, and the card restarts into the same mode when done.
 
 If the upload breaks off half way, the old firmware is already partly
@@ -130,11 +146,14 @@ overwritten. The card keeps running from RAM, so upload again before
 restarting. As a last resort, the Pico W can always be reflashed over USB by
 holding BOOTSEL.
 
+`pgusinit /flash` works as on every PicoGUS; it stops the web server for the
+duration.
+
 ## Build options
 
 | CMake option | Default | |
 | --- | --- | --- |
-| `WEBSERVER` | `ON` on Pico W boards | include the web server in the sound card firmwares |
+| `WEBSERVER` | `ON` on Pico W and Pico 2 W boards | include the web server in the sound card firmwares |
 | `WEB_MDNS` | `OFF` | also answer mDNS for `http://picogus.local/`. Costs ~12KB of RAM, which Sound Blaster mode needs for CD images made of many track files. |
 
 ## HTTP API

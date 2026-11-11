@@ -47,17 +47,16 @@ typedef uint16_t Bit16u;
 typedef int32_t Bits;
 typedef int8_t Bit8s;
 
-// autodetect when Gateway runs by watching for it setting this message on the MT-32's LCD
-static const char* gateway_msg = "\xf0\x41\x10\x16\x12\x20\x00\x00       Gateway";
-static uint8_t gateway_pos = 0;
-static uint8_t gateway_len = 22;
-
 #include "system/pico_pic.h"
 
 void MIDI_Init(bool delaysysex,bool fakeallnotesoff);
 void MIDI_RawOutByte(Bit8u data);
 bool MIDI_Available(void);
 extern volatile bool midi_output_busy;
+/* Act like a real MPU-401: takes 100us on average to move each byte out of the bus
+ * latch, and DRR reads busy during this time. */
+#define MPU401_UART_LATCH_US 100
+static uint32_t uart_latch_busy_until = 0;
 
 static uint32_t MPU401_EventHandler(Bitu val);
 static PIC_TimerEvent MPU401_Event = {
@@ -83,6 +82,11 @@ static void MPU401_EOIHandlerDispatch(void);
 #define MPU401_QUEUE 32
 #define MPU401_TIMECONSTANT 60000000
 #define MPU401_RESETBUSY 14000
+/* A real MPU-401 delays for ~33ms when reset from UART mode while still
+ * draining the TX. When it's over it re-inits and discards the TX ring.
+ * Short sysex messages sent right before the reset survive and get flushed
+ * during this delay (this happens in Gateway). */
+#define MPU401_RESETBUSY_UART 33000
 
 enum MpuMode { M_UART,M_INTELLIGENT };
 typedef enum MpuMode MpuMode; /* SOFTMPU */
@@ -101,9 +105,16 @@ typedef enum MpuDataType MpuDataType; /* SOFTMPU */
 #define MSG_MPU_CLOCK           0xfd
 #define MSG_MPU_ACK             0xfe
 
-static bool config_versionfix = false;
 static bool config_delaysysex = false;
 static bool config_fakeallnotesoff = false;
+/* If true, busy wait for MPU401_BUSY_STATUS_WAIT_US, which holds IOCHRDY high. This
+ * can be used to work around fast timeouts in some games like A-10 Tank Killer that
+ * give up waiting on DRR after only 256 status reads by making those status reads
+ * take longer and give time for the TX ring to drain. Note that this is a quality
+ * of life improvement as a real MPU-401 would have the same issue with these games
+ * on faster systems. */
+static bool config_waitbusystatus = false;
+#define MPU401_BUSY_STATUS_WAIT_US 2
 
 static struct {
     bool intelligent;
@@ -125,7 +136,13 @@ static struct {
         bool eoi_scheduled;
         Bit8s data_onoff;
         Bitu command_byte,cmd_pending;
+        Bitu cmd_held;          /* command received while a track request was outstanding */
+        Bit16u cmd_held_reqs;   /* requests already queued when cmd_held arrived; it runs after they are answered */
+        bool req_outstanding;   /* a track/conductor request has been queued and not yet answered */
         Bit8u tmask,cmask,amask;
+        Bit8u out_deferred;     /* tracks whose output is deferred */
+        Bit8u ticks_pending;    /* sequencer ticks that arrived while a data request was outstanding */
+        Bit8u ano_chan;         /* next all notes off status byte to send (0 if none) */
         Bit16u midi_mask;
         Bit16u req_mask;
         Bit8u channel,old_chan;
@@ -137,6 +154,11 @@ static struct {
         bool clock_to_host;
     } clock;
 } mpu;
+
+/* True while MIDI output is deferred because there isn't room in the buffer. DRR is set while this is true */
+__force_inline static bool MPU401_OutputDeferred(void) {
+    return mpu.state.out_deferred || mpu.state.ano_chan;
+}
 
 Bit8u __force_inline QueueUsed() {
     return mpu.queue_used;
@@ -164,12 +186,45 @@ __force_inline static void ClrQueue(void) {
     mpu.queue_pos=0;
 }
 
+/* Send pending "All notes off" messages while the MIDI output buffer has room.
+   A real MPU-401 blocks until there is room for each message, but we can't
+   block here, so defer that to be sent by MPU401_FlushDeferred() later. */
+__force_inline static void MPU401_DrainAllNotesOff(void) {
+    while (mpu.state.ano_chan && MIDI_BufferFree() >= 4 && !mpu.state.wsd && !mpu.state.wsm) {
+        MIDI_RawOutByte(mpu.state.ano_chan);
+        MIDI_RawOutByte(0x7b);
+        MIDI_RawOutByte(0);
+        mpu.state.ano_chan = (mpu.state.ano_chan == 0xbe) ? 0 : mpu.state.ano_chan + 1;
+    }
+}
+
+/* All notes off */
+__force_inline static void MPU401_AllNotesOff(void) {
+    mpu.state.ano_chan=0xb0;
+    /* keep ordering: any deferred track output goes out first */
+    if (!mpu.state.out_deferred) MPU401_DrainAllNotesOff();
+}
+
 __force_inline Bit8u MPU401_ReadStatus(void) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     uint8_t ret=0x3f;   /* Bits 6 and 7 clear */
-    if (mpu.state.cmd_pending || midi_output_busy) ret|=0x40;
+    /* DRR (bit 6) reads busy when any of these are true:
+     * - a command is waiting for the reset to finish (cmd_pending)
+     * - the MIDI output ring is nearly full, unless the host is answering a
+     *   track request: those bytes go to the track buffer, not the ring, and
+     *   a real card accepts them even when its serial output queue is full
+     * - output is deferred: a real card's main loop blocks until there is room,
+     *   so it stops servicing the host latch, except when the host is mid D0/DF
+     *   message. In that case the deferral is waiting on that message to finish
+     * - if UART mode and the previous byte is still being moved out of the latch
+     */
+    /* TODO this many status flag checks is a pretty bad smell... */
+    if (mpu.state.cmd_pending || (midi_output_busy && !mpu.state.req_outstanding) ||
+        (MPU401_OutputDeferred() && !mpu.state.wsd && !mpu.state.wsm) ||
+        (mpu.mode==M_UART && (int32_t)(time_us_32() - uart_latch_busy_until) < 0)) ret|=0x40;
     if (!mpu.queue_used) ret|=0x80;
     critical_section_exit(&mpu_crit);
+    if (config_waitbusystatus && (ret & 0x40)) busy_wait_us(MPU401_BUSY_STATUS_WAIT_US);
     return ret;
 }
 
@@ -187,6 +242,14 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
         PIC_RemoveEvent(&MPU401_ResetDone);
         mpu.state.reset=false;
     }
+    if (val!=0xff && mpu.state.req_outstanding && !mpu.state.block_ack) {
+        /* Real MPU-401: a command that arrives while the host is answering a track request
+         * is saved and dispatched after the request is over. The ACK comes after held commands
+         * are dispatched */
+        mpu.state.cmd_held=val+1;
+        mpu.state.cmd_held_reqs=mpu.state.req_mask;   /* the requests due right now */
+        goto write_command_return;
+    }
     if (val<=0x2f) {
         switch (val&3) { /* MIDI stop, start, continue */
             case 1: {MIDI_RawOutByte(0xfc);mpu.clock.cth_savecount=mpu.clock.cth_counter;break;}
@@ -199,11 +262,7 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
                 if (mpu.state.playing && !mpu.clock.clock_to_host)
                     PIC_RemoveEvent(&MPU401_Event);
                 mpu.state.playing=false;
-                for (i=0xb0;i<0xbf;i++) {  /* All notes off */
-                    MIDI_RawOutByte(i);
-                    MIDI_RawOutByte(0x7b);
-                    MIDI_RawOutByte(0);
-                }
+                MPU401_AllNotesOff();
                 break;
             case 0x8:       /* Play */
                 /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Intelligent mode playback started");*/ /* SOFTMPU */
@@ -279,14 +338,11 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             QueueByte(0);
             goto write_command_return;
         case 0xac:      /* Request version */
-            if (config_versionfix) {
-                // Hack for Gateway
-                QueueByte(MPU401_VERSION);
-                QueueByte(MSG_MPU_ACK);
-            } else {
-                QueueByte(MSG_MPU_ACK);
-                QueueByte(MPU401_VERSION);
-            }
+            /* We used to have a workaround for Gateway here, but now that we act
+             * more like a real MPU-401, we don't have to do that to hide the buggy
+             * behavior in Gateway's MIDI driver */
+            QueueByte(MSG_MPU_ACK);
+            QueueByte(MPU401_VERSION);
             goto write_command_return;
         case 0xad:      /* Request revision */
             QueueByte(MSG_MPU_ACK);
@@ -301,11 +357,8 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             break;
         case 0xb9:      /* Clear play map */
         case 0xb8:      /* Clear play counters */
-            for (i=0xb0;i<0xbf;i++) {  /* All notes off */
-                MIDI_RawOutByte((Bit8u)i);
-                MIDI_RawOutByte(0x7b);
-                MIDI_RawOutByte(0);
-            }
+            mpu.state.out_deferred=0;    /* play buffers are reset below so deferred output is moot */
+            MPU401_AllNotesOff();
             for (i=0;i<8;i++) {
                 mpu.playbuf[i].counter=0;
                 mpu.playbuf[i].type=T_OVERFLOW;
@@ -319,13 +372,24 @@ __force_inline void MPU401_WriteCommand(Bit8u val, bool crit) { /* SOFTMPU */
             break;
         case 0xff:      /* Reset MPU-401 */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Reset %X",val);*/ /* SOFTMPU */
-            PIC_AddEvent(&MPU401_ResetDone, MPU401_RESETBUSY, 0);
+            PIC_AddEvent(&MPU401_ResetDone, mpu.mode==M_UART ? MPU401_RESETBUSY_UART : MPU401_RESETBUSY, 0);
             mpu.state.reset=true;
-            if (mpu.mode==M_UART) {
+            {
+                /* On a real MPU-401, the bus data latch is in the gate array, not the MCU. This
+                 * means that during reset, a byte presented to the host survives. 
+                 * Gateway unintentionally relies on this because its buggy driver times
+                 * out getting the version, issues a reset, and reads the version again. */
+                bool latched = mpu.queue_used != 0;
+                Bit8u latched_byte = latched ? mpu.queue[mpu.queue_pos >= MPU401_QUEUE ? mpu.queue_pos - MPU401_QUEUE : mpu.queue_pos] : 0;
+                if (mpu.mode==M_UART) {
+                    MPU401_Reset();     // ring flushed later by MPU401_ResetDoneHandler, see MPU401_RESETBUSY_UART
+                    if (latched) QueueByte(latched_byte);
+                    goto write_command_return;      //do not send ack in UART mode
+                }
                 MPU401_Reset();
-                goto write_command_return;      //do not send ack in UART mode
+                MIDI_ClearBuffer();     /* Real MPU-401: intelligent mode reset reinits immediately and clears buffered MIDI output */
+                if (latched) QueueByte(latched_byte);
             }
-            MPU401_Reset();
             break;
         case 0x3f:      /* UART mode */
             /*LOG(LOG_MISC,LOG_NORMAL)("MPU-401:Set UART mode %X",val);*/ /* SOFTMPU */
@@ -389,16 +453,7 @@ __force_inline void MPU401_WriteData(Bit8u val, bool crit) { /* SOFTMPU */
     static Bit8u length,cnt,posd; /* SOFTMPU */
     if (mpu.mode==M_UART) {
         MIDI_RawOutByte(val);
-        // autodetect when Gateway runs
-        if (val == gateway_msg[gateway_pos]) {
-            ++gateway_pos;
-            if (gateway_pos == gateway_len) {
-                config_versionfix = true;
-                gateway_pos = 0;
-            }
-        } else {
-            gateway_pos = 0;
-        }
+        uart_latch_busy_until = time_us_32() + MPU401_UART_LATCH_US;
         goto write_return;
     }
     switch (mpu.state.command_byte) {       /* 0xe# command data */
@@ -604,14 +659,19 @@ __force_inline static void MPU401_IntelligentOut(Bit8u chan) {
 }
 
 __force_inline static void UpdateTrack(Bit8u chan) {
-  /* block until MIDI output buffer has room, matching real MPU-401 (busy-wait
-     with SCI TX interrupt draining), checks for >= 4 free bytes before writing
-     a message. */
-    if (mpu.playbuf[chan].type != T_OVERFLOW) {
-        while (MIDI_BufferFree() < 4) {
-            send_midi_bytes(1);
-        }
+  /* Real MPU-401 blocks until the MIDI output buffer has room by busy waiting until
+   * the TX is drained. The host sees DRR busy during this time. To emulate that block
+   * we defer the track's output and set DRR busy until it's flushed with
+   * MPU401_FlushDeferred(). */
+    if (mpu.playbuf[chan].type != T_OVERFLOW &&
+        (MIDI_BufferFree() < 4 || mpu.state.wsd || mpu.state.wsm)) {
+        /* wsd/wsm: the host is part way through writing a MIDI message after a
+         * D0/DF command. Each byte the host writes is passed straight to MIDI out.
+         * During this we need to defer the track's output until the message is done */
+        mpu.state.out_deferred|=(1<<chan);
+        return;
     }
+    mpu.state.out_deferred&=~(1<<chan);
     MPU401_IntelligentOut(chan);
     if (mpu.state.amask&(1<<chan)) {
         mpu.playbuf[chan].vlength=0;
@@ -646,14 +706,10 @@ bool MPU401_IsIntelligent(void) {
 }
 #endif
 
-uint32_t MPU401_EventHandler(Bitu val) {
-    /* SOFTMPU */
-    /* putchar('.'); */
+/* sequencer tick: advance the track, conductor, and clock-to-host counters */
+__force_inline static void MPU401_Tick(void) {
     Bit8u i;
-    if (mpu.mode==M_UART) return 0;
-    critical_section_enter_blocking(&mpu_crit);
-    if (mpu.state.irq_pending) goto next_event;
-        if (mpu.state.playing) {
+    if (mpu.state.playing) {
         for (i=0;i<8;i++) { /* Decrease counters */
             if (mpu.state.amask&(1<<i)) {
                 mpu.playbuf[i].counter--;
@@ -672,6 +728,23 @@ uint32_t MPU401_EventHandler(Bitu val) {
             mpu.state.req_mask|=(1<<13);
         }
     }
+}
+
+uint32_t MPU401_EventHandler(Bitu val) {
+    /* PicoGUS */
+    /* putchar('.'); */
+    if (mpu.mode==M_UART) return 0;
+    critical_section_enter_blocking(&mpu_crit);
+    if (mpu.state.irq_pending) {
+      /* An irq for data request is outstanding, but we should still count
+       * sequencer ticks. A real MPU-401 keeps counting ticks in its timer ISR
+       * and the main loop catches up after the request is served. This keeps
+       * tempo correct in games like Gateway which otherwise would run slow.
+       */
+      if (mpu.state.ticks_pending < 255) mpu.state.ticks_pending++;
+      goto next_event;
+    }
+    MPU401_Tick();
     if (!mpu.state.irq_pending && mpu.state.req_mask) MPU401_EOIHandler(0);
 next_event:
     critical_section_exit(&mpu_crit);
@@ -681,9 +754,16 @@ next_event:
 __force_inline static void MPU401_EOIHandlerDispatch(void) {
     if (mpu.state.send_now) {
         mpu.state.eoi_scheduled=true;
-        PIC_AddEvent(&MPU401_EOI, 60, 0); // Possible a bit longer
+        PIC_AddEvent(&MPU401_EOI, 60, 1); // val=1: take mpu_crit, we run from the alarm ISR
     }
     else if (!mpu.state.eoi_scheduled) MPU401_EOIHandler(0);
+}
+
+/* Set noinline because the compiler was inlining too much */
+static void __attribute__((noinline)) MPU401_RunHeldCommand(void) {
+    Bit8u held=mpu.state.cmd_held-1;
+    mpu.state.cmd_held=0;
+    MPU401_WriteCommand(held, false);
 }
 
 //Updates counters and requests new data on "End of Input"
@@ -698,7 +778,26 @@ __force_inline uint32_t MPU401_EOIHandler(Bitu val) {
         else UpdateTrack(mpu.state.channel);
     }
     mpu.state.irq_pending=false;
+    mpu.state.req_outstanding=false;
+    /* On a real MPU-401, a held command runs after we answer the requests that were due when it arrived */
+    if (mpu.state.cmd_held) {
+        mpu.state.cmd_held_reqs&=mpu.state.req_mask;
+        if (!mpu.state.cmd_held_reqs && !MPU401_OutputDeferred()) MPU401_RunHeldCommand();
+    }
+    /* Catch up on ticks that happend while a data request was outstanding */
+    while (mpu.state.ticks_pending && !mpu.state.req_mask && !mpu.state.send_now) {
+        mpu.state.ticks_pending--;
+        MPU401_Tick();
+    }
     if (!mpu.state.req_mask) {
+        if (val) {
+            critical_section_exit(&mpu_crit);
+        }
+        return 0;
+    }
+    /* A real MPU-401 requests data in its main loop, which doesn't run while a
+     * track's output drains. */
+    if (MPU401_OutputDeferred()) {
         if (val) {
             critical_section_exit(&mpu_crit);
         }
@@ -709,6 +808,7 @@ __force_inline uint32_t MPU401_EOIHandler(Bitu val) {
         if (mpu.state.req_mask&(1<<i)) {
             QueueByte(0xf0+i);
             mpu.state.req_mask&=~(1<<i);
+            mpu.state.req_outstanding=true;
             break;
         }
     } while ((i++)<16);
@@ -718,9 +818,29 @@ __force_inline uint32_t MPU401_EOIHandler(Bitu val) {
     return 0;
 }
 
+/* Flush output deferred by UpdateTrack/MPU401_AllNotesOff */
+void MPU401_FlushDeferred(void) {
+    if (!MPU401_OutputDeferred()) return;
+    critical_section_enter_blocking(&mpu_crit);
+    for (Bit8u i = 0; i < 8; i++) {
+        if (!(mpu.state.out_deferred & (1 << i))) continue;
+        if (MIDI_BufferFree() < 4 || mpu.state.wsd || mpu.state.wsm) break; /* no room, or host mid-message */
+        UpdateTrack(i); /* clears the out_deferred bit on success */
+    }
+    if (!mpu.state.out_deferred) MPU401_DrainAllNotesOff();
+    /* A held command whose requests were all answered was waiting for this drain */
+    if (!MPU401_OutputDeferred() && !mpu.state.irq_pending && mpu.state.cmd_held && !mpu.state.cmd_held_reqs)
+        MPU401_RunHeldCommand();
+    /* Just like MPU401_EventHandler does each tick */
+    if (!MPU401_OutputDeferred() && !mpu.state.irq_pending && !mpu.state.eoi_scheduled && mpu.state.req_mask)
+        MPU401_EOIHandler(0);
+    critical_section_exit(&mpu_crit);
+}
+
 static uint32_t  MPU401_ResetDoneHandler(Bitu val) { /* SOFTMPU */
     critical_section_enter_blocking(&mpu_crit);
     mpu.state.reset=false;
+    MIDI_ClearBuffer();
     if (mpu.state.cmd_pending) {
         MPU401_WriteCommand(mpu.state.cmd_pending-1, false);
         mpu.state.cmd_pending=0;
@@ -752,6 +872,11 @@ __force_inline static void MPU401_Reset(void) {
     mpu.state.data_onoff=-1;
     mpu.state.command_byte=0;
     mpu.state.block_ack=false;
+    mpu.state.cmd_held=0;
+    mpu.state.req_outstanding=false;
+    mpu.state.out_deferred=0;
+    mpu.state.ano_chan=0;
+    mpu.state.ticks_pending=0;
     mpu.clock.tempo=100;
     mpu.clock.timebase=120;
     mpu.clock.tempo_rel=0x40;
@@ -769,11 +894,11 @@ __force_inline static void MPU401_Reset(void) {
 
 
 /* HardMPU: Initialisation */
-void MPU401_Init(bool delaysysex, bool fakeallnotesoff)
+void MPU401_Init(bool delaysysex, bool fakeallnotesoff, bool waitbusystatus)
 {
-    config_versionfix = false;
     config_delaysysex = delaysysex;
     config_fakeallnotesoff = fakeallnotesoff;
+    config_waitbusystatus = waitbusystatus;
     if (!critical_section_is_initialized(&mpu_crit)) {
         critical_section_init(&mpu_crit);
     }

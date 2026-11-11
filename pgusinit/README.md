@@ -14,12 +14,22 @@ Firmware files that comes with release:
 
 * `picogus.uf2` - All modes are now in a single firmware. To switch between
   modes, use the `/mode x` option in pgusinit.
-* `picogus-picow.uf2` - All modes, for PicoGUS Femto and PicoGUS v1.x boards
+* `picogusw.uf2` - All modes, for PicoGUS Femto and PicoGUS v1.x boards
   with a Pico W installed. Adds a web page for status, volume, settings, mode
   switching, mt32-pi control and firmware updates over WiFi. Set up WiFi with
   `/wifissid` and `/wifipass`, then `/wifistatus` shows the address of the page.
+  `pg2350w.uf2` is the same for a Pico 2 W.
 * `pg-ne2k.uf2` - Special firmware for NE2000/WiFi. Only works on PicoGUS
   Femto and PicoGUS v1.x boards with a Pico W installed.
+* `pgus2350.uf2` and `ne2k2350.uf2` - the same two firmwares for PicoGUS Femto
+  and PicoGUS v1.x boards with an RP2350-based Raspberry Pi Pico 2 (Pico 2 W
+  for NE2000) installed instead of a Pico (Pico W).
+* `core2350.uf2` - the all-modes firmware for the PicoGUS v2.1 THT board
+  (RP2350B on a Core2350B module).
+
+Firmware for the RP2040 (Pico) and for the RP2350 (Pico 2) is not
+interchangeable. pgusinit shows which one a card has on its `Hardware:` line
+and `/flash` refuses a file made for the other one.
 
 pgusinit must be run with firmware it is compatible with. If run with an
 incompatible firmware, pgusinit will complain about a protocol mismatch. One
@@ -59,6 +69,16 @@ settings. Options may be given for other settings:
   saved.
 * `/defaults` - restores all card settings to defaults.
 * `/joy 1|0` - enable USB joystick support with 1, disable with 0.
+
+### WiFi options (Pico W boards)
+
+Used by the web page of `picogusw.uf2` and `pg2350w.uf2`, and by the NE2000
+firmware. Save them with `/save`.
+
+* `/wifissid abc` - set the WiFi network name to abc.
+* `/wifipass xyz` - set the WiFi WPA/WPA2 password to xyz.
+* `/wifinopass` - unset the password to connect to an open network.
+* `/wifistatus` - show the WiFi status, including the address of the web page.
 
 ### GUS options
 
@@ -155,16 +175,6 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
 * `/cdloadname x` - load CD image by name. Names with spaces can be quoted
 * `/cdauto 1|0` - auto-advance loaded image when same USB drive is reinserted
 * `/cdvol x` - sets the volume of the CD audio output to x percent.
-
-### WiFi options (Pico W boards)
-
-Used by the `picogus-picow.uf2` web page and by the NE2000 firmware. Save them
-with `/save`.
-
-* `/wifissid abc` - set the WiFi network name to abc.
-* `/wifipass xyz` - set the WiFi WPA/WPA2 password to xyz.
-* `/wifinopass` - unset the password to connect to an open network.
-* `/wifistatus` - show the WiFi status, including the address of the web page.
 
 ## Compiling
 

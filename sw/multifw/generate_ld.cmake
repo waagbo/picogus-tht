@@ -31,9 +31,10 @@ list(GET FW_ORIGINS 3 FW_4_ORIGIN)
 list(GET FW_ORIGINS 4 FW_5_ORIGIN)
 list(GET FW_ORIGINS 5 FW_6_ORIGIN)
 
-# The last flash sector holds the settings
+# The last flash sector holds the settings. The image is kept within 2 MB on
+# every chip (the RP2040's flash size, and what uf2create lays out).
 if(FW_ORIGIN GREATER 2093056)
-    message(FATAL_ERROR "Firmwares end at ${FW_ORIGIN}, which overlaps the settings sector at 2093056")
+    message(FATAL_ERROR "Firmwares end at ${FW_ORIGIN}, which overlaps the settings sector of a 2 MB flash at 2093056")
 endif()
 
 file(REMOVE ${FLASH_FIRMWARE_H})

@@ -45,16 +45,16 @@ void play_mpu() {
     // Init PIC on this core so it handles timers
     PIC_Init();
     DBG_PUTS("pic inited on core 1");
-    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff);
+    MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 
     for (;;) {
+#ifdef WEBSERVER
+        web_task();
+#endif
         send_midi_bytes(8);
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
-#endif
-#ifdef WEBSERVER
-        web_task();
 #endif
     }
 }
