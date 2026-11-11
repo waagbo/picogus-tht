@@ -9278,7 +9278,7 @@
 				)
 			)
 		)
-		(property "MPN" "PTD902-2020K-A103"
+		(property "MPN" "PTD902-2015F-A103"
 			(at 152.4 104.14 0)
 			(hide yes)
 			(show_name no)
@@ -9289,7 +9289,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "PTD902-2020K-A103-ND"
+		(property "DigiKey" "PTD902-2015F-A103-ND"
 			(at 152.4 104.14 0)
 			(hide yes)
 			(show_name no)
@@ -9300,7 +9300,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C470545 (Alps RK09712200HA)"
+		(property "LCSC" "C444934 (Alps RK09712200MC)"
 			(at 152.4 104.14 0)
 			(hide yes)
 			(show_name no)
@@ -9311,7 +9311,7 @@
 				)
 			)
 		)
-		(property "Alternatives" "RK0971221Z0X (same pot + switch, switch unused; DK 4809-RK0971221Z0X-ND 276, LCSC C22387186 681)."
+		(property "Alternatives" "Bourns PTD902-2015K-A103 (15 mm knurled shaft), PTD902-2020K-A103 (20 mm knurled); Alps RK09712200HA (20 mm flat; LCSC C470545), RK0971221Z0X (with switch, unused)."
 			(at 152.4 104.14 0)
 			(hide yes)
 			(show_name no)
@@ -10957,7 +10957,7 @@
 				)
 			)
 		)
-		(property "MPN" "PTD902-2020K-A103"
+		(property "MPN" "PTD902-2015F-A103"
 			(at 152.4 139.7 0)
 			(hide yes)
 			(show_name no)
@@ -10968,7 +10968,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "PTD902-2020K-A103-ND"
+		(property "DigiKey" "PTD902-2015F-A103-ND"
 			(at 152.4 139.7 0)
 			(hide yes)
 			(show_name no)
@@ -10979,7 +10979,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C470545 (Alps RK09712200HA)"
+		(property "LCSC" "C444934 (Alps RK09712200MC)"
 			(at 152.4 139.7 0)
 			(hide yes)
 			(show_name no)
@@ -10990,7 +10990,7 @@
 				)
 			)
 		)
-		(property "Alternatives" "RK0971221Z0X (same pot + switch, switch unused; DK 4809-RK0971221Z0X-ND 276, LCSC C22387186 681)."
+		(property "Alternatives" "Bourns PTD902-2015K-A103 (15 mm knurled shaft), PTD902-2020K-A103 (20 mm knurled); Alps RK09712200HA (20 mm flat; LCSC C470545), RK0971221Z0X (with switch, unused)."
 			(at 152.4 139.7 0)
 			(hide yes)
 			(show_name no)
