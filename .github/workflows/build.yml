@@ -207,6 +207,11 @@ jobs:
         fail-fast: false
         matrix:
           flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
+      env:
+        PICOSDK_VER: "2.3.1"
+        PICOEXTRA_VER: "sdk-2.3.1"
+        # Tests may build sources that come with the Pico-SDK (lwIP)
+        PICO_SDK_PATH: ${{github.workspace}}/pico/pico-sdk
       steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -216,6 +221,21 @@ jobs:
       - name: Merge experimental features
         if: matrix.flavor == 'experimental'
         run: sw/scripts/experimental.sh merge --in-place
+
+      # The firmware jobs' copy of the Pico-SDK if there is one. It is only
+      # restored here, never saved: this job doesn't fetch all of it.
+      - name: Restore Pico-SDK from cache
+        id: cache-sdk
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{github.workspace}}/pico/
+          key: ${{ env.PICOSDK_VER }}-${{ env.PICOEXTRA_VER }}
+      - name: Clone Pico-SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          git clone -b "$PICOSDK_VER" --depth 1 https://github.com/raspberrypi/pico-sdk.git $PICO_SDK_PATH
+          cd $PICO_SDK_PATH
+          git submodule update --init --depth 1 lib/lwip
 
       - name: Run host tests
         shell: bash
