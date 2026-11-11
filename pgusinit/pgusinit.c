@@ -595,6 +595,56 @@ void print_progress_bar(uint16_t current, uint16_t total)
     }
 }
 
+#define UF2_FLAG_FAMILY_ID_PRESENT 0x00002000ul
+#define UF2_FAMILY_RP2040          0xe48bff56ul
+#define UF2_FAMILY_RP2350_ARM_S    0xe48bff59ul
+
+static const char* chip_name(chip_type_t chip)
+{
+    return (chip == CHIP_RP2350) ? "RP2350 (Pico 2)" : "RP2040";
+}
+
+// Microcontroller on the card. Firmware from before RP2350 support doesn't have the register and returns 0xFF: those
+// cards all have an RP2040.
+static chip_type_t get_chip_type(void)
+{
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, CMD_CHIPTYPE); // Select microcontroller type register
+    uint8_t chip = inp(DATA_PORT_HIGH);
+    // Firmware that doesn't know the register stops listening to the control port when it is selected, and the
+    // commands that follow don't all knock first, so knock again
+    outp(CONTROL_PORT, 0xCC);
+    return (chip == CHIP_RP2350) ? CHIP_RP2350 : CHIP_RP2040;
+}
+
+// Check that a firmware file is for the card's microcontroller, going by the family ID in its first UF2 block. Firmware
+// for the other chip would leave the card unable to start until it is reprogrammed over USB.
+static bool firmware_matches_card(const char* fw_filename, uint32_t flags, uint32_t family)
+{
+    chip_type_t card_chip = get_chip_type();
+    chip_type_t fw_chip;
+    if (!(flags & UF2_FLAG_FAMILY_ID_PRESENT)) {
+        // Only RP2040 firmware files predate family IDs
+        fw_chip = CHIP_RP2040;
+    } else if (family == UF2_FAMILY_RP2040) {
+        fw_chip = CHIP_RP2040;
+    } else if (family == UF2_FAMILY_RP2350_ARM_S) {
+        fw_chip = CHIP_RP2350;
+    } else {
+        fprintf(stderr, "ERROR: file %s is not a PicoGUS firmware file\n", fw_filename);
+        return false;
+    }
+    if (fw_chip != card_chip) {
+        fprintf(stderr, "ERROR: file %s is firmware for the %s,\n", fw_filename, chip_name(fw_chip));
+        fprintf(stderr, "but this PicoGUS has an %s. Nothing was changed on the card.\n", chip_name(card_chip));
+        fprintf(stderr, "Firmware for this card is in %s\n",
+                (card_chip == CHIP_RP2350) ? "pgus2350.uf2 (ne2k2350.uf2 for NE2000 on a Pico 2 W)"
+                                           : "picogus.uf2 (pg-ne2k.uf2 for NE2000 on a Pico W)");
+        return false;
+    }
+    return true;
+}
+
 static int write_firmware(const char* fw_filename)
 {
     union {
@@ -640,6 +690,11 @@ static int write_firmware(const char* fw_filename)
 
         if (i == 0) {
             numBlocks = uf2_buf.uf2.numBlocks;
+
+            if (!firmware_matches_card(fw_filename, uf2_buf.uf2.flags, uf2_buf.uf2.fileSize)) {
+                fclose(fp);
+                return 16;
+            }
 
             // Put card into programming mode
             outp(CONTROL_PORT, 0xCC); // Knock on the door...
@@ -1332,12 +1387,16 @@ static init_status initPicoGUS()
     outp(CONTROL_PORT, CMD_HWTYPE); // Select hardware type register
     board_type = inp(DATA_PORT_HIGH);
     if (board_type == PICO_BASED) {
-        printf("Hardware: PicoGUS v1.x or PicoGUS Femto\n");
+        printf("Hardware: PicoGUS v1.x or PicoGUS Femto");
     } else if (board_type == PICOGUS_2) {
-        printf("Hardware: PicoGUS v2.0\n");
+        printf("Hardware: PicoGUS v2.0");
     } else {
-        printf("Hardware: Unknown\n");
+        printf("Hardware: Unknown");
     }
+    if (get_chip_type() == CHIP_RP2350) {
+        printf(" with an %s", chip_name(CHIP_RP2350));
+    }
+    printf("\n");
     printf("\n");
     return INIT_OK;
 }

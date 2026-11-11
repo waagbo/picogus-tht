@@ -29,8 +29,11 @@ if (NOT UF2CREATE_FOUND)
                 BINARY_DIR ${UF2CREATE_BINARY_DIR}
                 CMAKE_ARGS "-DCMAKE_MAKE_PROGRAM:FILEPATH=${CMAKE_MAKE_PROGRAM}"
                 CMAKE_CACHE_ARGS "-DMULTIFW_INCLUDE:STRING=${CMAKE_BINARY_DIR}/generated/multifw"
+                                 "-DUF2_FAMILY_ID:STRING=${PICOGUS_UF2_FAMILY_ID}"
                 BUILD_ALWAYS 1 # force dependency checking
                 INSTALL_COMMAND ""
+                # Lets generators like Ninja know where uf2create comes from
+                BUILD_BYPRODUCTS ${UF2CREATE_BINARY_DIR}/uf2create
                 )
     endif()
 

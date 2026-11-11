@@ -23,10 +23,10 @@
 #include "hardware/adc.h"
 #include "hardware/pio.h"
 #include "hardware/irq.h"
-#include "hardware/regs/vreg_and_chip_reset.h"
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
 
+#include "system/platform.h"
 #include "system/overclock.h"
 #include "system/pico_reflash.h"
 #include "system/flash_settings.h"
@@ -174,7 +174,7 @@ static void wtvol_from_mixer(uint8_t volume) {
 #define IOW_PIO_SM 0
 #define IOR_PIO_SM 1
 
-const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING;
+const char* firmware_string = PICO_PROGRAM_NAME " v" PICO_PROGRAM_VERSION_STRING PICOGUS_FW_STRING_SUFFIX;
 
 static uint8_t basePort_low;
 static uint8_t mouseSensitivity_low;
@@ -274,6 +274,7 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_DEFAULTS: // Select reset to defaults register
         break;
     case CMD_HWTYPE: // Hardware version
+    case CMD_CHIPTYPE: // Microcontroller type
         break;
     case CMD_FLASH: // Firmware write mode
         break;
@@ -684,6 +685,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.Volume.psgVol;
     case CMD_HWTYPE: // Hardware version
         return BOARD_TYPE;
+    case CMD_CHIPTYPE: // Microcontroller type
+        return PICOGUS_CHIP_TYPE;
     case CMD_FLASH:
         // Get status of firmware write
         return pico_firmware_getStatus();
@@ -1241,18 +1244,18 @@ int main()
     stdio_init_all();
 #endif
     DBG_PUTS(firmware_string);
-    io_rw_32 *reset_reason = (io_rw_32 *) (VREG_AND_CHIP_RESET_BASE + VREG_AND_CHIP_RESET_CHIP_RESET_OFFSET);
-    if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS) {
+    io_rw_32 *reset_reason = &PLATFORM_CHIP_RESET_REG;
+    if (*reset_reason & PLATFORM_CHIP_RESET_HAD_POWER_ON_BITS) {
         DBG_PUTS("I was reset due to power on reset or brownout detection.");
-    } else if (*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_RUN_BITS) {
+    } else if (*reset_reason & PLATFORM_CHIP_RESET_HAD_RUN_PIN_BITS) {
         DBG_PUTS("I was reset due to the RUN pin (either manually or due to ISA RESET signal)");
-    } else if(*reset_reason & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_PSM_RESTART_BITS) {
+    } else if(*reset_reason & PLATFORM_CHIP_RESET_HAD_DEBUG_BITS) {
         DBG_PUTS("I was reset due the debug port");
     }
 
     // Load settings from flash
     loadSettings(&settings, true /* migrate */);
-    hw_clear_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_EN_BITS);
+    platform_disable_xip_cache();
 
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)
     // GPIO 25 must be high to read GPIO 29 on the Pico W
@@ -1434,8 +1437,12 @@ extern void PIC_DeActivateIRQ(void);
 #endif // USBONLY
 
     for(int i=AD0_PIN; i<(AD0_PIN + 10); ++i) {
+        platform_gpio_enable_input(i);
         gpio_disable_pulls(i);
     }
+    platform_gpio_enable_input(IOW_PIN);
+    platform_gpio_enable_input(IOR_PIN);
+    platform_gpio_enable_input(DACK_PIN);
     gpio_disable_pulls(IOW_PIN);
     gpio_disable_pulls(IOR_PIN);
     gpio_pull_down(IOCHRDY_PIN);

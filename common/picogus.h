@@ -25,6 +25,10 @@ typedef enum {
 
 typedef enum { PICO_BASED = 0, PICOGUS_2 = 1 } board_type_t;
 
+// Microcontroller the firmware runs on, as reported by CMD_CHIPTYPE. Firmware from before RP2350 support doesn't know
+// the register and returns 0xFF: that is always an RP2040.
+typedef enum { CHIP_RP2040 = 0, CHIP_RP2350 = 1 } chip_type_t;
+
 typedef enum {
     INVALID_MODE = 0,
     GUS_MODE     = 1,
@@ -104,4 +108,5 @@ static const char *modenames[8] = {
 #define CMD_SAVE       0xE1 // Select save settings register
 #define CMD_REBOOT     0xE2 // Select reboot register
 #define CMD_HWTYPE     0xF0 // Hardware type 
+#define CMD_CHIPTYPE   0xF1 // Microcontroller type (chip_type_t)
 #define CMD_FLASH      0xFF // Firmware write mode

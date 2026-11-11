@@ -8,6 +8,17 @@
 #include "system/flash_settings.h"
 #include "../include/pg_debug.h"
 
+#if PICO_RP2040
+// RP2040 images start with the 256 byte boot2, followed by the vector table
+#define FW_VECTOR_TABLE_OFFSET 0x100
+#define VTOR_ADDR (PPB_BASE + M0PLUS_VTOR_OFFSET)
+#else
+// RP2350 images have no boot2: the vector table is at the start of the image
+// (the bootrom-visible IMAGE_DEF block follows it)
+#define FW_VECTOR_TABLE_OFFSET 0
+#define VTOR_ADDR (PPB_BASE + M33_VTOR_OFFSET)
+#endif
+
 static uint32_t sStart = 0;
 static const uint32_t offset[NR_OF_FIRMWARES] = {FLASH_FIRMWARE1, FLASH_FIRMWARE2, FLASH_FIRMWARE3, FLASH_FIRMWARE4, FLASH_FIRMWARE5, FLASH_FIRMWARE6};
 
@@ -52,7 +63,7 @@ int main(void)
          "msr msp, r0\n"
          "bx r1\n"
          :
-         : [start] "r" (sStart + 0x100), [vtable] "X" (PPB_BASE + M0PLUS_VTOR_OFFSET)
+         : [start] "r" (sStart + FW_VECTOR_TABLE_OFFSET), [vtable] "X" (VTOR_ADDR)
          :
     );
 

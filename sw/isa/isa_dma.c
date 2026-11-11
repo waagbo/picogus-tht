@@ -17,11 +17,23 @@
  */
 
 #include "isa_dma.h"
+#include "system/platform.h"
 
 #define dma_clkdiv ((float)RP2_CLOCK_SPEED / 183000.0)
 
+// The DMA PIO programs only ever sample these pins
+static void DMA_enable_inputs(void) {
+    platform_gpio_enable_input(IOW_PIN);
+    platform_gpio_enable_input(DACK_PIN);
+    platform_gpio_enable_input(TC_PIN);
+    for (uint pin = AD0_PIN; pin < AD0_PIN + 8; ++pin) {
+        platform_gpio_enable_input(pin);
+    }
+}
+
 dma_inst_t DMA_init(PIO pio, uint sm, irq_handler_t dma_isr) {
     dma_inst_t dma;
+    DMA_enable_inputs();
     dma.offset = pio_add_program(pio, &dma_write_program);
     pio_sm_claim(pio, sm);
     dma.sm = sm;
@@ -42,6 +54,7 @@ dma_inst_t DMA_init(PIO pio, uint sm, irq_handler_t dma_isr) {
 
 dma_inst_t DMA_multi_init(PIO pio, uint sm, irq_handler_t dma_isr) {
     dma_inst_t dma;
+    DMA_enable_inputs();
     dma.offset = pio_add_program(pio, &dma_write_multi_program);
     pio_sm_claim(pio, sm);
     dma.sm = sm;
