@@ -19,7 +19,7 @@ Firmware files that comes with release:
 * `pgus2350.uf2` and `ne2k2350.uf2` - the same two firmwares for PicoGUS Femto
   and PicoGUS v1.x boards with an RP2350-based Raspberry Pi Pico 2 (Pico 2 W
   for NE2000) installed instead of a Pico (Pico W).
-* `pgus-v21.uf2` - the all-modes firmware for the PicoGUS v2.1 THT board
+* `core2350.uf2` - the all-modes firmware for the PicoGUS v2.1 THT board
   (RP2350B on a Core2350B module).
 
 Firmware for the RP2040 (Pico) and for the RP2350 (Pico 2) is not

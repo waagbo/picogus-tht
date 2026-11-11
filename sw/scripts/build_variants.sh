@@ -7,7 +7,7 @@
 #              names (picogus.uf2, pg-ne2k.uf2, ...)
 #   rp2350     Pico 2 and Pico 2 W: pgus2350.uf2 and ne2k2350.uf2
 #   picogus21  the RP2350B PicoGUS v2.1 THT board (PICO_BOARD=picogus21):
-#              pgus-v21.uf2
+#              core2350.uf2
 # The RP2350 release files have names that stay intact on a DOS (8.3) file
 # system; the other variants get an "-rp2350" or "-v21" suffix.
 #
@@ -56,7 +56,7 @@ declare -A RP2350_OUTPUTS=(
     [multifw]=pgus2350             [ne2k]=ne2k2350
 )
 declare -A PICOGUS21_OUTPUTS=(
-    [multifw]=pgus-v21
+    [multifw]=core2350
 )
 ALL_VARIANTS=(multifw ne2k gus sb sb-ymf262 sb-ym3812 sb-emu8950 adlib adlib-ymf262 adlib-ym3812 adlib-dbopl3 mpu psg usb analyzer)
 DEFAULT_VARIANTS=(multifw ne2k)

@@ -56,7 +56,7 @@ Overhauled firmware flashing to be more resilient.
 
 ### RP2350 support
 
-- The firmware now also builds for the RP2350, from the same source as the RP2040 firmware: for PicoGUS v1.x and Femto boards with a Raspberry Pi Pico 2 or Pico 2 W in place of the Pico or Pico W (`pgus2350.uf2`, and `ne2k2350.uf2` for NE2000/WiFi), and for the PicoGUS v2.1 THT board, which has an RP2350B on a Core2350B module and keeps the GUS sample RAM in the module's PSRAM (`pgus-v21.uf2`). Not tested on hardware yet. See `sw/docs/rp2350.md`.
+- The firmware now also builds for the RP2350, from the same source as the RP2040 firmware: for PicoGUS v1.x and Femto boards with a Raspberry Pi Pico 2 or Pico 2 W in place of the Pico or Pico W (`pgus2350.uf2`, and `ne2k2350.uf2` for NE2000/WiFi), and for the PicoGUS v2.1 THT board, which has an RP2350B on a Core2350B module and keeps the GUS sample RAM in the module's PSRAM (`core2350.uf2`). Not tested on hardware yet. See `sw/docs/rp2350.md`.
 - Firmware for the RP2040 and the RP2350 is not interchangeable, so flashing is guarded: the firmware checks the UF2 data it is sent and refuses a file for the other chip (or one that isn't laid out as a PicoGUS firmware file) before erasing anything, and `pgusinit /flash` checks the file against the card's chip before sending it. pgusinit shows the chip on its hardware line when it is not an RP2040.
 - Releases contain the firmware for every platform. `sw/scripts/build_release.sh` builds the same set of files locally, and with `--experimental` a second set with the experimental feature branches merged in (see `sw/experimental/README.md`).
 

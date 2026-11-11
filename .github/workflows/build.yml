@@ -136,7 +136,7 @@ jobs:
       #   run: sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' ${{env.PICO_SDK_PATH}}/src/rp2_common/pico_platform_compiler/include/pico/platform/compiler.h
 
       # Mega firmware and NE2000 firmware: picogus.uf2 and pg-ne2k.uf2 for
-      # RP2040, pgus2350.uf2 and ne2k2350.uf2 for RP2350, pgus-v21.uf2 for v2.1
+      # RP2040, pgus2350.uf2 and ne2k2350.uf2 for RP2350, core2350.uf2 for v2.1
       - name: Build Firmware
         shell: bash
         run: sw/scripts/build_release.sh --platform ${{ matrix.chip }} --no-dos-tools --out $OUTPUT_DIR
@@ -238,7 +238,7 @@ jobs:
         shell: bash
         run: |
           ls -la $STAGING_DIR
-          for f in picogus.uf2 pg-ne2k.uf2 pgus2350.uf2 ne2k2350.uf2 pgus-v21.uf2 pgusinit.exe README.md; do
+          for f in picogus.uf2 pg-ne2k.uf2 pgus2350.uf2 ne2k2350.uf2 core2350.uf2 pgusinit.exe README.md; do
             if [ ! -s "$STAGING_DIR/$f" ]; then
               echo "::error::$f is missing from the ${{ matrix.flavor }} files"
               exit 1

@@ -621,7 +621,7 @@ static const char* chip_firmware_files(chip_type_t chip)
     case CHIP_RP2350:
         return "pgus2350.uf2 (ne2k2350.uf2 for NE2000 on a Pico 2 W)";
     case CHIP_RP2350B_V21:
-        return "pgus-v21.uf2";
+        return "core2350.uf2";
     default:
         return "picogus.uf2 (pg-ne2k.uf2 for NE2000 on a Pico W)";
     }
