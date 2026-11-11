@@ -14450,6 +14450,41 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "PiGUS library:RM2"
+			(exclude_from_sim no) (in_bom yes) (on_board yes) (in_pos_files yes) (duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "U" (at -12.7 13.97 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify left)))
+			(property "Value" "RM2" (at 12.7 13.97 0) (show_name no) (do_not_autoplace no) (effects (font (size 1.27 1.27)) (justify right)))
+			(property "Footprint" "PiGUS library:RaspberryPi_RM2_HandSolder" (at 0 0 0) (show_name no) (do_not_autoplace no) (hide yes) (effects (font (size 1.27 1.27))))
+			(property "Datasheet" "https://datasheets.raspberrypi.com/rm2/rm2-datasheet.pdf" (at 0 0 0) (show_name no) (do_not_autoplace no) (hide yes) (effects (font (size 1.27 1.27))))
+			(property "Description" "Raspberry Pi Radio Module 2 (RMC20452T): CYW43439 WiFi 4 + Bluetooth 5.2, gSPI host interface, 14.5 x 16.5 mm castellated module" (at 0 0 0) (show_name no) (do_not_autoplace no) (hide yes) (effects (font (size 1.27 1.27))))
+			(symbol "RM2_0_1"
+				(rectangle (start -12.7 12.7) (end 12.7 -15.24) (stroke (width 0.254) (type default)) (fill (type background)))
+			)
+			(symbol "RM2_1_1"
+				(pin input line (at -15.24 10.16 0) (length 2.54) (name "SCLK" (effects (font (size 1.27 1.27)))) (number "3" (effects (font (size 1.27 1.27)))))
+				(pin input line (at -15.24 7.62 0) (length 2.54) (name "DATA_IN" (effects (font (size 1.27 1.27)))) (number "5" (effects (font (size 1.27 1.27)))))
+				(pin output line (at -15.24 2.54 0) (length 2.54) (name "DATA_OUT" (effects (font (size 1.27 1.27)))) (number "6" (effects (font (size 1.27 1.27)))))
+				(pin output line (at -15.24 -2.54 0) (length 2.54) (name "~{IRQ}" (effects (font (size 1.27 1.27)))) (number "10" (effects (font (size 1.27 1.27)))))
+				(pin input line (at -15.24 -7.62 0) (length 2.54) (name "CS" (effects (font (size 1.27 1.27)))) (number "9" (effects (font (size 1.27 1.27)))))
+				(pin input line (at -15.24 -10.16 0) (length 2.54) (name "WL_ON" (effects (font (size 1.27 1.27)))) (number "12" (effects (font (size 1.27 1.27)))))
+				(pin input line (at -15.24 -12.7 0) (length 2.54) (name "BT_ON" (effects (font (size 1.27 1.27)))) (number "13" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at 15.24 10.16 180) (length 2.54) (name "VIN" (effects (font (size 1.27 1.27)))) (number "16" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at 15.24 7.62 180) (length 2.54) (name "VDDIO" (effects (font (size 1.27 1.27)))) (number "14" (effects (font (size 1.27 1.27)))))
+				(pin bidirectional line (at 15.24 2.54 180) (length 2.54) (name "GPIO0" (effects (font (size 1.27 1.27)))) (number "8" (effects (font (size 1.27 1.27)))))
+				(pin bidirectional line (at 15.24 0.0 180) (length 2.54) (name "GPIO1" (effects (font (size 1.27 1.27)))) (number "18" (effects (font (size 1.27 1.27)))))
+				(pin bidirectional line (at 15.24 -2.54 180) (length 2.54) (name "GPIO2" (effects (font (size 1.27 1.27)))) (number "17" (effects (font (size 1.27 1.27)))))
+				(pin no_connect line (at 15.24 -7.62 180) (length 2.54) (name "NC" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+				(pin no_connect line (at 15.24 -10.16 180) (length 2.54) (name "NC" (effects (font (size 1.27 1.27)))) (number "19" (effects (font (size 1.27 1.27)))))
+				(pin no_connect line (at 15.24 -12.7 180) (length 2.54) (name "NC" (effects (font (size 1.27 1.27)))) (number "20" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at -6.35 -17.78 90) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at -3.81 -17.78 90) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "4" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at -1.27 -17.78 90) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "7" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at 1.27 -17.78 90) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "11" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at 3.81 -17.78 90) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "15" (effects (font (size 1.27 1.27)))))
+				(pin power_in line (at 6.35 -17.78 90) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "21" (effects (font (size 1.27 1.27)))))
+			)
+			(embedded_fonts no)
+		)
 	)
 	(text "Saves PIO instructions due to JMP limitations"
 		(exclude_from_sim no)
@@ -15110,14 +15145,6 @@
 		(uuid "0398e833-646e-49d0-b3f0-1595ce2f8b29")
 	)
 	(no_connect
-		(at 381 127)
-		(uuid "03da9e17-bb7e-5a54-b67f-8999f5f5b8f7")
-	)
-	(no_connect
-		(at 381 139.7)
-		(uuid "1080706b-b90a-5b5d-86cf-eabe0222719e")
-	)
-	(no_connect
 		(at 381 111.76)
 		(uuid "15b6ed73-97d5-5552-911e-5098a9669a8f")
 	)
@@ -15134,10 +15161,6 @@
 		(uuid "254456ed-97f7-461f-a273-df6784f1d689")
 	)
 	(no_connect
-		(at 381 137.16)
-		(uuid "25714d52-1d38-511b-8818-1ad62b4ed7f9")
-	)
-	(no_connect
 		(at 28.575 36.83)
 		(uuid "3662e974-85c0-4df0-8ae1-12cda69c70da")
 	)
@@ -15152,10 +15175,6 @@
 	(no_connect
 		(at 381 142.24)
 		(uuid "3e04507f-1a4d-59d1-8827-958fda01fa5c")
-	)
-	(no_connect
-		(at 381 132.08)
-		(uuid "3e5ec63c-a5fa-5033-9851-cf3fb5e404d5")
 	)
 	(no_connect
 		(at 92.71 37.465)
@@ -25758,7 +25777,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
 			(at 389.89 187.96 0)
 			(hide yes)
 			(show_name no)
@@ -25780,7 +25799,7 @@
 				)
 			)
 		)
-		(property "Description" "5.1k 1/4W 1% metal film: USB-C CC pull-down (Rd)"
+		(property "Description" "5.1k 1/4W 1% metal film: USB-C CC pull-down (Rd); standing"
 			(at 389.89 187.96 0)
 			(hide yes)
 			(show_name no)
@@ -32079,7 +32098,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
 			(at 397.51 190.5 0)
 			(hide yes)
 			(show_name no)
@@ -32101,7 +32120,7 @@
 				)
 			)
 		)
-		(property "Description" "5.1k 1/4W 1% metal film: USB-C CC pull-down (Rd)"
+		(property "Description" "5.1k 1/4W 1% metal film: USB-C CC pull-down (Rd); standing"
 			(at 397.51 190.5 0)
 			(hide yes)
 			(show_name no)
@@ -37981,6 +38000,1138 @@
 				)
 			)
 		)
+	)
+	(symbol
+		(lib_id "PiGUS library:RM2")
+		(at 254.0 256.54 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "4691fb51-585a-5e3d-8c7d-a6eedb277561")
+		(property "Reference" "U14"
+			(at 241.3 242.57000000000002 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "RM2"
+			(at 266.7 242.57000000000002 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "PiGUS library:RaspberryPi_RM2_HandSolder"
+			(at 254.0 256.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://datasheets.raspberrypi.com/rm2/rm2-datasheet.pdf"
+			(at 254.0 256.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Raspberry Pi Radio Module 2 (RMC20452T): CYW43439 WiFi 4 + Bluetooth 5.2, gSPI host interface, 14.5 x 16.5 mm castellated module (SMD: no through-hole version exists)"
+			(at 254.0 256.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Raspberry Pi"
+			(at 254.0 256.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RMC20452T"
+			(at 254.0 256.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "DigiKey" ""
+			(at 254.0 256.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" ""
+			(at 254.0 256.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a7678298-4992-515b-b268-c22b2373ce5f")
+		)
+		(pin "2"
+			(uuid "4d5dcf0a-1d66-5c1a-b842-6e9f4110533f")
+		)
+		(pin "3"
+			(uuid "eadedd27-7549-585a-b16f-9e7051ae0d05")
+		)
+		(pin "4"
+			(uuid "33ab0e96-02f6-590c-80d2-9aa7aaabfd83")
+		)
+		(pin "5"
+			(uuid "2c69371c-d161-5cc2-825b-35bf204da70b")
+		)
+		(pin "6"
+			(uuid "f2e7e65d-0b4d-582d-8336-1c288594d007")
+		)
+		(pin "7"
+			(uuid "932cba9a-6f0a-5c35-a739-a83d8d29fd7e")
+		)
+		(pin "8"
+			(uuid "cac9a970-f769-53b1-b5d9-6d76cb4933a3")
+		)
+		(pin "9"
+			(uuid "929209b9-373e-5aa5-86d3-be73f4476587")
+		)
+		(pin "10"
+			(uuid "b9ad1d88-dcd1-582e-9b0a-1aacb444faea")
+		)
+		(pin "11"
+			(uuid "03e65f26-b1eb-5fa7-b789-d81424b034aa")
+		)
+		(pin "12"
+			(uuid "0865085b-f3a5-5e27-943a-faac88618955")
+		)
+		(pin "13"
+			(uuid "b8b421a4-a763-5765-ba20-ac68d53556eb")
+		)
+		(pin "14"
+			(uuid "2e864e99-1b95-51be-83a9-8708d24aaa48")
+		)
+		(pin "15"
+			(uuid "29245326-f651-57a9-91df-9caaa279441a")
+		)
+		(pin "16"
+			(uuid "e4ce8013-079f-5965-a411-0eb99c0c1b24")
+		)
+		(pin "17"
+			(uuid "983b3b7f-6489-5e5b-a8cf-61eb5bc7763f")
+		)
+		(pin "18"
+			(uuid "8a74fef5-d425-58c4-ac07-7dcbc0c1ab87")
+		)
+		(pin "19"
+			(uuid "dbef54d4-a2ac-513b-b425-272139b8230d")
+		)
+		(pin "20"
+			(uuid "b45e743c-5f9e-593d-a622-67b8add11001")
+		)
+		(pin "21"
+			(uuid "7b44829f-a59e-58f4-8227-259cd6c7c176")
+		)
+		(instances
+			(project "PicoGUS-THT"
+				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
+					(reference "U14")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 232.41 254.0 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "02e13150-76b9-5539-a260-7ca508ce5be9")
+		(property "Reference" "R33"
+			(at 232.41 250.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "470R"
+			(at 232.41 252.1 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+			(at 232.41 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 232.41 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "470R 1/4W 1% metal film: RM2 data out to the shared data GPIO (as on the Pico W); standing"
+			(at 232.41 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Stackpole"
+			(at 232.41 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RNMF14FTC470R"
+			(at 232.41 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "DigiKey" "S470CACT-ND"
+			(at 232.41 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C58592 (UNI-ROYAL MFR0W4F4700A50)"
+			(at 232.41 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "bf3588cb-d4f5-5763-b75f-3fccee31acca")
+		)
+		(pin "2"
+			(uuid "d71edc09-65e6-5885-9b63-18f715edfdc9")
+		)
+		(instances
+			(project "PicoGUS-THT"
+				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
+					(reference "R33")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 232.41 259.08 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "a3fb5234-716e-5808-b93a-268dc73075db")
+		(property "Reference" "R34"
+			(at 232.41 255.48 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "10k"
+			(at 232.41 257.18 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+			(at 232.41 259.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 232.41 259.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "10k 1/4W 1% metal film: RM2 host-wake IRQ onto the shared data GPIO (as on the Pico W); standing"
+			(at 232.41 259.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 232.41 259.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "MFR-25FBF52-10K"
+			(at 232.41 259.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "DigiKey" "10.0KXBK-ND"
+			(at 232.41 259.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C1519255"
+			(at 232.41 259.08 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "09d5571f-ad0c-575f-a224-4916ddf04fb2")
+		)
+		(pin "2"
+			(uuid "78a6101e-452a-52be-ac7b-678c7f3fe6b6")
+		)
+		(instances
+			(project "PicoGUS-THT"
+				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
+					(reference "R34")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C_Polarized_US")
+		(at 283.21 250.19 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "e7f3146f-59cd-54fb-a3c4-011c720087c4")
+		(property "Reference" "C47"
+			(at 285.75 248.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "10uF"
+			(at 285.75 251.46 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"
+			(at 283.21 250.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 283.21 250.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "10uF 50V X7R radial MLCC, 5.0 mm pitch: RM2 supply decoupling"
+			(at 283.21 250.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Murata"
+			(at 283.21 250.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RCER71H106MWM1H03A"
+			(at 283.21 250.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "DigiKey" "490-7518-1-ND"
+			(at 283.21 250.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C3690252"
+			(at 283.21 250.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "7683bd8d-5371-5779-b553-538b7da997b3")
+		)
+		(pin "2"
+			(uuid "6ed1f681-a400-5cc2-87b5-f816f9d0634f")
+		)
+		(instances
+			(project "PicoGUS-THT"
+				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
+					(reference "C47")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 274.32 243.84 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "591cb6bc-ba0a-5459-99e2-8122036a0c54")
+		(property "Reference" "#PWR102"
+			(at 274.32 247.65 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 274.32 240.284 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 274.32 243.84 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 274.32 243.84 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 274.32 243.84 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "751f2739-94cb-5a1a-b77a-5a385aae5305")
+		)
+		(instances
+			(project "PicoGUS-THT"
+				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
+					(reference "#PWR102")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 283.21 254.0 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "b744c0a8-839d-5afb-a05e-18e4f31e4a43")
+		(property "Reference" "#PWR103"
+			(at 283.21 260.096 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 283.21 258.572 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 283.21 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 283.21 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 283.21 254.0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e056485e-5a60-59ee-aef3-5e8fddb0f801")
+		)
+		(instances
+			(project "PicoGUS-THT"
+				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
+					(reference "#PWR103")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 255.27 274.32 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "099244c5-2746-5c58-a103-8e6405552c3e")
+		(property "Reference" "#PWR104"
+			(at 255.27 280.416 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 255.27 278.892 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 255.27 274.32 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 255.27 274.32 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 255.27 274.32 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "dcddb98b-5461-5026-afe5-fb4619019dee")
+		)
+		(instances
+			(project "PicoGUS-THT"
+				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b"
+					(reference "#PWR104")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 238.76 248.92) (xy 223.52 248.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "51ae81a3-c69d-59e5-bab1-f71db354f9d5")
+	)
+	(wire
+		(pts
+			(xy 223.52 248.92) (xy 218.44 248.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "67dea172-7a13-556d-81e4-9a83b0e3b00e")
+	)
+	(wire
+		(pts
+			(xy 223.52 248.92) (xy 223.52 254.0)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5e3d8b8f-05ec-55f6-b50b-441134dc779a")
+	)
+	(wire
+		(pts
+			(xy 223.52 254.0) (xy 223.52 259.08)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "24fa7678-d825-5d13-be0c-bdf5e64e8a4b")
+	)
+	(wire
+		(pts
+			(xy 238.76 254.0) (xy 236.22 254.0)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6dfd55fa-f6f1-5e9b-81da-6be78cc9d584")
+	)
+	(wire
+		(pts
+			(xy 228.6 254.0) (xy 223.52 254.0)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2c230810-6142-5331-a94a-8c522c24ef93")
+	)
+	(wire
+		(pts
+			(xy 238.76 259.08) (xy 236.22 259.08)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0bfc04c3-8e13-54d0-8558-259cb1315e68")
+	)
+	(wire
+		(pts
+			(xy 228.6 259.08) (xy 223.52 259.08)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e0239846-72dd-50d5-bf02-5df9e68abd45")
+	)
+	(wire
+		(pts
+			(xy 238.76 266.7) (xy 236.22 266.7)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c081710a-96e7-5e3c-ac11-f24197b027f6")
+	)
+	(wire
+		(pts
+			(xy 238.76 269.24) (xy 236.22 269.24)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "997f6f3d-7aa4-5993-a8f8-8c26c1a464b4")
+	)
+	(wire
+		(pts
+			(xy 236.22 266.7) (xy 236.22 269.24)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "db8a1dda-d29b-5b65-9214-7fdafa684f33")
+	)
+	(wire
+		(pts
+			(xy 269.24 246.38) (xy 274.32 246.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4e59cd8d-4d9e-58b2-ab9b-7a74aa651c73")
+	)
+	(wire
+		(pts
+			(xy 269.24 248.92) (xy 274.32 248.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bb80f68b-7a2c-5b57-a4c0-28afa7ef6c0e")
+	)
+	(wire
+		(pts
+			(xy 274.32 246.38) (xy 274.32 248.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8b98479a-ffae-564a-adfc-8a3ecdf2c7b0")
+	)
+	(wire
+		(pts
+			(xy 274.32 246.38) (xy 274.32 243.84)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2e94b6a1-e9b7-5fd6-a43c-227733226aa8")
+	)
+	(wire
+		(pts
+			(xy 274.32 246.38) (xy 283.21 246.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "db027512-e87a-5933-bf85-d367f5451a3f")
+	)
+	(wire
+		(pts
+			(xy 247.65 274.32) (xy 250.19 274.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "512a338f-e41d-55b7-929a-6c034eb6d07b")
+	)
+	(wire
+		(pts
+			(xy 250.19 274.32) (xy 252.73 274.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f797a873-ad92-5d56-afce-4693175ad9b5")
+	)
+	(wire
+		(pts
+			(xy 252.73 274.32) (xy 255.27 274.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "df7d3614-b887-5e62-b1e5-b7586f15db74")
+	)
+	(wire
+		(pts
+			(xy 255.27 274.32) (xy 257.81 274.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9cde3801-0fe6-5d88-be1b-cc8154af2e84")
+	)
+	(wire
+		(pts
+			(xy 257.81 274.32) (xy 260.35 274.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "65e0ba0e-729c-5dd2-a6e8-66cadb5b412c")
+	)
+	(junction
+		(at 223.52 248.92)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "77118389-cfc0-5978-bb01-4819db8ae341")
+	)
+	(junction
+		(at 223.52 254.0)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f5532959-04dc-56d5-a63e-9b168a0847f5")
+	)
+	(junction
+		(at 274.32 246.38)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f5859ba1-9d1f-5d9c-94d1-c21caaa5344f")
+	)
+	(label "WL_CLK"
+		(at 238.76 246.38 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "30d844c2-f43a-5aee-bbcf-0b2149cc9bb3")
+	)
+	(label "WL_D"
+		(at 218.44 248.92 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "d270fe23-9457-5f29-90d2-287bc7626f8b")
+	)
+	(label "WL_CS"
+		(at 238.76 264.16 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "6f57a307-0460-5a45-8a57-c403ba087267")
+	)
+	(label "WL_ON"
+		(at 236.22 266.7 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "1a8638be-68fb-58b0-bc57-c236c1222cae")
+	)
+	(no_connect
+		(at 269.24 254.0)
+		(uuid "1e4974f9-c8e5-5014-9375-1f23318d51c5")
+	)
+	(no_connect
+		(at 269.24 256.54)
+		(uuid "46c221fb-d277-5a39-b704-7a52aa597b43")
+	)
+	(no_connect
+		(at 269.24 259.08)
+		(uuid "f2b6ab94-e4ce-5fa6-a438-906fc4614ee1")
+	)
+	(text "RADIO MODULE 2: WiFi / Bluetooth (CYW43439)"
+		(exclude_from_sim no)
+		(at 213.36 240.03 0)
+		(effects
+			(font
+				(size 2 2)
+			)
+			(justify left bottom)
+		)
+		(uuid "993d662d-d27f-5ae7-9c84-87e9d5c403a6")
+	)
+	(text "gSPI as on the Pico W: data in, data out (470R) and the IRQ (10k) share one GPIO.\nGPIO40-45 are the RP2350B pins that are not 5 V tolerant: fine here, all 3.3 V.\nAntenna end on the bracket edge; RF keep-out on the board (see README)."
+		(exclude_from_sim no)
+		(at 213.36 283.21 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "a1a30b7f-5709-5e34-a48b-779c44e99b4e")
+	)
+	(label "WL_ON"
+		(at 381.0 127.0 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "85149ee7-b3b1-5465-8779-41835da33a0e")
+	)
+	(label "WL_CS"
+		(at 381.0 132.08 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b9155a57-1545-5dc0-977c-0093fa0946e5")
+	)
+	(label "WL_D"
+		(at 381.0 137.16 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "5c5e57f0-e394-5ebe-be3f-fb2233036303")
+	)
+	(label "WL_CLK"
+		(at 381.0 139.7 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "53ea5a6c-8dd1-58d5-8d09-3c5ef2d210c0")
 	)
 	(sheet_instances
 		(path "/"
