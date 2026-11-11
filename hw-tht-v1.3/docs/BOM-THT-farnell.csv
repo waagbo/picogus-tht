@@ -5,7 +5,7 @@ Quantity,Manufacturer Part Number,Manufacturer,Customer Part Number,Description
 1,SN74AHC14N,Texas Instruments,PicoGUS-THT-1.3.2: U5,74AHC14
 2,SN74AHC00N,Texas Instruments,"PicoGUS-THT-1.3.2: U6,U7",74AHC00
 1,APS6404L-3SQR-SN,AP Memory,PicoGUS-THT-1.3.2: U8,APS6404L-3SQR-SN
-1,PCM5102AQPWRQ1,Texas Instruments,PicoGUS-THT-1.3.2: U9,PCM5102A
+1,PCM5100APWR,Texas Instruments,PicoGUS-THT-1.3.2: U9,PCM5100A
 1,SN74AHCT126N,Texas Instruments,PicoGUS-THT-1.3.2: U10,74AHCT126
 1,1N5819RLG,onsemi,PicoGUS-THT-1.3.2: D1,1N5819
 2,RNMF14FTC220R,Stackpole,"PicoGUS-THT-1.3.2: R3,R4",220R

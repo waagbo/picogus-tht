@@ -141,7 +141,8 @@ silkscreen. Each round found real faults. Apply these from the start on the next
 - **DAC**:
   - PCM5100A, PCM5101A, PCM5102A and the automotive PCM5102A-Q1 are pin-compatible.
   - PCM5102APWR was out of stock at DigiKey until 2027, but PCM5102AQPWRQ1 was in stock.
-  - The difference is not audible with the firmware's 16-bit output.
+  - The difference is not audible with the firmware's 16-bit output, so v1.3.2 went back to the cheapest grade,
+    the PCM5100APWR (24.69 kr at DigiKey against 59.83 kr for the PCM5102AQPWRQ1).
 - **J9 in gold**: Amphenol 77313-118-26LF has 30 µin gold and the same dimensions as the tin Sullins PEC13DAAN.
 - **Check a part's drawing, not its listing title.** LCSC C9040 is listed as a gold 2x13 pin header but is a shrouded
   box header with latches, which a Waveblaster daughterboard cannot plug into.

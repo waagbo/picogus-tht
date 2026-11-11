@@ -3,7 +3,7 @@
 Board revision **v1.3.2**: the v1.3.1 (rev B) THT board on a 102 mm outline, with
 the fine-pitch chips soldered straight to the card and a test pad on every one of their pins.
 
-* **U3/U4** (SN74CB3T3257, TSSOP-16) and **U9** (PCM5102A, TSSOP-20; the PCM5100A/5101A fit too) only exist as TSSOPs. They are soldered to
+* **U3/U4** (SN74CB3T3257, TSSOP-16) and **U9** (PCM5100A, TSSOP-20; the PCM5101A/5102A fit too) only exist as TSSOPs. They are soldered to
   the card on hand-solder footprints, and **every pin has its own 0.7 mm round test pad** in line with it, for a
   probe, a meter or a scope (see [U3/U4 and U9 with a test pad per pin](#u3u4-and-u9-with-a-test-pad-per-pin)).
   The TSSOP-to-DIP adapter boards of the earlier v1.3.2 layout are gone, and so are their sockets.
@@ -66,7 +66,7 @@ board.
 
 ### U3/U4 and U9 with a test pad per pin
 
-| | U3, U4 (SN74CB3T3257, TSSOP-16) | U9 (PCM5102A, TSSOP-20) |
+| | U3, U4 (SN74CB3T3257, TSSOP-16) | U9 (PCM5100A, TSSOP-20) |
 |---|---|---|
 | Footprint | `PiGUS library:TSSOP-16_4.4x5mm_P0.65mm_HandSolder_TestPads` | `PiGUS library:TSSOP-20_4.4x6.5mm_P0.65mm_HandSolder_TestPads` |
 | Courtyard | 11.4 × 5.75 mm | 11.4 × 7.05 mm |
@@ -844,9 +844,10 @@ python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT-sockets.csv docs/BOM-THT-
 
 * **Logic ICs (U2, U5, U6, U7, U10): order from DigiKey.** LCSC lists the DIPs, but had 0 of U2, U5 and U10 and
   60 of U6/U7 on 2026-11-07. **The Pico (U1)** is not sold in the LCSC shop, so the LCSC file leaves it out.
-* **U9 is the PCM5102A** (112 dB). DigiKey's line is the automotive PCM5102AQPWRQ1, in stock when the PCM5102APWR
-  was not; LCSC's line is the PCM5102APWR. The PCM5100A (100 dB) is the budget choice: with the firmware's 16-bit
-  output the grades sound the same. All three are pin-compatible.
+* **U9 is the PCM5100A** (PCM5100APWR, 100 dB), the cheapest grade: 24.69 kr at DigiKey on 2026-11-11, against
+  59.83 kr for the automotive PCM5102AQPWRQ1 (112 dB). With the firmware's 16-bit output the grades sound the same.
+  The PCM5101A and PCM5102A (also the -Q1 and the PW tube) are pin-compatible drop-ins. DigiKey showed only 69 in
+  stock (LCSC 1167), so check before ordering; at LCSC the PCM5102APWR (C107671) was cheaper but down to 5.
 * **The pin headers are gold-plated** (30 µin): Amphenol 77313-118-26LF for J9, 77313-118-18LF for J1 and
   77311-118-02LF for J6/J7, with the same pin lengths as the parts they replace (the tin Sullins PEC13DAAN for J9,
   the Amphenol 10129381-918001BLF for J1, which DigiKey lists with only 1 µin gold, and a tin Sullins 1x40 strip cut
@@ -859,9 +860,9 @@ python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT-sockets.csv docs/BOM-THT-
   the front. Solder them before the through-hole parts, the TSSOPs first; then check each pin against its neighbours
   on the test pads (a bridge shows as a short between two pads) and ring each test pad through to the part it
   connects to.
-* **DigiKey BOM cost**: about 563 kr excl. MVA for one board at digikey.no's single-piece prices of 2026-11-07
-  (parts only, no PCB, no shipping; price breaks lower it a little). The PCM5102A-Q1 is 60 kr of that: with the
-  PCM5100A the board is about 528 kr. The optional machined socket set was ~80 kr on rev B, plus ~21 kr for the
+* **DigiKey BOM cost**: about 528 kr excl. MVA for one board at digikey.no's single-piece prices of 2026-11-07
+  (U9 re-read on 2026-11-11; parts only, no PCB, no shipping; price breaks lower it a little). The PCM5100A is 25 kr
+  of that; the PCM5102A-Q1 instead adds about 35 kr. The optional machined socket set was ~80 kr on rev B, plus ~21 kr for the
   Pico sockets.
 * **Ceramic capacitors must have 5.0 mm (or 5.08 mm) lead pitch.** 2.5 mm parts don't fit (e.g. TDK FG1x, Vishay K…L2).
 

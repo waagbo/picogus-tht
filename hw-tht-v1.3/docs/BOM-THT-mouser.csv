@@ -5,7 +5,7 @@ Quantity,Manufacturer Part Number,Manufacturer,Customer Part Number,Description
 1,SN74AHC14N,Texas Instruments,U5,74AHC14
 2,SN74AHC00N,Texas Instruments,"U6,U7",74AHC00
 1,APS6404L-3SQR-SN,AP Memory,U8,APS6404L-3SQR-SN
-1,PCM5102AQPWRQ1,Texas Instruments,U9,PCM5102A
+1,PCM5100APWR,Texas Instruments,U9,PCM5100A
 1,SN74AHCT126N,Texas Instruments,U10,74AHCT126
 1,1N5819RLG,onsemi,D1,1N5819
 2,RNMF14FTC220R,Stackpole,"R3,R4",220R
