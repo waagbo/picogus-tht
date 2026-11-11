@@ -826,6 +826,10 @@
     [
       "6a1c2f0e-5b7d-4c3e-9f21-8d4b7a6e3c10",
       "Mixer"
+    ],
+    [
+      "6a6f69f9-b2fb-58de-aefe-9bea60b2b63f",
+      "Boot ROM"
     ]
   ],
   "text_variables": {},
