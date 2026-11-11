@@ -407,23 +407,45 @@ static void CompleteList(PLIST_ENTRY list, NTSTATUS st) {
   }
 }
 
-/* something in directory dir changed (filter: FILE_NOTIFY_CHANGE_*) */
+/* something in directory dir changed (filter: FILE_NOTIFY_CHANGE_*).
+ * Called with Vcb.Lock held: CCBs join and leave NotifyList and change
+ * their filter only under it, so the list is walked and the names compared
+ * here at PASSIVE_LEVEL (RtlEqualUnicodeString is pageable); the spin lock
+ * guards only the IRP queues, which the cancel routine touches at
+ * DISPATCH_LEVEL. */
 static void NotifyDir(PCUNICODE_STRING dir, ULONG filter) {
   LIST_ENTRY done;
   PLIST_ENTRY e;
   KIRQL old;
   InitializeListHead(&done);
-  KeAcquireSpinLock(&Vcb.NotifyLock, &old);
   for (e = Vcb.NotifyList.Flink; e != &Vcb.NotifyList; e = e->Flink) {
     PGCCB *ccb = CONTAINING_RECORD(e, PGCCB, NotifyLink);
     PGFCB *fcb = (PGFCB *)ccb->FileObject->FsContext;
     if (!(ccb->NotifyFilter & filter)) continue;
     if (!UpcaseEqual(&fcb->Name, dir) && !(ccb->NotifyTree && IsAncestor(&fcb->Name, dir))) continue;
+    KeAcquireSpinLock(&Vcb.NotifyLock, &old);
     if (IsListEmpty(&ccb->NotifyIrps)) ccb->NotifyChanged = TRUE;
     else TakeIrps(ccb, &done);
+    KeReleaseSpinLock(&Vcb.NotifyLock, old);
   }
-  KeReleaseSpinLock(&Vcb.NotifyLock, old);
   CompleteList(&done, STATUS_NOTIFY_ENUM_DIR);
+}
+
+/* directory dir is going away: its own watchers learn it (Explorer then
+ * closes its handle, which lets the delete happen). Vcb.Lock held. */
+static void NotifyDeletePending(PGFCB *dir) {
+  LIST_ENTRY done;
+  PLIST_ENTRY e;
+  KIRQL old;
+  InitializeListHead(&done);
+  for (e = Vcb.NotifyList.Flink; e != &Vcb.NotifyList; e = e->Flink) {
+    PGCCB *ccb = CONTAINING_RECORD(e, PGCCB, NotifyLink);
+    if ((PGFCB *)ccb->FileObject->FsContext != dir) continue;
+    KeAcquireSpinLock(&Vcb.NotifyLock, &old);
+    TakeIrps(ccb, &done);
+    KeReleaseSpinLock(&Vcb.NotifyLock, old);
+  }
+  CompleteList(&done, STATUS_DELETE_PENDING);
 }
 
 /* the item at path changed: notify its directory */
@@ -457,10 +479,18 @@ static void MediaChanged(void) {
   }
 }
 
+/* completes the IRP itself in every case (it may stay pending) */
 static NTSTATUS NotifyChangeDirectory(PIRP irp, PIO_STACK_LOCATION sp, PGFCB *fcb, PGCCB *ccb) {
   KIRQL old;
   BOOLEAN now = FALSE;
-  if (fcb->Kind != FCB_DIR && fcb->Kind != FCB_ROOT) return STATUS_INVALID_PARAMETER;
+  NTSTATUS st = STATUS_SUCCESS;
+  if (fcb->Kind != FCB_DIR && fcb->Kind != FCB_ROOT) st = STATUS_INVALID_PARAMETER;
+  else if (sp->FileObject->Flags & FO_CLEANUP_COMPLETE) st = STATUS_NOTIFY_CLEANUP;
+  else if (fcb->DeletePending) st = STATUS_DELETE_PENDING;
+  if (st != STATUS_SUCCESS) {
+    Complete(irp, st, 0);
+    return st;
+  }
   KeAcquireSpinLock(&Vcb.NotifyLock, &old);
   ccb->NotifyFilter = sp->Parameters.NotifyDirectory.CompletionFilter;
   ccb->NotifyTree = (sp->Flags & SL_WATCH_TREE) != 0;
@@ -760,17 +790,94 @@ static NTSTATUS AttachFile(PFILE_OBJECT fo, PGFCB *fcb, PIO_STACK_LOCATION sp, B
 }
 
 /* MmFlushImageSection and friends may wait for paging I/O, which needs the
- * lock: call them with the lock dropped (the caller's FCB reference keeps
- * the FCB alive) */
-static BOOLEAN FlushImage(PGFCB *f, MMFLUSH_TYPE how) {
+ * lock: call them with the lock dropped, holding a reference of our own.
+ * MmFlushImageSection also tells whether a data section still has users
+ * (MmFlushForDelete), so it is asked about either kind of section. When the
+ * memory manager let go of the last file object meanwhile, the FCB is freed
+ * and *pf set to NULL. */
+static BOOLEAN FlushImage(PGFCB **pf, MMFLUSH_TYPE how) {
+  PGFCB *f = *pf;
   BOOLEAN ok;
-  if (!f || f->Section.ImageSectionObject == NULL) return TRUE;
+  if (!f || (f->Section.ImageSectionObject == NULL && f->Section.DataSectionObject == NULL)) return TRUE;
   f->RefCount++;
   VcbUnlock();
   ok = MmFlushImageSection(&f->Section, how);
   VcbLock();
-  f->RefCount--;
+  if (--f->RefCount == 0) {
+    FreeFcb(f);
+    *pf = NULL;
+  }
   return ok;
+}
+
+/* mapped views of a file and reads/writes through the card agree only when
+ * dirty pages are written before a read or write of the same range, and
+ * pages are dropped after a write or a cut: lock dropped, as above (the
+ * caller's file object holds the FCB) */
+static void SectionFlush(PGFCB *f, LONGLONG off, ULONG len) {
+  LARGE_INTEGER o;
+  IO_STATUS_BLOCK io;
+  if (f->Section.DataSectionObject == NULL) return;
+  o.QuadPart = off;
+  f->RefCount++;
+  VcbUnlock();
+  CcFlushCache(&f->Section, len ? &o : NULL, len, &io);
+  VcbLock();
+  f->RefCount--;
+}
+
+static void SectionPurge(PGFCB *f, LONGLONG off, ULONG len) {
+  LARGE_INTEGER o;
+  if (f->Section.DataSectionObject == NULL) return;
+  o.QuadPart = off;
+  f->RefCount++;
+  VcbUnlock();
+  (void)CcPurgeCacheSection(&f->Section, &o, len, FALSE);
+  VcbLock();
+  f->RefCount--;
+}
+
+/* the file system name of an alias ("MYDOCU~1.TXT" -> "My Document.txt"), so
+ * that a file has one FCB whichever name it was opened by. Replaces *path
+ * (allocated) when something changed. */
+static NTSTATUS Canonical(PUNICODE_STRING path) {
+  char oem[PGC_PATH_MAX], canon[PGC_PATH_MAX];
+  WCHAR w[PGC_PATH_MAX];
+  USHORT i, n;
+  PWCH b;
+  BOOLEAN alias = FALSE;
+  for (i = 0; i < path->Length / 2; i++) {
+    if (path->Buffer[i] == L'~') alias = TRUE;
+  }
+  if (!alias || !NT_SUCCESS(ToOem(path, oem))) return STATUS_SUCCESS;
+  if (pgc_canonical(&Card, oem, canon) != PGC_OK || pgc_strcmp(oem, canon) == 0) return STATUS_SUCCESS;
+  n = FromOem(canon, w, sizeof(w));
+  if (n == 0) return STATUS_SUCCESS;
+  b = (PWCH)AllocNp(n + sizeof(WCHAR));
+  if (!b) return STATUS_INSUFFICIENT_RESOURCES;
+  RtlCopyMemory(b, w, n);
+  ExFreePool(path->Buffer);
+  path->Buffer = b;
+  path->Length = n;
+  path->MaximumLength = (USHORT)(n + sizeof(WCHAR));
+  return STATUS_SUCCESS;
+}
+
+/* the card writes no zeros when a file grows: the gap is written here, as
+ * NT wants zeros in a file's new space */
+static int ZeroRange(PGFCB *f, ULONG from, ULONG to) {
+  static const UCHAR zeros[2048];
+  while (from < to) {
+    uint32_t done = 0;
+    ULONG n = to - from;
+    int r;
+    if (n > sizeof(zeros)) n = sizeof(zeros);
+    r = pgc_write(&Card, &f->File, from, zeros, n, &done);
+    if (done) SetSize(f, from + done);
+    if (r != PGC_OK) return r;
+    from += done;
+  }
+  return PGC_OK;
 }
 
 static BOOLEAN CanTruncate(PGFCB *f, LONGLONG size) {
@@ -820,6 +927,8 @@ static NTSTATUS Create(PIRP irp, PIO_STACK_LOCATION sp) {
     goto out;
   }
   PushTime(FALSE);
+  st = Canonical(&path);
+  if (!NT_SUCCESS(st)) goto out;
 
   want_dir = (copt & FILE_DIRECTORY_FILE) != 0 || dironly;
   want_file = (copt & FILE_NON_DIRECTORY_FILE) != 0;
@@ -958,7 +1067,7 @@ static NTSTATUS Create(PIRP irp, PIO_STACK_LOCATION sp) {
       goto out;
     }
     if (writer || delete_on_close) {
-      if (!FlushImage(fcb, delete_on_close ? MmFlushForDelete : MmFlushForWrite)) {
+      if (!FlushImage(&fcb, delete_on_close ? MmFlushForDelete : MmFlushForWrite)) {
         st = delete_on_close ? STATUS_CANNOT_DELETE : STATUS_SHARING_VIOLATION;
         goto out;
       }
@@ -1005,15 +1114,20 @@ static NTSTATUS Create(PIRP irp, PIO_STACK_LOCATION sp) {
       st = IoCheckShareAccess(access, sp->Parameters.Create.ShareAccess, fo, &fcb->Share, FALSE);
       if (!NT_SUCCESS(st)) goto out;
     }
-    (void)pgc_close(&Card, &fcb->File);
     {
-      uint8_t na;
+      uint8_t na, need = fcb->File.need;
       uint32_t ns;
       uint16_t nt, nd;
+      (void)pgc_close(&Card, &fcb->File);
       r = pgc_open(&Card, &fcb->File, oem, PGC_TRUNCATE_EXISTING, PGC_READWRITE,
                    (uint8_t)(FatAttr(fattr) | PGC_ATTR_ARCHIVE), NULL, &na, &ns, &nt, &nd);
       if (r != PGC_OK) {
-        if (fcb->RefCount == 0) FreeFcb(fcb);
+        if (fcb->RefCount == 0) {
+          FreeFcb(fcb);
+        } else {
+          /* the other handles keep the file as it was */
+          (void)pgc_file_attach(&Card, &fcb->File, oem, need);
+        }
         st = PgcStatus(r);
         goto out;
       }
@@ -1032,6 +1146,7 @@ static NTSTATUS Create(PIRP irp, PIO_STACK_LOCATION sp) {
       if (fcb->RefCount == 0) FreeFcb(fcb);
       goto out;
     }
+    SectionPurge(fcb, 0, 0);    /* cached pages of the old contents */
     irp->IoStatus.Information = (disp == FILE_SUPERSEDE) ? FILE_SUPERSEDED : FILE_OVERWRITTEN;
     NotifyItem(&path, FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE);
     goto out;
@@ -1193,10 +1308,12 @@ static NTSTATUS Read(PIRP irp, PIO_STACK_LOCATION sp) {
 
   if (!fcb || fcb->Kind != FCB_FILE) return STATUS_INVALID_DEVICE_REQUEST;
   if (sp->MinorFunction & IRP_MN_MDL) return STATUS_INVALID_DEVICE_REQUEST;
+  if (fcb->Deleted) return STATUS_FILE_DELETED;     /* never re-opened by path */
   if (off.LowPart == FILE_USE_FILE_POINTER_POSITION && off.HighPart == -1) off = fo->CurrentByteOffset;
   if (len == 0) return STATUS_SUCCESS;
   buf = (PUCHAR)IrpBuffer(irp);
   if (!buf) return STATUS_INSUFFICIENT_RESOURCES;
+  if (!paging) SectionFlush(fcb, off.QuadPart, len);
   if (off.HighPart != 0) {
     r = PGC_OK;
   } else {
@@ -1205,7 +1322,8 @@ static NTSTATUS Read(PIRP irp, PIO_STACK_LOCATION sp) {
     r = pgc_read(&Card, &fcb->File, off.LowPart, buf, want, &got);
   }
   MediaChanged();
-  if (r != PGC_OK && got == 0) return PgcStatus(r);
+  /* a request cut short by the card is a failure, not a short file */
+  if (r != PGC_OK) return PgcStatus(r);
   if (paging) {
     /* a page past the end of the file reads as zeros */
     if (got < len) RtlZeroMemory(buf + got, len - got);
@@ -1224,13 +1342,21 @@ static NTSTATUS Write(PIRP irp, PIO_STACK_LOCATION sp) {
   ULONG len = sp->Parameters.Write.Length;
   LARGE_INTEGER off = sp->Parameters.Write.ByteOffset;
   BOOLEAN paging = (irp->Flags & IRP_PAGING_IO) != 0;
-  ULONG fsize;
+  ULONG fsize, start_size;
   uint32_t done = 0;
   PUCHAR buf;
   int r;
 
   if (!fcb || fcb->Kind != FCB_FILE) return STATUS_INVALID_DEVICE_REQUEST;
   if (sp->MinorFunction & IRP_MN_MDL) return STATUS_INVALID_DEVICE_REQUEST;
+  if (fcb->Deleted) {
+    /* pages of a deleted file: nothing to keep */
+    if (paging) {
+      irp->IoStatus.Information = len;
+      return STATUS_SUCCESS;
+    }
+    return STATUS_FILE_DELETED;
+  }
   fsize = (ULONG)fcb->Header.FileSize.QuadPart;
   if (off.LowPart == FILE_WRITE_TO_END_OF_FILE && off.HighPart == -1) {
     off.QuadPart = fsize;
@@ -1244,28 +1370,30 @@ static NTSTATUS Write(PIRP irp, PIO_STACK_LOCATION sp) {
     if (off.QuadPart + len > fsize) len = (ULONG)(fsize - off.QuadPart);
   }
   if ((ULONGLONG)off.QuadPart + len > 0xFFFFFFFFull) return STATUS_DISK_FULL;   /* FAT: 4 GB - 1 */
-  buf = (PUCHAR)IrpBuffer(irp);
-  if (!buf) return STATUS_INSUFFICIENT_RESOURCES;
   pgc_file_need(&fcb->File, PGC_READWRITE);
   PushTime(FALSE);
-  r = pgc_write(&Card, &fcb->File, off.LowPart, buf, len, &done);
+  if (!paging) SectionFlush(fcb, off.QuadPart, len);   /* dirty mapped pages of the range first */
+  buf = (PUCHAR)IrpBuffer(irp);
+  if (!buf) return STATUS_INSUFFICIENT_RESOURCES;
+  r = PGC_OK;
+  start_size = fsize;
+  if (off.LowPart > fsize) {
+    r = ZeroRange(fcb, fsize, off.LowPart);            /* the gap reads as zeros */
+    fsize = (ULONG)fcb->Header.FileSize.QuadPart;
+  }
+  if (r == PGC_OK) r = pgc_write(&Card, &fcb->File, off.LowPart, buf, len, &done);
   MediaChanged();
-  if (done) {
-    if (off.LowPart + done > fsize) SetSize(fcb, off.LowPart + done);
+  if (done || fsize != start_size) {
     fcb->Modified = TRUE;
     fcb->TimeStale = TRUE;
     fcb->Attr |= PGC_ATTR_ARCHIVE;
   }
-  if (r != PGC_OK && done == 0) return (r == PGC_EACCESS) ? STATUS_DISK_FULL : PgcStatus(r);
+  if (done && off.LowPart + done > fsize) SetSize(fcb, off.LowPart + done);
   irp->IoStatus.Information = done;
   if (!paging && (fo->Flags & FO_SYNCHRONOUS_IO)) fo->CurrentByteOffset.QuadPart = off.QuadPart + done;
-  /* mapped views of the file are now out of date */
-  if (!paging && fcb->Section.DataSectionObject) {
-    LARGE_INTEGER o;
-    o.QuadPart = off.QuadPart;
-    (void)CcPurgeCacheSection(&fcb->Section, &o, done, FALSE);
-  }
-  if (r != PGC_OK) return (r == PGC_EACCESS) ? STATUS_DISK_FULL : STATUS_SUCCESS;
+  if (!paging && done) SectionPurge(fcb, off.QuadPart, done);   /* mapped views are out of date */
+  /* a write cut short is a failure (paging writes must not look done) */
+  if (r != PGC_OK) return (r == PGC_EACCESS) ? STATUS_DISK_FULL : PgcStatus(r);
   return STATUS_SUCCESS;
 }
 
@@ -1494,11 +1622,17 @@ static NTSTATUS SetSizeInfo(PGFCB *f, LONGLONG size) {
   if (size < f->Header.FileSize.QuadPart && !CanTruncate(f, size)) return STATUS_USER_MAPPED_FILE;
   pgc_file_need(&f->File, PGC_READWRITE);
   PushTime(FALSE);
-  r = pgc_set_size(&Card, &f->File, (uint32_t)size);
-  if (r != PGC_OK) return (r == PGC_EACCESS) ? STATUS_DISK_FULL : PgcStatus(r);
-  SetSize(f, (ULONG)size);
   f->Modified = TRUE;
   f->TimeStale = TRUE;
+  if (size > f->Header.FileSize.QuadPart) {
+    r = ZeroRange(f, (ULONG)f->Header.FileSize.QuadPart, (ULONG)size);
+    if (r != PGC_OK) return (r == PGC_EACCESS) ? STATUS_DISK_FULL : PgcStatus(r);
+    return STATUS_SUCCESS;
+  }
+  r = pgc_set_size(&Card, &f->File, (uint32_t)size);
+  if (r != PGC_OK) return PgcStatus(r);
+  SetSize(f, (ULONG)size);
+  SectionPurge(f, size, 0);
   return STATUS_SUCCESS;
 }
 
@@ -1506,7 +1640,7 @@ static NTSTATUS Rename(PGFCB *f, PIO_STACK_LOCATION sp, PFILE_RENAME_INFORMATION
   PFILE_OBJECT target = sp->Parameters.SetFile.FileObject;
   UNICODE_STRING parent, newpath, newname;
   char oemto[PGC_PATH_MAX];
-  PGFCB *other;
+  PGFCB *other = NULL;
   NTSTATUS st;
   int r;
   ULONG nl;
@@ -1547,34 +1681,55 @@ static NTSTATUS Rename(PGFCB *f, PIO_STACK_LOCATION sp, PFILE_RENAME_INFORMATION
     st = STATUS_INVALID_PARAMETER;     /* into itself */
     goto out;
   }
-  if (UpcaseEqual(&f->Name, &newpath) && pgc_strcmp(f->Oem, oemto) != 0) {
-    /* only the case changes: FatFs renames onto itself fine */
-  } else if (!UpcaseEqual(&f->Name, &newpath)) {
-    uint8_t ta;
-    r = pgc_getattr(&Card, oemto, &ta, NULL, NULL, NULL);
-    if (r == PGC_OK) {
-      if (!ri->ReplaceIfExists) {
-        st = STATUS_OBJECT_NAME_COLLISION;
-        goto out;
-      }
-      other = FindFcb(&newpath);
-      if ((ta & PGC_ATTR_DIR) || (other && other->OpenCount > 0)) {
-        st = STATUS_ACCESS_DENIED;
-        goto out;
-      }
-      r = pgc_delete(&Card, oemto);
-      if (r != PGC_OK) {
-        st = PgcStatus(r);
-        goto out;
-      }
-      if (other) {
-        other->Deleted = TRUE;
-        Unlist(other);
-      }
-    } else if (r != PGC_ENOFILE) {
-      st = PgcStatus(r);
+  {
+    /* the target by its file system name: an alias of the file itself is
+     * no rename at all, an alias of another file names that file */
+    UNICODE_STRING canon;
+    canon.Buffer = (PWCH)AllocNp(newpath.MaximumLength);
+    if (!canon.Buffer) {
+      st = STATUS_INSUFFICIENT_RESOURCES;
       goto out;
     }
+    RtlCopyMemory(canon.Buffer, newpath.Buffer, newpath.Length);
+    canon.Length = newpath.Length;
+    canon.MaximumLength = newpath.MaximumLength;
+    st = Canonical(&canon);
+    if (NT_SUCCESS(st) && !UpcaseEqual(&canon, &newpath) && UpcaseEqual(&canon, &f->Name)) {
+      ExFreePool(canon.Buffer);
+      st = STATUS_SUCCESS;
+      goto out;
+    }
+    if (NT_SUCCESS(st) && UpcaseEqual(&f->Name, &newpath) && pgc_strcmp(f->Oem, oemto) != 0) {
+      /* only the case changes: FatFs renames onto itself fine */
+    } else if (NT_SUCCESS(st) && !UpcaseEqual(&f->Name, &newpath)) {
+      uint8_t ta;
+      r = pgc_getattr(&Card, oemto, &ta, NULL, NULL, NULL);
+      if (r == PGC_OK) {
+        if (!ri->ReplaceIfExists) {
+          st = STATUS_OBJECT_NAME_COLLISION;
+        } else {
+          other = FindFcb(&canon);
+          if ((ta & PGC_ATTR_DIR) || (other && other->OpenCount > 0)) {
+            st = STATUS_ACCESS_DENIED;
+          } else if (other && !FlushImage(&other, MmFlushForDelete)) {
+            st = STATUS_ACCESS_DENIED;   /* a running program or a mapped view */
+          } else {
+            if (other) {
+              /* its pages go nowhere now; never re-opened by path */
+              (void)pgc_unbind(&Card, &other->File);
+              other->Deleted = TRUE;
+              Unlist(other);
+            }
+            r = pgc_delete(&Card, oemto);
+            if (r != PGC_OK) st = PgcStatus(r);
+          }
+        }
+      } else if (r != PGC_ENOFILE) {
+        st = PgcStatus(r);
+      }
+    }
+    ExFreePool(canon.Buffer);
+    if (!NT_SUCCESS(st)) goto out;
   }
   /* an open card file must not be renamed under FatFs: its directory entry moves */
   if (f->Kind == FCB_FILE) (void)pgc_unbind(&Card, &f->File);
@@ -1618,11 +1773,12 @@ static NTSTATUS SetInfo(PIRP irp, PIO_STACK_LOCATION sp) {
         int err;
         if (!DirEmpty(f->Oem, &err)) return STATUS_DIRECTORY_NOT_EMPTY;
         if (err != PGC_OK) return PgcStatus(err);
-      } else if (!FlushImage(f, MmFlushForDelete)) {
+      } else if (!FlushImage(&f, MmFlushForDelete)) {
         return STATUS_CANNOT_DELETE;
       }
       f->DeletePending = TRUE;
       fo->DeletePending = TRUE;
+      if (f->Kind == FCB_DIR) NotifyDeletePending(f);
     } else {
       f->DeletePending = FALSE;
       fo->DeletePending = FALSE;
@@ -2108,6 +2264,9 @@ static NTSTATUS NTAPI Dispatch(PDEVICE_OBJECT dev, PIRP irp) {
     st = DeviceControl(irp, sp);
     break;
   case IRP_MJ_FLUSH_BUFFERS:
+    if (fcb && fcb->Kind == FCB_FILE) SectionFlush(fcb, 0, 0);    /* dirty mapped pages */
+    st = STATUS_SUCCESS;          /* the card writes every request through */
+    break;
   case IRP_MJ_LOCK_CONTROL:       /* no locking, as in EtherDFS */
   case IRP_MJ_SHUTDOWN:
     st = STATUS_SUCCESS;          /* the card writes every request through */

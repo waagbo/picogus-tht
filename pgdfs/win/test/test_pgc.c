@@ -331,6 +331,19 @@ static void test_names(void) {
     CHECK(pgc_getattr(&card, "\\program files\\read me first.TXT", &attr, NULL, NULL, NULL) == PGC_OK, "case-insensitive");
     CHECK(pgc_longname(&card, "\\PROGRA~1", name, sizeof(name)) == PGC_OK && strcmp(name, "Program Files") == 0,
           "longname of the dir: '%s'", name);
+    {
+        char canon[PGC_PATH_MAX];
+        CHECK(pgc_canonical(&card, "\\PROGRA~1\\README~1.TXT", canon) == PGC_OK &&
+              strcmp(canon, "\\Program Files\\Read Me First.txt") == 0, "canonical alias path: '%s'", canon);
+        CHECK(pgc_canonical(&card, "\\Program Files\\short.txt", canon) == PGC_OK &&
+              strcmp(canon, "\\Program Files\\short.txt") == 0, "canonical long path unchanged: '%s'", canon);
+        CHECK(pgc_canonical(&card, "\\PROGRA~1\\NEW~1.TXT", canon) == PGC_OK &&
+              strcmp(canon, "\\Program Files\\NEW~1.TXT") == 0, "a new name with a tilde stays: '%s'", canon);
+        CHECK(pgc_canonical(&card, "\\", canon) == PGC_OK && strcmp(canon, "\\") == 0, "root: '%s'", canon);
+        CHECK(pgc_canonical(&card, "", canon) == PGC_OK && strcmp(canon, "") == 0, "empty root: '%s'", canon);
+        strcpy(canon, "\\PROGRA~1");
+        CHECK(pgc_canonical(&card, canon, canon) == PGC_OK && strcmp(canon, "\\Program Files") == 0, "in place: '%s'", canon);
+    }
     for (r = pgc_find_first(&card, &s, "\\Program Files", 0x16, 1); r == PGC_OK; r = pgc_find_next(&card, &s)) {
         n++;
         if (strcmp(s.shortname, ".") == 0) seen_dot++;

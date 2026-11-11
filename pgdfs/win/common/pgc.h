@@ -242,6 +242,12 @@ int      pgc_delete_mask(pgc_card *c, const char *pathmask);
 int      pgc_rename(pgc_card *c, const char *from, const char *to);
 /* the long name of the last component of an 8.3 path */
 int      pgc_longname(pgc_card *c, const char *path, char *name, uint16_t max);
+/* path with every component that is a generated 8.3 alias ("MYDOCU~1.TXT",
+ * anything with a '~') replaced by the long name of the entry it names, so
+ * that one file has one spelling whichever name a program used. Components
+ * that name nothing, or a path that would get too long, stay as they are.
+ * out may be path. PGC_ENOTREADY without a drive, else PGC_OK. */
+int      pgc_canonical(pgc_card *c, const char *path, char *out);
 
 /* ---- directory search -------------------------------------------------------
  * pgc_find_first() lists dir ("" or "\" = root) entry by entry, with "." and

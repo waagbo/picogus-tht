@@ -545,6 +545,50 @@ int pgc_longname(pgc_card *c, const char *path, char *name, uint16_t max) {
   return PGC_OK;
 }
 
+int pgc_canonical(pgc_card *c, const char *path, char *out) {
+  char res[PGC_PATH_MAX], probe[PGC_PATH_MAX], name[PGC_NAME_MAX];
+  uint16_t pos = 0, i = 0, n = pgc_strlen(path);
+  int r = ready(c);
+  if (r != PGC_OK) return r;
+  if (n >= PGC_PATH_MAX) return PGC_ETOOLONG;
+  while (i < n) {
+    uint16_t start, len, j;
+    int alias = 0;
+    while (i < n && (path[i] == '\\' || path[i] == '/')) i++;
+    if (i >= n) break;
+    start = i;
+    while (i < n && path[i] != '\\' && path[i] != '/') {
+      if (path[i] == '~') alias = 1;
+      i++;
+    }
+    len = (uint16_t)(i - start);
+    /* res + "\" + component */
+    if (pos + 1 + len >= PGC_PATH_MAX) return PGC_ETOOLONG;
+    pgc_memcpy(probe, res, pos);
+    probe[pos] = '\\';
+    pgc_memcpy(probe + pos + 1, path + start, len);
+    probe[pos + 1 + len] = 0;
+    if (alias && pgc_longname(c, probe, name, sizeof(name)) == PGC_OK && name[0] != 0) {
+      uint16_t nl = pgc_strlen(name);
+      for (j = 0; j < nl && name[j] != '\\' && name[j] != '/'; j++) { }
+      if (j == nl && pos + 1 + nl < PGC_PATH_MAX) {
+        probe[pos + 1] = 0;
+        pgc_memcpy(probe + pos + 1, name, (uint32_t)nl + 1);
+        len = nl;
+      }
+    }
+    pgc_memcpy(res, probe, (uint32_t)pos + 1 + len + 1);
+    pos = (uint16_t)(pos + 1 + len);
+  }
+  if (pos == 0) {
+    out[0] = path[0] == '\\' || path[0] == '/' ? '\\' : 0;
+    if (out[0]) out[1] = 0;
+    return PGC_OK;
+  }
+  pgc_memcpy(out, res, (uint32_t)pos + 1);
+  return PGC_OK;
+}
+
 /* ---- directory search ------------------------------------------------------- */
 
 /* AfffffffffffttddssssCCpp -> s, then the long name if wanted */
