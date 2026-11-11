@@ -1021,8 +1021,8 @@ static bool cmdSendDFSPort(const char* arg, const int cmd, const int cmd2, const
         return false;
     }
     if (previous != (uint16_t)val) {
-        printf("PGDFS data port set to %lX. A resident PGUSDFS.EXE keeps the port it read at install:\n", val);
-        printf("unload and reload it (PGUSDFS /U, then PGUSDFS E:).\n");
+        printf("PGDFS data port set to %lX. A resident PGDFS.EXE keeps the port it read at install:\n", val);
+        printf("unload and reload it (PGDFS /U, then PGDFS E:).\n");
     }
     return true;
 }

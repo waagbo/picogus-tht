@@ -80,7 +80,7 @@ done
 # DOS programs that go into a release: each is a directory with a Makefile for
 # OpenWatcom that leaves its .exe files next to it. Directories a source tree
 # doesn't have are skipped, so experimental features can bring their own.
-DOS_TOOL_DIRS=(pgusinit pgusdfs)
+DOS_TOOL_DIRS=(pgusinit pgdfs)
 
 build_dos_tools() {
     local tree="$1" out="$2" dir exe

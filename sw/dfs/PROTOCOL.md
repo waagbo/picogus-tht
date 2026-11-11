@@ -1,6 +1,6 @@
 # PGDFS wire protocol
 
-PGDFS lets a DOS network-redirector TSR (`PGUSDFS.EXE`) use the USB drive plugged
+PGDFS lets a DOS network-redirector TSR (`PGDFS.EXE`) use the USB drive plugged
 into the PicoGUS as a drive letter. DOS forwards every file operation on that
 letter (open, read, find-first, mkdir, ...) to the TSR as an INT 2Fh/11h call;
 the TSR packs the call into a request frame, ships it to the card, and unpacks
@@ -166,7 +166,7 @@ program (pgusinit) may have changed the selected register in between.
 
 ## Time
 
-At install, and on `PGUSDFS /T`, the driver writes the DOS clock through
+At install, and on `PGDFS /T`, the driver writes the DOS clock through
 `CMD_DFSTIME`. Core 0 collects the four bytes and hands them to core 1,
 which keeps `dos_time + elapsed` and returns it from `get_fattime()`. Without it, files created from DOS carry the FatFs default
 timestamp (1 Jan 1980 or the firmware's fixed value).
@@ -224,7 +224,7 @@ the USB mass-storage glue (`sw/usb_msc/msc_app.c`) and the state of the FatFs
 volume object as it is. AX is always 0; without a drive the volume fields are
 zero and the counters still count. The layout is fixed and versioned by its
 first byte; the same table is in `sw/dfs/dfs_server.h` (`DFS_DIAG_*`) and in
-`pgusdfs/dfsdiag.c`. Little-endian; the u16 event counters saturate at FFFFh,
+`pgdfs/dfsdiag.c`. Little-endian; the u16 event counters saturate at FFFFh,
 the u32 ones count since power-on.
 
 | Offset | Size | Field |

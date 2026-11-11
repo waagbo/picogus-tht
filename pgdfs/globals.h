@@ -51,7 +51,7 @@ static struct tsrshareddata {
 
 /* the one and only frame buffer: the request is built here (4-byte header
  * followed by the payload) and the answer overwrites it, exactly as on the
- * card. FRAMESIZE is defined in pgusdfs.c. */
+ * card. FRAMESIZE is defined in pgdfs.c. */
 static unsigned char glob_frame[FRAMESIZE];
 
 /* largest payload that goes into one frame: min(4096, CMD_DFSMAXLEN). READ

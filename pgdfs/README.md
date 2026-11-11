@@ -30,9 +30,9 @@ of Ethernet. The protocol is documented in `sw/dfs/PROTOCOL.md`.
 ## Usage
 
 ```
-PGUSDFS X: [/Q] [/R]     map the PicoGUS USB drive to drive X:
-PGUSDFS /U [/Q]          unload PGUSDFS from memory
-PGUSDFS /T               push the DOS date and time to the card and exit
+PGDFS X: [/Q] [/R]       map the PicoGUS USB drive to drive X:
+PGDFS /U [/Q]            unload PGDFS from memory
+PGDFS /T                 push the DOS date and time to the card and exit
 ```
 
 * `X:` - the drive letter to use (any unused letter up to `LASTDRIVE`).
@@ -44,7 +44,7 @@ PGUSDFS /T               push the DOS date and time to the card and exit
   INT 2Fh (unload TSRs in the reverse order of loading).
 * `/T` - only send the DOS clock to the card, whether or not the TSR is
   loaded. PGDFS does this at install time as well; the card uses the clock
-  for the timestamps of files created or modified from DOS. Run `PGUSDFS /T`
+  for the timestamps of files created or modified from DOS. Run `PGDFS /T`
   again after changing the DOS date or time.
 * `/?` - help.
 
@@ -56,7 +56,7 @@ USB drive does not have to be present when PGDFS loads: without one, any
 access to the drive letter fails with "drive not ready" until a drive is
 plugged in.
 
-Example `AUTOEXEC.BAT` line: `PGUSDFS E: /Q`.
+Example `AUTOEXEC.BAT` line: `PGDFS E: /Q`.
 
 `PGUSINIT.EXE` shows the state of PGDFS on a `PGDFS data port 1D4, USB
 drive: ...` line of its normal output when the firmware has PGDFS (or `PGDFS
@@ -75,7 +75,7 @@ the setting from the card at install time and prints it in its banner (`data
 port 1D4h`), so there is nothing to configure on the DOS side; move the
 window only when another card needs 1D4h-1D5h. PGDFS reads the port once at
 install: after changing it (or after `pgusinit /defaults`) unload and reload
-the driver (`PGUSDFS /U`, then `PGUSDFS E:`). Keep the window clear of the ports
+the driver (`PGDFS /U`, then `PGDFS E:`). Keep the window clear of the ports
 of the emulated devices that are active in your mode (220h Sound Blaster,
 250h CD-ROM, 330h MPU-401, 388h AdLib, ...): those are decoded first and
 pgusinit warns when the window overlaps one of them.
@@ -202,8 +202,8 @@ names, never file contents.
   in `CONFIG.SYS` or pick a lower letter.
 * `This drive letter is already in use` - the letter belongs to a local
   disk, a SUBST or another network drive.
-* `PGUSDFS is already loaded` - use `PGUSDFS /U` first to change the mapping.
-* Wrong timestamps on files created from DOS: run `PGUSDFS /T` after setting
+* `PGDFS is already loaded` - use `PGDFS /U` first to change the mapping.
+* Wrong timestamps on files created from DOS: run `PGDFS /T` after setting
   the DOS clock (the card keeps DOS time + elapsed time).
 * Emulators: DOSBox and DOSBox-X do not emulate a PicoGUS, so PGDFS reports
   "PicoGUS not detected" there. The undocumented `/N` option installs the
@@ -233,9 +233,9 @@ it needs about 10 KB of conventional memory; it can be loaded high with
 ## Building
 
 OpenWatcom 2.0: `make` (GNU make, as used by the CI) or `wmake -f makefile.wat`
-builds `PGUSDFS.EXE` and `DFSDIAG.EXE`. The TSR is compiled with `-0 -s -ms`
+builds `PGDFS.EXE` and `DFSDIAG.EXE`. The TSR is compiled with `-0 -s -ms`
 (8086 code, no stack checks, small model); its resident code lives in the
-`BEGTEXT` segment and must not call the C library. Check `pgusdfs.map` after
+`BEGTEXT` segment and must not call the C library. Check `pgdfs.map` after
 changes: the `DGROUP` size must not exceed `DATASEGSZ` in `globals.h`.
 
 ## Credits

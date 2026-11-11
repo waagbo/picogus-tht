@@ -965,12 +965,12 @@ void begtextend(void) {
  * nor stay in memory after going TSR (EtherDFS used generated code for the
  * same purpose). They are '$'-terminated for INT 21h/AH=9. */
 static const char far MSG_HELP[] =
-  "PGUSDFS v" PVER " - the USB drive of a PicoGUS as a DOS drive letter\r\n"
+  "PGDFS v" PVER " - the USB drive of a PicoGUS as a DOS drive letter\r\n"
   "Based on EtherDFS (C) 2017, 2018 Mateusz Viste - MIT license\r\n"
   "\r\n"
-  "Usage: PGUSDFS X: [/Q] [/R]     map the PicoGUS USB drive to drive X:\r\n"
-  "       PGUSDFS /U [/Q]          unload PGUSDFS from memory\r\n"
-  "       PGUSDFS /T               push the DOS clock to the card and exit\r\n"
+  "Usage: PGDFS X: [/Q] [/R]       map the PicoGUS USB drive to drive X:\r\n"
+  "       PGDFS /U [/Q]            unload PGDFS from memory\r\n"
+  "       PGDFS /T                 push the DOS clock to the card and exit\r\n"
   "\r\n"
   "  /R   map the drive read-only\r\n"
   "  /Q   quiet: print nothing when loading or unloading succeeded\r\n"
@@ -978,13 +978,13 @@ static const char far MSG_HELP[] =
   "  /?   this help\r\n"
   "\r\n"
   "The data port comes from the card's settings (pgusinit /dfsport, default 1D4).\r\n$";
-static const char far MSG_UNSUPDOS[] = "PGUSDFS requires DOS 5.0 or later.\r\n$";
+static const char far MSG_UNSUPDOS[] = "PGDFS requires DOS 5.0 or later.\r\n$";
 static const char far MSG_NOREDIR[] = "The DOS network redirector API is not available (INT 2Fh/1100h).\r\n$";
-static const char far MSG_NOTLOAD[] = "PGUSDFS is not loaded.\r\n$";
-static const char far MSG_OTHERTSR[] = "Another TSR hooked INT 2Fh after PGUSDFS - cannot unload.\r\n$";
-static const char far MSG_TSRCOMFA[] = "Communication with the resident PGUSDFS failed.\r\n$";
-static const char far MSG_UNLOADED[] = "PGUSDFS unloaded.\r\n$";
-static const char far MSG_ALRLOAD[] = "PGUSDFS is already loaded (use /U to unload it).\r\n$";
+static const char far MSG_NOTLOAD[] = "PGDFS is not loaded.\r\n$";
+static const char far MSG_OTHERTSR[] = "Another TSR hooked INT 2Fh after PGDFS - cannot unload.\r\n$";
+static const char far MSG_TSRCOMFA[] = "Communication with the resident PGDFS failed.\r\n$";
+static const char far MSG_UNLOADED[] = "PGDFS unloaded.\r\n$";
+static const char far MSG_ALRLOAD[] = "PGDFS is already loaded (use /U to unload it).\r\n$";
 static const char far MSG_NOMULTPX[] = "No free INT 2Fh multiplex id found.\r\n$";
 static const char far MSG_MAPFAIL[] = "Cannot map this drive letter (LASTDRIVE too low?).\r\n$";
 static const char far MSG_DRVACTIV[] = "This drive letter is already in use.\r\n$";
@@ -1001,7 +1001,7 @@ static const char far MSG_NOLABEL[] = "(no label)$";
 static const char far MSG_MB[] = " MB)\r\n$";
 static const char far MSG_NODRIVE[] = "No USB drive is mounted yet - insert one before using the drive letter.\r\n$";
 static const char far MSG_TIMESET[] = "DOS date and time sent to the PicoGUS.\r\n$";
-static const char far MSG_INSTLLED[] = "PGUSDFS installed: $";
+static const char far MSG_INSTLLED[] = "PGDFS installed: $";
 static const char far MSG_INSTL2[] = " -> PicoGUS USB drive$";
 static const char far MSG_RDONLY[] = " (read-only)$";
 static const char far MSG_RESIDENT[] = ", resident size $";

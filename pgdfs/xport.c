@@ -7,7 +7,7 @@
  * See XPORT.H for the interface and sw/dfs/PROTOCOL.md for the protocol.
  *
  * RESIDENT CODE RULES (this file is #included into the BEGTEXT segment of
- * PGUSDFS.C): no libc calls of any kind, no string literals, only static
+ * PGDFS.C): no libc calls of any kind, no string literals, only static
  * initializers that need no startup code (plain constants), no stack checks
  * (-s). inp()/outp() are compiler intrinsics and compile to IN/OUT
  * instructions. The code must run on an 8086, so REP INSW/OUTSW (80186+)

@@ -1,5 +1,5 @@
 PGDFS is derived from EtherDFS (http://etherdfs.sourceforge.net), the
-Ethernet DOS file system by Mateusz Viste. The files PGUSDFS.C, GLOBALS.H,
+Ethernet DOS file system by Mateusz Viste. The files PGDFS.C, GLOBALS.H,
 DOSSTRUC.H, CHINT.H and CHINT086.ASM are modified copies of the EtherDFS
 v0.8.2 client sources; the PicoGUS transport (XPORT.C, XPORT.H) and the
 test tool (DFSDIAG.C) are new but distributed under the same terms.

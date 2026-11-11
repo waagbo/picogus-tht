@@ -61,7 +61,7 @@ uint32_t dfs_platform_millis(void);
 #define DFS_AL_DIAG     0xF2 /* request: empty; answer: the DFS_DIAG_LEN-byte record below,
                               * AX = 0 always, drive or no drive (zeros for what is absent).
                               * Disk I/O and FatFs telemetry for the field: which layer a
-                              * failing write died in. Mirrored in pgusdfs/dfsdiag.c. */
+                              * failing write died in. Mirrored in pgdfs/dfsdiag.c. */
 
 /*
  * DFS_AL_DIAG answer record, little-endian, DFS_DIAG_LEN bytes (PROTOCOL.md
