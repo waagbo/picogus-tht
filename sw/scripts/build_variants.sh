@@ -49,8 +49,6 @@ DEFAULT_VARIANTS=(multifw ne2k)
 # The ISA analyzer uses RP2350-only hardware (QMI PSRAM); SB + NE2000 is an
 # RP2350 experiment (sw/docs/sb-ne2000-rp2350.md)
 declare -A CHIP_ONLY=([analyzer]=rp2350 [sb-ne2k]=rp2350)
-# Variants that need a Pico W (CYW43), so not for the v2.1 board
-declare -A NEEDS_PICOW=([ne2k]=1 [sb-ne2k]=1)
 
 usage() {
     cat <<EOF
@@ -158,10 +156,6 @@ for chip in "${PLATFORMS[@]}"; do
     mkdir -p "${BUILD_ROOT}/${chip}"
     for variant in "${VARIANTS[@]}"; do
         only="${CHIP_ONLY[$variant]:-}"
-        if [[ "${chip}" == picogus21 && -n "${NEEDS_PICOW[$variant]:-}" ]]; then
-            echo "==== ${chip} ${variant}: skipped (needs a Pico W)"
-            continue
-        fi
         if [[ "${chip}" == picogus21 && "${variant}" == analyzer ]]; then
             echo "==== ${chip} ${variant}: skipped (Pico Plus 2 tool)"
             continue

@@ -10,13 +10,16 @@ line out, MIDI out) and bracket tab holes in v1.3.2's places, so the [v1.3.2 bra
 v2.0's passive line-out mix (four 1k resistors) is replaced by the **op-amp mixer of the THT v1.3 boards** (NE5532 on
 ISA ±12 V, Waveblaster +6 dB), with film coupling capacitors and a DC-coupled DAC path.
 
+An optional **Raspberry Pi Radio Module 2** (U14: the Pico W's Wi-Fi and Bluetooth radio) sits at the bracket end on
+four of the module's free GPIOs, for the NE2000 (Wi-Fi) firmware: see [Radio module](#radio-module-optional).
+
 The parts that only exist as SMD are soldered on the card: U1/U2 (SN74CB3T3257, TSSOP-16) and U10 (PCM5100A,
 TSSOP-20) on THT v1.3.2's test-pad TSSOP footprints (hand-solder toes and a 0.7 mm test pad per pin), U13 (M62429L)
-on v2.0's SOIC-8. Everything else is through hole; see
+on v2.0's SOIC-8; the radio module is a castellated module on hand-solder lands. Everything else is through hole; see
 [Parts with no through-hole version](#parts-with-no-through-hole-version).
 
 > **Status: schematic done; board placed and routed (4 layers, DRC clean, matches the schematic), for review. Not
-> built or tested. Firmware: ported and built (`picogus-v21.uf2`), not tested on hardware** (see
+> built or tested. Firmware: ported and built (`picogus-v21.uf2`, and `pg-ne2k-v21.uf2` for the radio module), not tested on hardware** (see
 > [Firmware](#firmware) and [Layout status](#layout-status)). JLCPCB files: `hw-common/tools/jlcpcb.sh
 > hw-tht-v2.1/PicoGUS-THT.kicad_pcb` with `ALLOW_DRC=courtyards_overlap` (the 11 accepted overlaps in the logic
 > column); the Hardware workflow builds them on every change.
@@ -36,11 +39,14 @@ Files:
 | `tools/digikey_upload.py` | Writes both DigiKey upload files from `docs/BOM-THT.csv` (`python3 tools/digikey_upload.py [cards]`; more than one card gives `-<n>x` files) |
 | `tools/lcsc_bom.py` | Writes the three LCSC files from `docs/BOM-THT.csv` with LCSC's live stock and prices (`python3 tools/lcsc_bom.py [cards]`) |
 | `tools/gen_core2350b.py` | Generates the Core2350B footprint and 3D model in `hw-common` and checks the pin map |
+| `tools/gen_rm2.py` | Generates the Radio Module 2 footprint and 3D model in `hw-common` and its symbol (dimensions from the RM2 datasheet) |
 | `docs/renders/` | 3D renders of the routed card: red from the front and the back, green, purple, white and black from the front (ENIG; white silkscreen, black on white). Made with `hw-common/tools/render.sh` |
 | `docs/figures/routing.png` | The routed board: tracks per layer, vias and the AGND/AVDD islands |
 
 The shared `PiGUS library` footprints are linked from `hw-common/`. **New in the shared library for v2.1:**
 `Waveshare_Core2350B` (with a generated 3D model, `hw-common/parts/Waveshare_Core2350B.wrl`),
+`RaspberryPi_RM2_HandSolder` (the Radio Module 2 with lands 1 mm past the module edge; 3D model
+`hw-common/parts/RaspberryPi_RM2.wrl`),
 `USB_C_Receptacle_GCT_USB4085`, `TSSOP-16_4.4x5mm_P0.65mm_HandSolder_TestPads` and
 `TSSOP-20_4.4x6.5mm_P0.65mm_HandSolder_TestPads` (THT v1.3.2's: KiCad's TSSOP with the toes to ±3.9 mm and one
 0.7 mm round test pad per pin in two staggered columns per side, at x ±4.45 / ±5.1 mm),
@@ -50,15 +56,17 @@ numbered 5, as the `USB_A` symbol's shield pin) and `C_Film_P5.00mm_7.8x7.8mm_or
 ## What changed compared to v2.0
 
 The schematic is v2.0's (`hw-chipdown`), upgraded to KiCad 10 and edited. Its netlist was compared with v2.0's
-connection by connection: apart from the changes in this table the two are identical (119 multi-pin nets each).
-Reference designators are v2.0's; new ones are D3, R19, R20 and C46.
+connection by connection: apart from the changes in this table the two are identical (119 multi-pin nets each; the
+radio module adds six to v2.1). Reference designators are v2.0's; new ones are D3, R19, R20, C46 and the radio
+module's U14, R33, R34 and C47.
 
 | v2.0 | v2.1 | Why |
 |---|---|---|
 | U12 RP2040 (QFN-56), U11 W25Q128 flash, Y1 12 MHz crystal, R12/R14/R15/R16, C24–C37 (the RP2040 sheet) | **U12 Waveshare Core2350B** module on four 2x8 sockets (or soldered on its headers) | No chip-down RP2040 by hand. The module has the RP2350B, 16 MB flash, crystal, its own 3.3 V LDO and the 27 Ω USB resistors |
 | U9 AMS1117-3.3 (SOT-223) | **U9 MCP1826S-3302E/AB** (TO-220) | Through hole, and 250 mV dropout: VSYS is now one Schottky drop below +5V (see [Power](#power)) |
 | Q1 AO3401A ideal-diode switch (+5V → VSYS), R17 | **D3 1N5819** | No good TO-92 P-MOSFET; a second Schottky as for USB (D2) |
-| J6 micro-USB (SMD) | **J6 GCT USB4085** through-hole USB-C + **R19/R20** 5.1 kΩ CC pull-downs | Through hole; device only, never sources VBUS |
+| J6 micro-USB (SMD) | **J6 GCT USB4085** through-hole USB-C + **R19/R20** 5.1 kΩ CC pull-downs, in v2.0's place on the bottom edge | Through hole; device only, never sources VBUS |
+| – (no radio; the Pico-based boards take a Pico W) | **U14 Raspberry Pi Radio Module 2** (optional) + R33, R34, C47, on GPIO40/42/44/45 | Wi-Fi for the NE2000 firmware: see [Radio module](#radio-module-optional) |
 | U6 74LVC2G06 (SOT-363), open-drain MIDI and I/O CH RDY drivers | **U6 74AHCT126** (DIP-14) on +5V + **C46** | No DIP open-drain inverter that runs on 3.3 V; the v1.3 THT boards' solution (OE = the old input, A tied low, so OE high pulls the line low). Spare gates tied low |
 | U4/U5 74LVC00, U3 74AHC14, U7 SN74CB3T3245 (TSSOP) | 74AHC00 ×2, 74AHC14, **74AHC244** (DIP) | AHC: 3.3 V supply with 5 V tolerant inputs (as on v1.2/v1.3) |
 | U1/U2 SN74CB3T3257, U10 PCM5100 (TSSOP) | same chips, **SMD on the card** (TSSOP-16/-20 on v1.3.2's hand-solder footprints with a test pad per pin) | No through-hole version exists |
@@ -74,7 +82,8 @@ Reference designators are v2.0's; new ones are D3, R19, R20 and C46.
 | `+3.3V` power symbols | `+3V3` | The RP2040 sheet joined the two names; without it they would have split |
 
 Unchanged references: J1 (ISA), J3 (IRQ/DMA), J7 (MIDI out), J8 (Waveblaster), J9 (line out), H1/H2, and every
-GPIO assignment except GPIO0–3 (PSRAM, now free). Board positions: see [Layout status](#layout-status).
+GPIO assignment except GPIO0–3 (PSRAM, now free); GPIO40, 42, 44 and 45, which an RP2040 does not have, go to the
+radio module. Board positions: see [Layout status](#layout-status).
 
 ## Parts with no through-hole version
 
@@ -99,28 +108,30 @@ digikey.no prices of 2026-10-30, for one board, in NOK; shipping not included. P
 
 | | NOK excl. MVA | NOK incl. 25 % MVA |
 |---|---|---|
-| DigiKey order, `docs/BOM-THT-digikey.csv` (43 lines) | 580.00 | 725.00 |
+| DigiKey order, `docs/BOM-THT-digikey.csv` (43 lines) | 600.72 | 750.90 |
 | Optional IC sockets, `docs/BOM-THT-digikey-optional.csv` (U3–U7, U11) | 58.98 | 73.72 |
-| Both | 638.98 | 798.73 |
+| Both | 659.70 | 824.63 |
 
-* **Not in the DigiKey order**: the Core2350B2 (waveshare.com, US$6.99) and the M62429L (LCSC C52260216, minimum 5),
-  and the PCB.
+* **Not in the DigiKey order**: the Core2350B2 (waveshare.com, US$6.99), the M62429L (LCSC C52260216, minimum 5),
+  the optional Radio Module 2 (RMC20452T, Farnell 4737257; its two resistors and capacitor are in the order) and the
+  PCB.
 * J5 is now v1.3.2's Molex 67643 (DK WM4993-ND, 16.58 NOK, price of 2026-10-31), so it is in the DigiKey order.
 * **C39–C42** (2.2 µF film, 61 NOK) are on backorder at DigiKey until about April 2027: see the LCSC film part or the
   bipolar electrolytic in [Audio](#audio).
 
-**LCSC instead** (lcsc.com prices and stock of 2026-11-06, US$, shipping not included; `docs/BOM-THT-lcsc-order.csv` has every
+**LCSC instead** (lcsc.com prices and stock of 2026-11-11, US$, shipping not included; `docs/BOM-THT-lcsc-order.csv` has every
 line):
 
 | | US$ |
 |---|---|
-| LCSC order, `docs/BOM-THT-lcsc.csv` (40 lines, quantities raised to LCSC's minimums) | 50.93 |
+| LCSC order, `docs/BOM-THT-lcsc.csv` (40 lines, quantities raised to LCSC's minimums) | 52.40 |
 | Optional IC sockets, `docs/BOM-THT-lcsc-optional.csv` | 7.24 |
 
 * **Not at LCSC**: U3 SN74AHC14N, U6 SN74AHCT126N and U9 MCP1826S-3302E/AB (none in stock, and no LCSC part fits
   without a design change: the 74HC14 does not take 5 V inputs at 3.3 V, the 125 has the opposite enable, the
   LM2940 clones want a larger output capacitor with ESR): buy them at DigiKey (296-4550-5-ND, 296-4659-5-ND,
-  MCP1826S-3302E/AB-ND, about 30 NOK). The Core2350B2 comes from Waveshare.
+  MCP1826S-3302E/AB-ND, about 30 NOK). The Core2350B2 comes from Waveshare, the optional Radio Module 2 from
+  Farnell (4737257).
 * **Different parts from the BOM** (all in the `Note` column): U7 is TI's SN74LVC244AN (same pinout, 5 V-tolerant
   inputs at 3.3 V like the AHC244, stronger outputs), J7/J9 the XKB clones of the CUI jacks (as on THT v1.3.2),
   C21/C22 Dersonic C0G discs, R27/R28 and R31/R32 the taped Yageo MFR-25, and the generic headers, sockets,
@@ -178,7 +189,8 @@ appears once and that the cells form the two rings. On the module: the user LED 
 Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link to the edge pin).
 
 * **U12 is placed at 0°**: GPIO0–14 (P1) face the logic on the left, GPIO15–29 (P3) face the ISA fingers,
-  USB/SWD/RUN/BOOTSEL/power (P2) face up and the unused GPIO30–44 (P4) face the bracket.
+  USB/SWD/RUN/BOOTSEL/power (P2) face up and GPIO30–44 (P4) face the bracket, where the radio module takes GPIO40,
+  42 and 44, and GPIO45 from the end of P2.
 * **Variants**: Core2350B0 (no PSRAM, $4.99), B1 (2 MB, $5.99), **B2 (8 MB, $6.99, recommended)**; the `-Kit`
   versions add Waveshare's USB-C FPC adapter. Not sold by DigiKey: buy from waveshare.com (SKU 31690 for the B2) or a
   Waveshare reseller.
@@ -186,7 +198,7 @@ Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link
   daughterboard area, so that is fine. Soldered straight into the card on its male headers, the module sits at about
   3.5 mm.
 
-## GPIO map (= v2.0)
+## GPIO map (= v2.0, plus the radio module)
 
 | GPIO | Net | GPIO | Net |
 |---|---|---|---|
@@ -201,7 +213,10 @@ Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link
 | 15 | RA9 | 24, 25 | RV_DATA, RV_CLK (U13 M62429) |
 | 26 | RI/OCHRDY (U6) | 27 | ADS (U1/U2 select, U3) |
 | 28 | UART_TX (MIDI, J4, Waveblaster) | 29 | GND (board ID, as v2.0) |
-| 30–46 | not connected (39: module LED) | 47 | module PSRAM CS (QMI CS1), on the module |
+| 30–38, 41, 43, 46 | not connected | 40 | WL_ON (radio module on; also its BT_ON) |
+| 39 | not connected (LED on the module) | 42 | WL_CS (radio chip select) |
+| 44 | WL_D (radio data in and out, host wake) | 45 | WL_CLK (radio clock) |
+| 47 | module PSRAM CS (QMI CS1), on the module | | |
 
 ## Power
 
@@ -213,6 +228,9 @@ Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link
   not leave enough headroom after the diode. Its pinout is VIN–GND–VOUT, tab GND (**not** the 1117 pinout, so an
   LD1117V33 does not fit). C11/C13 (10 µF) + C10 (1 µF) on its output: Microchip asks for at least 1 µF and at most
   22 µF. C12 (10 µF, input) is about 10 mm from the VIN pin, joined by a 0.4 mm track.
+* **Radio module**: U14's VIN and VDDIO are on the card's +3V3 (U9), with C47 (10 µF) next to it. It draws up to
+  about 270 mA while transmitting (RM2 datasheet), which U9 (1 A) has to spare: about 0.4 W more in the TO-220 at
+  worst.
 * **The module powers itself**: VSYS goes to the module's **VBUS** pin, and its own LDO (ME6217C33, 800 mA, 3V3_EN
   pulled up on the module) makes the module's 3.3 V. The module's **3V3 pin is not connected**: the ME6217 must not
   see VOUT above VIN + 0.3 V, so it cannot be back-fed from U9. Both rails are 3.3 V ± 2 %; the RP2350's GPIO0–39 are
@@ -229,8 +247,12 @@ Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link
 
 As on v2.0, the RP2350's one USB port goes to both **J5** (USB-A host: joystick, mouse, keyboard, storage, hub; VBUS
 from +5V through F1) and **J6** (USB-C, for programming: BOOTSEL + drag-and-drop, and powering the card from USB
-alone). Use one at a time. J6 has 5.1 kΩ Rd on CC1/CC2, so any USB-C charger or host supplies 5 V; it never sources
-VBUS.
+alone). Use one at a time. J6 has 5.1 kΩ Rd on CC1/CC2 (R19/R20, standing above it), so any USB-C charger or host
+supplies 5 V; it never sources VBUS.
+
+J6 is where v2.0 has its program connector: on the bottom edge right of the ISA connector, facing down (see
+[Mechanical](#mechanical)). Its D+/D− join J5's pins after about 6 cm, most of it on the back under the radio module:
+no problem for full-speed USB, which is all the RP2350 does. Its VBUS runs the same way to D2, above the two buttons.
 
 **J6 is a GCT USB4085-GF-A**, the through-hole USB-C 2.0 receptacle: 16 contacts on a 0.85 mm pitch in two rows (0.4
 mm holes, 0.15 mm between pads), plus four shell legs. It is the hardest part to solder on the card: use a fine tip,
@@ -238,6 +260,43 @@ thin solder and flux, and check for bridges with a magnifier. The footprint has 
 `PicoGUS-THT.kicad_dru` allows 0.13 mm / 0.4 mm hole-to-hole between J6's own pads (the board minimum clearance is
 0.13 mm only for that; every netclass keeps 0.2 mm). The contacts' holes are 0.45 mm apart (GCT's land pattern):
 check that the PCB fab accepts it.
+
+## Radio module (optional)
+
+**U14 is a Raspberry Pi Radio Module 2** (RM2, RMC20452T): the Pico W's Infineon CYW43439 (2.4 GHz Wi-Fi 4 and
+Bluetooth 5.2) with its antenna, as a 16.5 × 14.5 mm castellated module. It gives this card what a Pico W gives the
+Pico-based PicoGUS boards: the NE2000 network card over Wi-Fi. It is optional: without U14, R33, R34 and C47 the card
+is as before.
+
+| RM2 pin | Net | GPIO | On a Pico W |
+|---|---|---|---|
+| 12 WL_ON and 13 BT_ON | WL_ON | 40 | GPIO23 |
+| 9 CS | WL_CS | 42 | GPIO25 |
+| 5 DATA_IN; 6 DATA_OUT through R33 (470 Ω); 10 IRQ (host wake) through R34 (10 kΩ) | WL_D | 44 | GPIO24 |
+| 3 SCLK | WL_CLK | 45 | GPIO29 |
+| 14 VDDIO and 16 VIN | +3V3, C47 (10 µF) | | 3V3 |
+| 1, 4, 7, 11, 15, 21 | GND | | |
+
+* **Wired as on the Pico W** (one shared data line), on four of the Core2350B's free pins. The RM2's own GPIO0–2
+  (on a Pico W: LED, regulator mode, VBUS sense) are not connected. Clock and data are both above GPIO32 because the
+  SDK's CYW43 driver runs them from one PIO block, which on the RP2350B reaches GPIO0–31 or GPIO16–47. GPIO40–47 are
+  the RP2350B's ADC pins, 3.3 V only, which is what the module needs.
+* **Where**: at the bracket end below the USB-A port, where the USB-C was: module centre (210.04, 109.30), turned
+  so that its antenna end is on the card edge. The last 5 mm before the edge (x 213.29 to the edge, between J5 and
+  H2) carry no copper on any of the four layers (rule area `rm2-rf-keepout`), and the front copper is kept clear under
+  the module. +5V passes on the front between the Core2350B and the module's lands; RV_DATA, RV_CLK and the USB-C's
+  VBUS and data pair pass under the module on the back, with the GND plane between them and the module.
+* **The antenna is boxed in, and on a card of this size that cannot be helped.** Raspberry Pi asks for a 35.5 × 18.5 mm
+  area around the antenna end without metal. Here the steel bracket is 3.4 mm in front of it, J5's shell about 4.5 mm
+  above and the bracket tab at H2 about 4.3 mm below; then comes the PC's case. **Use a plastic (3D-printed) bracket**
+  if the radio is to be used, and expect less range than a Pico W on the bench. The module has no connector for an
+  external antenna.
+* **Soldering**: the lands reach 1.0 mm past the module's edge (0.5 mm in the datasheet's reflow pattern), so an
+  iron gets at them. Tack two opposite corners, check that the module sits square in its corner marks, then solder
+  the 21 castellations. Pin 1 is at the dot, top right, next to the antenna end.
+* **Firmware**: `sw/boards/picogus21.h` gives the SDK's CYW43 driver the four pins, and the NE2000 firmware builds
+  for the card (`pg-ne2k-v21.uf2`). Not tested on hardware. The other firmware modes do not use the radio.
+* **R33 and R34 stand** (as R19/R20 at the USB-C do): one lead folded back along the body, pads 2.54 mm apart.
 
 ## Firmware
 
@@ -262,6 +321,8 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
 * Use the `-v21` files on this board: the bootloader and `pgusinit /flash` accept any RP2350 image and cannot tell
   a Pico 2 image from a v2.1 one.
 * A Core2350B0 (no PSRAM) runs every mode except GUS, which stops at the PSRAM check.
+* **With the radio module fitted**: `pg-ne2k-v21.uf2` (NE2000 over Wi-Fi; `build_variants.sh -p picogus21 ne2k`),
+  see [Radio module](#radio-module-optional).
 
 ## Mechanical
 
@@ -272,11 +333,13 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
   x 214.70 and the ISA fingers in v1.3.2's places, so the [v1.3.2 bracket](../hw-tht-v1.3/README.md#bracket) fits
   (its drawing is on User.Drawings). Its WT VOL hole between the two jacks stays unused: v2.1's Waveblaster volume is
   digital, and U13 with its output capacitors sits behind that hole, where v1.3.2 has RV1.
-* **J6 (USB-C) at the bracket end**, centred at y 108.89, where v1.3.2 has the Pico's micro-USB. It faces the
-  bracket with the footprint's PCB-edge line on the board edge, so its front is 2.5 mm past the edge (x 220.80), 0.9
-  mm behind the inner face of the bracket drawing's plate. As on v1.3.2, the bracket has no hole there (v1.3.2's
-  README: a USB plug cannot enter the slot opening at that height), so J6 is for programming and powering the card on
-  the bench with the bracket off. In the PC, update the firmware with `pgusinit`.
+* **J6 (USB-C) on the bottom edge, in the place of v2.0's program connector**: right of the ISA connector, facing
+  down, centred at x 205.29 (v2.0: 205.49; v2.1's ISA connector is 0.2 mm further left, so the distance to it is the
+  same). The footprint's PCB-edge line is on the board edge, so the connector's front is 2.5 mm below the edge. As on
+  v2.0 it is for programming and powering the card on the bench: in a slot the motherboard is in its way. In the
+  PC, update the firmware with `pgusinit`.
+* **U14 (radio module)** at the bracket end between J5 and H2, 2.6 mm tall, its antenna end flush with the card edge;
+  see [Radio module](#radio-module-optional) for what the bracket does to it.
 * **J8 (Waveblaster)** with pin 1 where v1.3.2 has it, (158.89, 39.63), and like v1.3.2 without daughterboard
   standoff holes (`Wavetable_NoMountingHoles`; v2.0 had two, 6.35 mm right of pin 1): the daughterboard is held by
   its header. **J3 (IRQ/DMA)** at v1.3.2's position, pin 1 (136.03, 124.91).
@@ -291,19 +354,19 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
 
 ## Layout status
 
-**Placed and routed (2026-11-07), for review.** The placement and the silkscreen labels are the user's (the DAC
+**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11), for review.** The placement and the silkscreen labels are the user's (the DAC
 block turned and moved under the daughterboard; regulator, module, USB-C parts and headers moved), with the changes
 listed below. **DRC with schematic parity: 0 unconnected items, no clearance, hole or parity errors.** What is left:
 the 11 accepted courtyard overlaps of the logic column (U3–U7 on v1.3.2's 12.05 mm pitch with their decoupling discs
-and R1/R5/R18 between them) and 16 warnings for connector silkscreen past the bracket edge (J5, J6, J7 and J9 hang
-over it, as on v1.3.2).
+and R1/R5/R18 between them) and 16 warnings for connector silkscreen past the card edge (J5, J7 and J9 hang over
+the bracket edge as on v1.3.2, J6 over the bottom edge).
 
 ![The routed board: F.Cu red, B.Cu blue, In2.Cu green, AGND/AVDD islands shaded](docs/figures/routing.png)
 
 * **Stack-up**: F.Cu and B.Cu signals; **In1.Cu GND** with the **AGND island**, **In2.Cu +3V3** with the **AVDD
   island** (see [Audio](#audio)); FB3 (GND–AGND) and FB4 (+3V3–AVDD) are the only ties. 0.2 mm signal tracks, 0.4 mm
   for +5V, VSYS, the USB VBUS nets and ±12 V; the plane nets reach their planes through short stubs and vias. 0.6/0.3
-  mm vias. About 2.5 m of track on each outer layer and 139 vias.
+  mm vias. About 2.5 m of track on each outer layer and 152 vias.
 * **In2.Cu carries eight short signal hops** (52 mm in all, the longest 12 mm: D5, ADS, D4, D7, GPIO23, D2, AD3, AD1)
   where the band above the ISA fingers is full on both outer layers. They cut slots in the +3V3 plane, not in GND.
 * **Routing rules**: no copper between the gold fingers (rule areas between them; tracks leave each finger straight
@@ -325,15 +388,28 @@ over it, as on v1.3.2).
   four track ends were stretched onto the moved pads. **The PicoGUS logo and `v2.1.0` then moved 1.02 mm right as
   one group**, so they sit centred between C40 and the board edge: 0.77 mm from C40's silkscreen outline to the "P"
   and from the end of `v2.1.0` to the edge (letters x 186.92–212.69, `v2.1.0` at (212.84, 40.58)).
+* **Radio module in, USB-C moved (2026-11-11)**: U14 took the USB-C's place at the bracket end. J6 went to v2.0's
+  place on the bottom edge, with R19/R20 standing above it. D2 moved to the strip above SW1/SW2 (and into the
+  `Core2350B + power` group). R33/R34 stand in a row above the module, C47 above them. What crossed that corner was
+  rerouted by hand: **+5V** from the ISA finger to F1 (the feed of everything on +5V) now runs on the front between
+  the Core2350B's pin column and the module's lands and changes to the back at (198.6, 120.2); **RV_DATA, RV_CLK,
+  the USB-C's VBUS and its data pair** run on the back under the module; the radio's four signals leave the
+  Core2350B on the back, under the +5V track, and reach the module through vias (or R34's pad) next to its lands. The ISA D3 line now stays on the front all the way (two
+  vias less), and the old VSYS run to D2's former place is gone (VSYS reaches D2 from C12). Labels: `RUN` (now
+  0.9 mm, like `BOOTSEL`) and `BOOTSEL` moved sideways to clear D2; `USB-C FLASH` (1.0 mm) stands left of J6;
+  `USB HOST` moved 1.7 mm right; `WIFI` is new. H2's reference is hidden; the references of J6 and F1 are inside
+  their own outlines.
 * **Labels to look at** (visible references over a neighbour's courtyard): C23 under J9's body and U13 under C41
-  (both hidden once the parts are fitted), J6 over D2, F1 over SW1, D1 over R13, C16 over C14.
+  (both hidden once the parts are fitted), D1 over R13, C16 over C14; R33/R34 sit between their resistors and C47,
+  R19/R20 between the two resistors, U14 left of the module's lands.
 * **PicoGUS logo in copper, as on v1.3.2**: the eight solder-mask openings (the letters) with copper letters 0.15 mm
   larger under them, and a rule area that keeps tracks and vias off them. `v2.1.0` stands right of it (Jost 1.2 mm).
 * **Silkscreen labels** (Jost, embedded in the board file as on v1.3.2): `WAVEBLASTER`, `MIXER`, `DAC`, `WT VOL`,
-  `MIDI OUT`, `LINE OUT`, `USB HOST`, `USB-C FLASH`, `RUN`, `BOOTSEL`, `UART`, `SWD`, and `IRQ`/`DMA` over J3.
+  `MIDI OUT`, `LINE OUT`, `USB HOST`, `WIFI`, `USB-C FLASH`, `RUN`, `BOOTSEL`, `UART`, `SWD`, and `IRQ`/`DMA` over J3.
 * **Groups, as on v1.3.2**, so a block moves as one: `74AHCT126 (U6)`, `74AHC00 (U4)`, `74AHC00 (U5)`,
   `74AHC14 (U3)` (with the column resistors), `74AHC244 (U7)`, `ISA bus switches (U1, U2)`,
   `Waveblaster header (J8)`, `DAC (U10)`, `Mixer + line out (U11, J9)`, `WT volume (U13)`, `MIDI out (J7)`,
-  `USB host (J5)`, `USB-C (J6)`, `Core2350B + power (U12)`, `IRQ/DMA jumpers (J3)`, `PicoGUS logo`,
+  `USB host (J5)`, `USB-C (J6)`, `WiFi radio (U14)`, `Core2350B + power (U12)`, `IRQ/DMA jumpers (J3)`, `PicoGUS logo`,
   `Copyright and attribution (back)` and the bracket drawing.
-* **R21–R32 (mixer) are on 10.16 mm pitch** like every other resistor on the card.
+* **R21–R32 (mixer) are on 10.16 mm pitch** like every other lying resistor on the card; R19, R20, R33 and R34
+  stand (2.54 mm).

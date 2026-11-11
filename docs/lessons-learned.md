@@ -113,6 +113,9 @@ silkscreen. Each round found real faults. Apply these from the start on the next
     holes, and the DAC GND/VNEG/XSMT stubs.
   - Then autoroute (Freerouting, with GND routed as a net), then fill and stitch the pours.
   - The tightest spots, such as U9's east test pads, are faster by hand.
+  - After a rip-up, compare each net's track length with the old board, power nets first. DRC only knows connected
+    or not: on THT v2.1 (radio module, USB-C move) an autorouter pass rejoined +5V by a long detour on the far
+    side of the card instead of the short run that had been ripped up, and the report was clean.
 - **Starved thermals**: a few pads get one spoke. The v1.3.2 README lists where each one joins GND.
 - **Cloud environment**: `.claude/cloud-env-setup.sh` installs KiCad 10, the libraries, a `kipython` wrapper,
   Freerouting, gerbv and ngspice. `kipython -I` drops the path it needs, so use `kipython -P -s` and run it
