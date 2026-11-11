@@ -44,7 +44,7 @@ Files:
 | `usb.kicad_sch` | USB host port (J11 USB-A, F1, C34/C35, U12) (as v1.3.1) |
 | `PicoGUS-THT-schematic.pdf` | Schematic PDF |
 | `docs/BOM-THT.csv` | BOM with DigiKey **and** LCSC part numbers, stock (2026-11-07) and a digikey.no link per line |
-| `docs/BOM-THT-digikey.csv`, `docs/BOM-THT-lcsc.csv` (+ `-optional`) | DigiKey and LCSC upload files for one board, made from `BOM-THT.csv` (see [Ordering](#ordering)); optional: sockets, U12 |
+| `docs/BOM-THT-digikey.csv`, `docs/BOM-THT-lcsc.csv` (+ `-optional`) | DigiKey and LCSC upload files for one board, made from `BOM-THT.csv` (see [Ordering](#ordering)); optional: sockets (and U12 for LCSC; the DigiKey file has U12, marked "(optional)") |
 | `docs/BOM-THT-sockets.csv` (+ `-digikey-optional`, `-lcsc-optional`) | Socket build: every DIP IC and the Pico socketed, with heights (see [Socket build](#socket-build)) |
 | `docs/renders/` | 3D renders of the routed card: red from the front and the back, green, purple, white and black from the front (ENIG; white silkscreen, black on white). Made with `hw-common/tools/render.sh` |
 | `docs/figures/` | Figures for the README's exceptions and design choices (e.g. the test pads, the placement options, the accepted courtyard overlaps), with the scripts that make them in `docs/figures/src/` |
@@ -819,15 +819,16 @@ plus alternatives. Stock was re-read on 2026-11-07: LCSC from its product API, D
 the few DigiKey figures that could not be re-read and are from the earlier checks of 2026-09-28 to 2026-10-23).
 
 **Upload files.** `docs/BOM-THT-digikey.csv` (DigiKey cart upload) and `docs/BOM-THT-lcsc.csv` (LCSC BOM tool) hold
-one board; `-optional` adds the sockets and U12. Each line's Customer Reference is the board and its positions,
-e.g. `PicoGUS-THT-1.3.2: C30,C31`, so every bag arrives labelled for sorting. The quantities are for one board: set
+one board; `-optional` adds the sockets (and U12 for LCSC). Each line's Customer Reference is the board and its
+positions, e.g. `PicoGUS-THT-1.3.2: C30,C31`, so every bag arrives labelled for sorting. The DigiKey file includes
+the optional U12 as `PicoGUS-THT-1.3.2: U12 (optional)`, so it comes with the order (`--digikey-main U12`). The quantities are for one board: set
 the number of boards in the shop's BOM tool. LCSC raises lines to its minimum order quantities (50 for some
 resistors). After changing `BOM-THT.csv`, regenerate them (from this folder):
 
 ```
 python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT.csv docs/BOM-THT --prefix 'PicoGUS-THT-1.3.2: ' \
     --label '(jumpers)=J1,J7 shunts' --label '(U1-socket)=U1 sockets' --label '(DIP14-socket)=U5,U6,U7,U10 sockets' \
-    --label '(DIP20-socket)=U2 socket' --label '(DIP8-socket)=U11 socket'
+    --label '(DIP20-socket)=U2 socket' --label '(DIP8-socket)=U11 socket' --digikey-main U12
 python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT-sockets.csv docs/BOM-THT-sockets \
     --prefix 'PicoGUS-THT-1.3.2: ' --all-optional
 ```
