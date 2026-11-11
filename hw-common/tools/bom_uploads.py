@@ -2,7 +2,7 @@
 """DigiKey and LCSC upload files from a board BOM CSV (one board).
 
     python3 hw-common/tools/bom_uploads.py BOM.csv OUT_PREFIX --prefix "PicoGUS-THT-1.3.2: " \
-        [--label "(jumpers)=J1,J7 shunts" ...] [--all-optional] [--digikey-main U12 ...]
+        [--label "(jumpers)=J1,J7 shunts" ...] [--all-optional] [--main U12 ...]
 
 Writes (only the files that get lines):
     OUT_PREFIX-digikey.csv           Quantity, Digi-Key Part Number, Manufacturer Part Number, Customer Reference
@@ -18,8 +18,8 @@ LCSC lines whose "LCSC stock ..." cell starts with "n/a" (a part LCSC does not s
 assembly library).
 
 The customer reference is PREFIX + the reference designators, so every bag arrives labelled with its board
-positions. --digikey-main REFS puts that optional line in the main DigiKey file, marked "(optional)", so it is
-ordered by default. DigiKey allows 48 characters; longer lists are shortened to ranges (C3-9,11-14). Lines whose
+positions. --main REFS puts that optional line in the main DigiKey and LCSC files, marked "(optional)", so it
+is ordered by default. DigiKey allows 48 characters; longer lists are shortened to ranges (C3-9,11-14). Lines whose
 references are not designators, e.g. "(jumpers)", take their text from --label; for "Socket for" BOMs,
 "U2 (74AHC244)" becomes "U2 socket".
 """
@@ -76,8 +76,8 @@ def main():
     ap.add_argument('--prefix', default='')
     ap.add_argument('--label', action='append', default=[], help='REFS=TEXT for lines without designators')
     ap.add_argument('--all-optional', action='store_true', help='treat every line as optional')
-    ap.add_argument('--digikey-main', action='append', default=[],
-                    help='REFS of an optional line to put in the main DigiKey file instead, marked "(optional)"')
+    ap.add_argument('--main', action='append', default=[],
+                    help='REFS of an optional line to put in the main files instead, marked "(optional)"')
     a = ap.parse_args()
     labels = dict(x.split('=', 1) for x in a.label)
     rows = list(csv.DictReader(open(a.bom, newline='', encoding='utf-8')))
@@ -107,14 +107,13 @@ def main():
         if len(ref) > MAXLEN:
             sys.exit('customer reference too long (%d > %d): %s' % (len(ref), MAXLEN, ref))
         opt = '-optional' if (a.all_optional or 'optional' in r.get('Type', '').lower()) else ''
+        if opt and refs_text in a.main:  # an optional part ordered by default
+            ref += ' (optional)'; opt = ''
+            if len(ref) > MAXLEN:
+                sys.exit('customer reference too long (%d > %d): %s' % (len(ref), MAXLEN, ref))
         dk = re.match(r'\s*([^\s\[]+)', r.get('DigiKey PN') or '')
         if dk:
-            if opt and refs_text in a.digikey_main:
-                if len(ref + ' (optional)') > MAXLEN:
-                    sys.exit('customer reference too long (%d > %d): %s (optional)' % (len(ref) + 11, MAXLEN, ref))
-                out['digikey'].append([qty, dk[1], r[mpncol].strip(), ref + ' (optional)'])
-            else:
-                out['digikey' + opt].append([qty, dk[1], r[mpncol].strip(), ref])
+            out['digikey' + opt].append([qty, dk[1], r[mpncol].strip(), ref])
         lc = re.match(r'\s*(C\d+)\s*(?:\[(.*?)\])?', r.get('LCSC PN [MPN if different]') or '')
         lcstock = next((v for k, v in r.items() if k and k.startswith('LCSC stock')), '') or ''
         if lc and not lcstock.strip().lower().startswith('n/a'):  # n/a: e.g. only in JLCPCB's assembly library
