@@ -18113,7 +18113,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" "Sullins"
+		(property "Manufacturer" "Amphenol ICC (FCI)"
 			(at 138.43 26.035 0)
 			(hide yes)
 			(effects
@@ -18123,7 +18123,7 @@
 				(hide yes)
 			)
 		)
-		(property "MPN" "PREC040SAAN-RC"
+		(property "MPN" "77311-118-02LF"
 			(at 138.43 26.035 0)
 			(hide yes)
 			(effects
@@ -18133,7 +18133,7 @@
 				(hide yes)
 			)
 		)
-		(property "DigiKey" "S1012EC-40-ND"
+		(property "DigiKey" "609-4434-ND"
 			(at 138.43 26.035 0)
 			(hide yes)
 			(effects
@@ -18143,7 +18143,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC" "C2337 (BOOMELE 2.54-1*40P)"
+		(property "LCSC" "C599036"
 			(at 138.43 26.035 0)
 			(hide yes)
 			(effects
@@ -21552,7 +21552,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" "Amphenol"
+		(property "Manufacturer" "Amphenol ICC (FCI)"
 			(at 167.64 83.185 0)
 			(hide yes)
 			(effects
@@ -21562,7 +21562,7 @@
 				(hide yes)
 			)
 		)
-		(property "MPN" "10129381-918001BLF"
+		(property "MPN" "77313-118-18LF"
 			(at 167.64 83.185 0)
 			(hide yes)
 			(effects
@@ -21572,7 +21572,7 @@
 				(hide yes)
 			)
 		)
-		(property "DigiKey" "609-10129381-918001BLF-ND"
+		(property "DigiKey" "609-77313-118-18LF-ND"
 			(at 167.64 83.185 0)
 			(hide yes)
 			(effects
@@ -24571,7 +24571,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" "Sullins"
+		(property "Manufacturer" "Amphenol ICC (FCI)"
 			(at 232.41 31.115 0)
 			(hide yes)
 			(effects
@@ -24581,7 +24581,7 @@
 				(hide yes)
 			)
 		)
-		(property "MPN" "PREC040SAAN-RC"
+		(property "MPN" "77311-118-02LF"
 			(at 232.41 31.115 0)
 			(hide yes)
 			(effects
@@ -24591,7 +24591,7 @@
 				(hide yes)
 			)
 		)
-		(property "DigiKey" "S1012EC-40-ND"
+		(property "DigiKey" "609-4434-ND"
 			(at 232.41 31.115 0)
 			(hide yes)
 			(effects
@@ -24601,7 +24601,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC" "C2337 (BOOMELE 2.54-1*40P)"
+		(property "LCSC" "C599036"
 			(at 232.41 31.115 0)
 			(hide yes)
 			(effects

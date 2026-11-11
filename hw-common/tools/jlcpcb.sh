@@ -13,8 +13,8 @@
 #
 # The BOM's LCSC column is the schematic's LCSC field with any note dropped: "C3690252 (RCER71H106MWM1H03A)" gives
 # LCSC Part # C3690252 and MPN RCER71H106MWM1H03A (the part LCSC sells). <name>-jlcpcb-parts.csv next to the board
-# (Designator, LCSC Part #, MPN) overrides single parts for assembly, e.g. a 1x2 header the hand build cuts from a
-# 1x40 strip.
+# (Designator, LCSC Part #, MPN) overrides single parts for assembly, where JLCPCB needs a different part than the
+# hand build.
 #
 # The script stops when DRC finds errors. ALLOW_DRC=type1,type2 (DRC report types such as
 # courtyards_overlap) lets those types through but still stops on any other; FORCE=1 exports anyway.
