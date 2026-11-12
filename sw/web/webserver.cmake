@@ -11,17 +11,25 @@ if(NOT Python3_FOUND)
     message(FATAL_ERROR "The web server needs Python 3 to embed its web page")
 endif()
 
-# The web page, gzip compressed into a C array
+# The files of the web page (web/www), packed by scripts/web_pack.py: as a C
+# array for firmware built for one mode, and as a binary file for the
+# multi-firmware image, which stores them once for all modes. That image
+# reserves WEB_ASSETS_KB of flash for them, after the WiFi chip's firmware.
+set(WEB_ASSETS_KB 64 CACHE STRING "Flash reserved for the web page files in the multi-firmware image, in KB")
+math(EXPR PICOGUS_WEB_ASSETS_REGION "((${WEB_ASSETS_KB} + 3) / 4) * 4096")
 set(WEB_ASSETS_DIR ${CMAKE_BINARY_DIR}/generated/web)
+set(PICOGUS_WEB_ASSETS_BIN ${WEB_ASSETS_DIR}/web_assets.bin)
+file(GLOB_RECURSE _www_files CONFIGURE_DEPENDS ${PICOGUS_WEB_DIR}/www/*)
 add_custom_command(
-    OUTPUT ${WEB_ASSETS_DIR}/web_assets.h
+    OUTPUT ${WEB_ASSETS_DIR}/web_assets.h ${PICOGUS_WEB_ASSETS_BIN}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${WEB_ASSETS_DIR}
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/web_embed.py
-            ${PICOGUS_WEB_DIR}/www/index.html ${WEB_ASSETS_DIR}/web_assets.h
-    DEPENDS ${PICOGUS_WEB_DIR}/www/index.html ${CMAKE_SOURCE_DIR}/scripts/web_embed.py
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/web_pack.py ${PICOGUS_WEB_DIR}/www
+            --header ${WEB_ASSETS_DIR}/web_assets.h --bin ${PICOGUS_WEB_ASSETS_BIN}
+            --max-size ${PICOGUS_WEB_ASSETS_REGION}
+    DEPENDS ${_www_files} ${CMAKE_SOURCE_DIR}/scripts/web_pack.py
     VERBATIM
 )
-add_custom_target(web_assets DEPENDS ${WEB_ASSETS_DIR}/web_assets.h)
+add_custom_target(web_assets DEPENDS ${WEB_ASSETS_DIR}/web_assets.h ${PICOGUS_WEB_ASSETS_BIN})
 
 # CYW43 WiFi firmware blob, which the multifw image stores once for all modes.
 # It sits right after the 32KB bootloader; the mode firmwares follow it.
@@ -40,8 +48,15 @@ endif()
 math(EXPR PICOGUS_CYW43_FW_REGION
     "((((${PICOGUS_CYW43_WIFI_FW_LEN} + 511) / 512) * 512 + ${PICOGUS_CYW43_CLM_LEN} + 4095) / 4096) * 4096")
 set(PICOGUS_CYW43_FW_BIN ${CMAKE_BINARY_DIR}/cyw43_firmware.bin)
+# The web page files follow the WiFi firmware
+math(EXPR PICOGUS_WEB_ASSETS_OFFSET "${PICOGUS_CYW43_FW_OFFSET} + ${PICOGUS_CYW43_FW_REGION}")
+set(PICOGUS_WEB_SHARED_BIN ${CMAKE_BINARY_DIR}/web_shared.bin)
 
-function(picogus_add_cyw43_fw_bin)
+# What all modes of the multi-firmware image share, as one file for uf2create:
+# the WiFi chip's firmware and the web page files. Sets, for the caller,
+# where the mode firmwares start (MULTIFW_FIRST_ORIGIN) and what to pass on to
+# generate_ld.cmake and uf2create.
+macro(picogus_multifw_shared_resources)
     add_custom_command(
         OUTPUT ${PICOGUS_CYW43_FW_BIN}
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/cyw43_fw_extract.py
@@ -49,8 +64,20 @@ function(picogus_add_cyw43_fw_bin)
         DEPENDS ${PICOGUS_CYW43_FW_HEADER} ${CMAKE_SOURCE_DIR}/scripts/cyw43_fw_extract.py
         VERBATIM
     )
-    add_custom_target(cyw43_firmware_bin DEPENDS ${PICOGUS_CYW43_FW_BIN})
-endfunction()
+    add_custom_command(
+        OUTPUT ${PICOGUS_WEB_SHARED_BIN}
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/web_shared_bin.py ${PICOGUS_WEB_SHARED_BIN}
+                ${PICOGUS_CYW43_FW_BIN} ${PICOGUS_CYW43_FW_REGION}
+                ${PICOGUS_WEB_ASSETS_BIN} ${PICOGUS_WEB_ASSETS_REGION}
+        DEPENDS ${PICOGUS_CYW43_FW_BIN} ${PICOGUS_WEB_ASSETS_BIN} ${CMAKE_SOURCE_DIR}/scripts/web_shared_bin.py
+        VERBATIM
+    )
+    add_custom_target(web_shared_bin DEPENDS ${PICOGUS_WEB_SHARED_BIN})
+    math(EXPR MULTIFW_FIRST_ORIGIN "${PICOGUS_WEB_ASSETS_OFFSET} + ${PICOGUS_WEB_ASSETS_REGION}")
+    set(MULTIFW_LD_EXTRA_ARGS -DFW_FIRST_ORIGIN=${MULTIFW_FIRST_ORIGIN} -DFLASH_CYW43_FW=${PICOGUS_CYW43_FW_OFFSET})
+    set(MULTIFW_UF2_EXTRA_INPUTS ${PICOGUS_WEB_SHARED_BIN})
+    set(MULTIFW_UF2_EXTRA_DEPENDS web_shared_bin ${PICOGUS_WEB_SHARED_BIN})
+endmacro()
 
 # The network stack shares the RP2040's RAM with the sound card emulation (all
 # code runs from RAM), so it is compiled for size. It only ever runs at the
@@ -86,6 +113,7 @@ function(picogus_add_webserver TARGET_NAME MULTIFW)
         ${PICOGUS_WEB_DIR}/web_http.c
         ${PICOGUS_WEB_DIR}/web_api.cpp
         ${PICOGUS_WEB_DIR}/web_upload.c
+        ${PICOGUS_WEB_DIR}/web_assets.c
     )
     target_include_directories(${TARGET_NAME} PRIVATE ${PICOGUS_WEB_DIR} ${WEB_ASSETS_DIR})
     add_dependencies(${TARGET_NAME} web_assets)
@@ -112,6 +140,9 @@ function(picogus_add_webserver TARGET_NAME MULTIFW)
             PICOGUS_CYW43_FW_OFFSET=${PICOGUS_CYW43_FW_OFFSET}
             PICOGUS_CYW43_WIFI_FW_LEN=${PICOGUS_CYW43_WIFI_FW_LEN}
             PICOGUS_CYW43_CLM_LEN=${PICOGUS_CYW43_CLM_LEN}
+            # and one copy of the web page files
+            PICOGUS_WEB_ASSETS_OFFSET=${PICOGUS_WEB_ASSETS_OFFSET}
+            PICOGUS_WEB_ASSETS_SIZE=${PICOGUS_WEB_ASSETS_REGION}
         )
     endif()
     target_link_libraries(${TARGET_NAME} pico_cyw43_arch_lwip_poll)

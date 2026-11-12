@@ -36,7 +36,6 @@ extern cdrom_t cdrom;
 
 #include "web.h"
 #include "web_internal.h"
-#include "web_assets.h"
 
 extern Settings settings;
 extern board_type_t BOARD_TYPE;
@@ -329,11 +328,6 @@ void send_ok(http_conn_t *c) {
 
 // ---- handlers ----------------------------------------------------------------
 
-void h_index(http_conn_t *c) {
-    http_send_static(c, "text/html; charset=utf-8",
-                     (const uint8_t *)web_flash_uncached(web_index_html_gz), web_index_html_gz_len, true);
-}
-
 void h_status(http_conn_t *c) {
     send_status(c);
 }
@@ -530,8 +524,6 @@ void h_cd_load(http_conn_t *c) {
 extern "C" {
 
 const web_route_t web_routes[] = {
-    {"/",               HTTP_GET,  nullptr, nullptr, h_index, nullptr},
-    {"/index.html",     HTTP_GET,  nullptr, nullptr, h_index, nullptr},
     {"/api/status",     HTTP_GET,  nullptr, nullptr, h_status, nullptr},
     {"/api/set",        HTTP_POST, nullptr, nullptr, h_set, nullptr},
     {"/api/save",       HTTP_POST, nullptr, nullptr, h_save, nullptr},

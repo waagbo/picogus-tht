@@ -308,11 +308,42 @@ static void test_static_and_errors(void) {
     int st = client_wait(c, 10000);
     CHECK(st == 200, "GET / -> %d", st);
     CHECK(strstr(c->resp, "Content-Encoding: gzip") != NULL, "page is gzip encoded");
+    CHECK(strstr(c->resp, "Content-Type: text/html; charset=utf-8\r\n") != NULL, "page content type");
     const char *cl = strstr(c->resp, "Content-Length: ");
     size_t body_len = c->resp_len - (size_t)(client_body(c) - c->resp);
     CHECK(cl && (size_t)atoi(cl + 16) == body_len, "content length %d vs body %zu", cl ? atoi(cl + 16) : -1, body_len);
-    CHECK(body_len > 1000 && (unsigned char)client_body(c)[0] == 0x1f, "gzip magic");
+    CHECK(body_len > 20000 && (unsigned char)client_body(c)[0] == 0x1f, "the whole page, gzip magic (%zu bytes)", body_len);
+    // the browser may keep the page, but has to ask whether it changed
+    char etag[16] = "";
+    const char *et = strstr(c->resp, "ETag: \"");
+    if (et) memcpy(etag, et + 7, 8);
+    CHECK(strlen(etag) == 8 && strstr(c->resp, "Cache-Control: no-cache"), "page has an ETag: %s", etag);
     client_free(c);
+
+    // asked again with that ETag: 304 and no body
+    char head[256];
+    snprintf(head, sizeof(head), "GET /index.html HTTP/1.1\r\nHost: x\r\nIf-None-Match: \"%s\"\r\n\r\n", etag);
+    c = client_start(head, NULL, 0, 1460);
+    st = client_wait(c, 10000);
+    CHECK(st == 304 && !*client_body(c) && strstr(c->resp, etag), "unchanged page -> %d, body %zu bytes", st, strlen(client_body(c)));
+    client_free(c);
+    c = client_start("GET / HTTP/1.1\r\nIf-None-Match: W/\"00000000\"\r\n\r\n", NULL, 0, 1460);
+    st = client_wait(c, 10000);
+    CHECK(st == 200, "another ETag gets the page: %d", st);
+    client_free(c);
+
+    // other files of the pack: text is compressed, pictures are not
+    c = client_start("GET /static/hello.txt HTTP/1.1\r\n\r\n", NULL, 0, 1460);
+    st = client_wait(c, 10000);
+    CHECK(st == 200 && strstr(c->resp, "Content-Type: text/plain") && strstr(c->resp, "Content-Encoding: gzip"), "text file -> %d", st);
+    client_free(c);
+    c = client_start("GET /static/dot.png HTTP/1.1\r\n\r\n", NULL, 0, 1460);
+    st = client_wait(c, 10000);
+    CHECK(st == 200 && strstr(c->resp, "Content-Type: image/png") && !strstr(c->resp, "Content-Encoding")
+          && !memcmp(client_body(c), "\x89PNG\r\n\x1a\n not really a picture", 29), "picture -> %d", st);
+    client_free(c);
+    CHECK(request("GET", "/static/nope.png", NULL, NULL, 0, 1460, out, sizeof(out)) == 404, "no such file");
+    CHECK(request("POST", "/static/hello.txt", NULL, NULL, 0, 1460, out, sizeof(out)) == 404, "files can only be read");
 
     CHECK(request("GET", "/nope", NULL, NULL, 0, 1460, out, sizeof(out)) == 404, "404");
     CHECK(request("GET", "/api/set", NULL, NULL, 0, 1460, out, sizeof(out)) == 405, "405 on wrong method");

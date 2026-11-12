@@ -686,13 +686,10 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     set(FW_TARGET picogus)
     set(PICOGUS_IN_MULTIFW TRUE)
     if(PICO_CYW43_SUPPORTED AND WEBSERVER)
-        # One copy of the CYW43 WiFi firmware right after the bootloader, shared
-        # by all modes; the mode firmwares start after it
-        picogus_add_cyw43_fw_bin()
-        math(EXPR MULTIFW_FIRST_ORIGIN "${PICOGUS_CYW43_FW_OFFSET} + ${PICOGUS_CYW43_FW_REGION}")
-        set(MULTIFW_LD_EXTRA_ARGS -DFW_FIRST_ORIGIN=${MULTIFW_FIRST_ORIGIN} -DFLASH_CYW43_FW=${PICOGUS_CYW43_FW_OFFSET})
-        set(MULTIFW_UF2_EXTRA_INPUTS ${PICOGUS_CYW43_FW_BIN})
-        set(MULTIFW_UF2_EXTRA_DEPENDS cyw43_firmware_bin ${PICOGUS_CYW43_FW_BIN})
+        # One copy of the CYW43 WiFi firmware and of the web page files right
+        # after the bootloader, shared by all modes; the mode firmwares start
+        # after them
+        picogus_multifw_shared_resources()
     endif()
 
     # ---------------------------------------------------------------------------

@@ -93,13 +93,27 @@ bool http_form_get(const char *form, const char *key, char *buf, size_t buflen);
 bool http_form_get_int(const char *form, const char *key, int32_t *out);
 
 // responses (exactly one per request)
-void http_send_static(http_conn_t *c, const char *content_type, const uint8_t *data, uint32_t len, bool gzip);
 void http_send_json(http_conn_t *c, const char *json, uint32_t len);
 void http_send_error(http_conn_t *c, int status, const char *message);
 
 // Scratch buffer for building responses (core 1 only, not reentrant)
 #define WEB_SCRATCH_SIZE 2048
 extern char *web_scratch;
+
+// ---- web_assets.c ----------------------------------------------------------
+
+// A file of the web page, in flash
+typedef struct {
+    const char *type;       // content type
+    const uint8_t *data;
+    uint32_t length;
+    uint32_t etag;          // changes when the file does
+    bool gzip;              // data is gzip compressed
+} web_asset_t;
+
+// Index of the file served at a path, -1 if there is none
+int web_asset_find(const char *path);
+bool web_asset_get(int index, web_asset_t *asset);
 
 // ---- web_api.cpp -----------------------------------------------------------
 

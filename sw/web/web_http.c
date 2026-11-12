@@ -43,7 +43,7 @@
 #define WEB_HTTP_PORT 80
 #endif
 #define HTTP_MAX_CONN       3
-#define HTTP_BUF            600    // one header line at a time, then the form body
+#define HTTP_BUF            576    // one header line at a time, then the form body
 #define HTTP_IDLE_TIMEOUT_MS 15000
 #define HTTP_MAX_DISCARD    65536  // body bytes read and dropped to answer an error cleanly
 #define HTTP_POLL_INTERVAL  2      // lwIP poll callback every 2 * 500ms
@@ -60,6 +60,9 @@ struct http_conn {
     conn_state_t state;
     const web_route_t *route;
     int16_t route_status;       // HTTP error for the request line, 0 if routed
+    int8_t asset;               // file of the web page that was asked for, -1 if none
+    bool has_etag;              // the browser has a copy: If-None-Match
+    uint32_t etag;
     bool have_request_line;
     bool skip_line;             // dropping the rest of an over-long header line
     bool responded;
@@ -233,37 +236,54 @@ static char *put_uint(char *p, char *end, uint32_t v) {
 }
 
 // printf is not available in release builds, hence the hand-rolled formatting
-static bool send_head(http_conn_t *c, int status, const char *content_type, uint32_t len, bool gzip, bool nocache) {
-    const char *reason = status == 200 ? "OK" : status == 400 ? "Bad Request" : status == 404 ? "Not Found"
+// etag: for a file of the page, which the browser may keep but must ask about
+// each time (a firmware update changes it); 0 for answers that must not be kept
+static bool send_head(http_conn_t *c, int status, const char *content_type, uint32_t len, bool gzip, uint32_t etag) {
+    const char *reason = status == 200 ? "OK" : status == 304 ? "Not Modified"
+                       : status == 400 ? "Bad Request" : status == 404 ? "Not Found"
                        : status == 405 ? "Method Not Allowed" : status == 409 ? "Conflict"
                        : status == 413 ? "Payload Too Large" : status == 431 ? "Header Too Large"
                        : status == 503 ? "Service Unavailable" : "Error";
-    char head[200];
+    char head[224];
     char *end = head + sizeof(head);
     char *p = put_str(head, end, "HTTP/1.0 ");
     p = put_uint(p, end, (uint32_t)status);
     p = put_str(p, end, " ");
     p = put_str(p, end, reason);
-    p = put_str(p, end, "\r\nContent-Type: ");
-    p = put_str(p, end, content_type);
-    p = put_str(p, end, "\r\nContent-Length: ");
-    p = put_uint(p, end, len);
-    if (gzip) {
-        p = put_str(p, end, "\r\nContent-Encoding: gzip");
+    if (status != 304) {
+        p = put_str(p, end, "\r\nContent-Type: ");
+        p = put_str(p, end, content_type);
+        p = put_str(p, end, "\r\nContent-Length: ");
+        p = put_uint(p, end, len);
+        if (gzip) {
+            p = put_str(p, end, "\r\nContent-Encoding: gzip");
+        }
     }
-    p = put_str(p, end, nocache ? "\r\nCache-Control: no-store" : "\r\nCache-Control: max-age=60");
+    if (etag) {
+        static const char hex[] = "0123456789abcdef";
+        char tag[9];
+        for (int i = 0; i < 8; ++i) {
+            tag[i] = hex[(etag >> (28 - 4 * i)) & 15];
+        }
+        tag[8] = 0;
+        p = put_str(p, end, "\r\nETag: \"");
+        p = put_str(p, end, tag);
+        p = put_str(p, end, "\"\r\nCache-Control: no-cache");
+    } else {
+        p = put_str(p, end, "\r\nCache-Control: no-store");
+    }
     p = put_str(p, end, "\r\nConnection: close\r\n\r\n");
     return tcp_write(c->pcb, head, (u16_t)(p - head), TCP_WRITE_FLAG_COPY | TCP_WRITE_FLAG_MORE) == ERR_OK;
 }
 
 static void respond(http_conn_t *c, int status, const char *content_type, const void *body, uint32_t len,
-                    bool gzip, bool nocache) {
+                    bool gzip, uint32_t etag) {
     if (c->responded || !c->pcb) {
         return;
     }
     c->responded = true;
     c->state = CONN_SENDING;
-    if (!send_head(c, status, content_type, len, gzip, nocache)) {
+    if (!send_head(c, status, content_type, len, gzip, etag)) {
         conn_free(c, true);     // out of lwIP memory: drop rather than send garbage
         return;
     }
@@ -272,8 +292,16 @@ static void respond(http_conn_t *c, int status, const char *content_type, const 
     conn_push(c);
 }
 
-void http_send_static(http_conn_t *c, const char *content_type, const uint8_t *data, uint32_t len, bool gzip) {
-    respond(c, 200, content_type, data, len, gzip, false);
+// A file of the web page, or "you have it" if the browser's copy is current
+static void send_asset(http_conn_t *c) {
+    web_asset_t a;
+    if (!web_asset_get(c->asset, &a)) {
+        http_send_error(c, 503, "the web page is being replaced");
+    } else if (c->has_etag && c->etag == a.etag) {
+        respond(c, 304, "", NULL, 0, false, a.etag);
+    } else {
+        respond(c, 200, a.type, a.data, a.length, a.gzip, a.etag);
+    }
 }
 
 void http_send_json(http_conn_t *c, const char *json, uint32_t len) {
@@ -283,7 +311,7 @@ void http_send_json(http_conn_t *c, const char *json, uint32_t len) {
         http_send_error(c, 503, "response too large");
         return;
     }
-    respond(c, 200, "application/json", json, len, false, true);
+    respond(c, 200, "application/json", json, len, false, 0);
     if (c->state == CONN_SENDING && c->tx_left) {
         conn_free(c, true);
     }
@@ -297,7 +325,7 @@ void http_send_error(http_conn_t *c, int status, const char *message) {
     p = put_str(p, end, message);
     *p++ = '"';
     *p++ = '}';
-    respond(c, status, "application/json", body, (uint32_t)(p - body), false, true);
+    respond(c, status, "application/json", body, (uint32_t)(p - body), false, 0);
 }
 
 // ---- request parsing -------------------------------------------------------
@@ -327,12 +355,27 @@ static void parse_request_line(http_conn_t *c, char *line) {
             }
         }
     }
+    // not part of the API: a file of the web page?
+    if (method == HTTP_GET && !path_found) {
+        c->asset = (int8_t)web_asset_find(path);
+        // without the page, say what to do about it
+        c->route_status = c->asset >= 0 ? 0 : strcmp(path, "/") ? 404 : 503;
+        return;
+    }
     c->route_status = path_found ? 405 : 404;
 }
 
 static void parse_header_line(http_conn_t *c, char *line) {
     if (!strncasecmp(line, "Content-Length:", 15)) {
         c->content_length = (uint32_t)strtoul(line + 15, NULL, 10);
+    } else if (!strncasecmp(line, "If-None-Match:", 14)) {
+        // "1a2b3c4d", possibly marked weak: W/"1a2b3c4d"
+        const char *q = strchr(line + 14, '"');
+        char *end;
+        if (q) {
+            c->etag = (uint32_t)strtoul(q + 1, &end, 16);
+            c->has_etag = end == q + 9 && *end == '"';
+        }
     }
 }
 
@@ -362,9 +405,15 @@ static void fail_request(http_conn_t *c, int status, const char *msg) {
 
 static void headers_complete(http_conn_t *c) {
     c->body_received = 0;
+    if (!c->route && c->asset >= 0) {
+        send_asset(c);
+        return;
+    }
     if (!c->route) {
         fail_request(c, c->route_status ? c->route_status : 400,
-                     c->route_status == 404 ? "not found" : c->route_status == 405 ? "method not allowed" : "bad request");
+                     c->route_status == 404 ? "not found" : c->route_status == 405 ? "method not allowed"
+                     : c->route_status == 503 ? "the web page is missing: install the complete firmware file again"
+                     : "bad request");
         return;
     }
     if (!c->route->body && c->content_length >= HTTP_BUF) {
@@ -584,6 +633,7 @@ static err_t on_accept(void *arg, struct tcp_pcb *pcb, err_t err) {
         return ERR_ABRT;
     }
     memset(c, 0, offsetof(http_conn_t, buf));
+    c->asset = -1;
     c->pcb = pcb;
     c->state = CONN_HEADERS;
     c->last_activity_ms = now_ms();

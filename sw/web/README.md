@@ -16,6 +16,10 @@ card emulation. Open the card's address in a browser to:
 * upload files: a SysEx file (`.syx`) to send to MIDI out, or a firmware
   update (`.uf2`)
 
+The page is a text-mode setup program, as sound cards came with: one 80x25
+screen in the 16 VGA colours, worked with the keyboard or the mouse (see
+[The page](#the-page)).
+
 All sound modes include it when built for a Pico W board (`PICO_BOARD=picow_fast`,
 or `pico2w_fast` for the RP2350-based Pico 2 W). The NE2000 firmware does not:
 it hands the WiFi chip to DOS. PicoGUS 2.0 and v2.1 boards have no WiFi chip.
@@ -45,6 +49,79 @@ the sound card.
 
 **There is no password.** Anyone on your network can change the card's
 settings or install firmware. Only use it on a network you trust.
+
+## The page
+
+The page is built from the Textmode design system (`www/textmode/README.md`):
+an 80x25 character screen with the IBM VGA font, drawn at 1, 2 or 3 times its
+size, whichever fits the browser window. A phone fits the screen to its width.
+
+Everything can be done from the keyboard:
+
+| Key | |
+| --- | --- |
+| Arrow keys | move the bar; change a value (volume, radio buttons); left leaves a submenu |
+| Enter | select the command under the bar, or press the dialog's default button |
+| Esc | back to the previous window |
+| Tab, Shift+Tab | next and previous control of a dialog |
+| Letters | the highlighted letter of a command runs it. While the cursor is in a text field, letters are typed and Alt+letter is the hotkey. |
+| Space | tick a check box |
+| Home, End, PgUp, PgDn | first and last command; in lists and volume bars, larger steps |
+| F1, F2 | help; save the settings to the card |
+
+and with the mouse: the bar follows the pointer, a click selects, the volume
+bars can be clicked and dragged, lists scroll with the wheel, and the key
+hints on the bottom line are buttons. Only one window takes input at a time.
+
+Display in the main menu switches between the design system's three colour
+sets (Setup, Commander, Mono); the browser remembers the choice.
+
+To work on the page without a card, `make -C sw/web/test card` runs a mock
+card on `http://127.0.0.1:8080/` that serves the page from `www/` as the
+firmware would, and `make -C sw/web/test ui` runs the page through a browser,
+once with the keyboard only and once with the mouse only.
+
+### How the page is stored
+
+`scripts/web_pack.py` packs the files of the page when the firmware is built:
+
+* `www/index.html` with its style sheets, script and font put inside it
+  (`data-inline`), so the card serves the page as one document and one
+  request. It is 79KB, 29KB as stored (gzip).
+* every file under `www/static/`, served at `/static/...`: the place for
+  anything that is better loaded separately. There are none at present.
+
+The pack is kept in flash and sent from there; it takes no RAM. In the
+multi-mode firmware file it is stored once for all six modes, after the WiFi
+chip's firmware, in a region of 64KB (`WEB_ASSETS_KB`). Each file has an
+`ETag`: the browser keeps its copy and the card answers `304 Not Modified`
+until a firmware update changes the file.
+
+## Limits
+
+What bounds the web server, most limiting first:
+
+* **RAM for code, on the RP2040.** PicoGUS runs entirely from RAM (flash is too
+  slow and unpredictable for ISA bus timing), so every byte of *code* costs RAM.
+  The network stack is about 55KB of it (see [Memory](#memory)), and Sound
+  Blaster mode, the largest, is left with about 22KB of the RP2040's 264KB.
+  This is why there is no TLS and no password check (the libraries would not
+  fit), why mDNS is optional, and why new server-side features must stay small.
+  The RP2350 has over 270KB free in every mode.
+* **Buffers: 16KB.** lwIP's heap and the HTTP and upload buffers share the
+  16KB that the RP2040's unused XIP cache provides. That allows 3 connections
+  at a time, 2 x 1460 bytes of TCP window each way, and API answers of up to
+  about 2KB (the status JSON is about 1KB; a long list of CD images is cut).
+* **Time.** The server runs at most every 2ms, at the lowest priority, and in
+  Sound Blaster and AdLib mode only while the FM buffer is half full. It sends
+  at most two packets per run, which is the ceiling on speed; a game that keeps
+  core 1 busy lowers it further.
+* **Flash is not a limit.** The page's files are not copied to RAM. A Pico W
+  (2MB) has about 680KB of flash free with all modes and the web server, a
+  Pico 2 W (4MB) about 2.7MB. `WEB_ASSETS_KB` sets how much of it the
+  multi-mode firmware reserves for the page: a larger script or a second font
+  only needs a larger number there. What a bigger page costs is the time of
+  its first load (the 29KB page is 20 packets); after that the browser has it.
 
 ## Staying out of the way of the sound card
 
@@ -105,7 +182,7 @@ The status page shows how much of core 1 the web server used over the last
 
 PicoGUS runs entirely from RAM. The web server adds about 55KB of code and data
 to each mode. On the RP2040 that leaves Sound Blaster mode, the largest, with
-about 23KB free for CD images and the USB stack; the other modes keep 65KB or
+about 22KB free for CD images and the USB stack; the other modes keep 65KB or
 more, and on the RP2350 every mode has over 260KB free. Because of this, the
 RP2040's Sound Blaster mode is built without the PGDFS file service when a
 source tree has both features (the other modes, and the RP2350, have both).
@@ -123,15 +200,16 @@ cache off at boot, after which that memory can be used as ordinary SRAM at
 
 A cached flash read would overwrite those buffers, so in these firmwares
 everything that reads flash at run time uses the cache-bypassing alias
-(`XIP_NOCACHE_NOALLOC_BASE`) instead: the web page, the shared WiFi firmware,
-and AdLib mode's OPL level table.
+(`XIP_NOCACHE_NOALLOC_BASE`) instead: the files of the web page, the shared
+WiFi firmware, and AdLib mode's OPL level table.
 
 The RP2350's XIP cache can't be used that way, and it has twice the RAM: there
 the buffers are ordinary memory.
 
-The ~225KB WiFi chip firmware stays in flash. In the multi-mode firmware file,
-all modes share a single copy, stored right after the bootloader
-(`web_cyw43_fw_shared.h`, `multifw/uf2create`).
+The ~225KB WiFi chip firmware stays in flash, as do the files of the web page.
+In the multi-mode firmware file all modes share a single copy of each, stored
+right after the bootloader (`web_cyw43_fw_shared.h`, `web_assets.c`,
+`webserver.cmake`).
 
 ## Firmware update
 
@@ -155,6 +233,7 @@ duration.
 | --- | --- | --- |
 | `WEBSERVER` | `ON` on Pico W and Pico 2 W boards | include the web server in the sound card firmwares |
 | `WEB_MDNS` | `OFF` | also answer mDNS for `http://picogus.local/`. Costs ~12KB of RAM, which Sound Blaster mode needs for CD images made of many track files. |
+| `WEB_ASSETS_KB` | `64` | flash reserved for the files of the web page in the multi-mode firmware file. The build fails, saying so, if the page outgrows it. |
 
 ## HTTP API
 
@@ -182,11 +261,17 @@ The web page uses this API; scripts can too. Forms are
 loopback interface. It sends requests in awkward pieces and checks them:
 headers, forms, settings, MIDI checks, SysEx and firmware uploads with
 backpressure, broken and aborted uploads, connection limits, and a 10 minute
-polling run. It also tests the MIDI injection in `mpu401/midi.c`.
+polling run. It also tests the MIDI injection in `mpu401/midi.c`, and that
+the page is served from its pack, with `304` for a copy the browser has.
 
 ```
 make -C sw/web/test PICO_SDK_PATH=/path/to/pico-sdk test
 ```
+
+`make -C sw/web/test ui` tests the page itself in a browser (Node.js with
+Playwright) against a mock card: every command once by keyboard and once by
+mouse, that all windows sit on whole character cells inside the 80x25 screen,
+and that there is never more than one bar.
 
 ## Files
 
@@ -196,6 +281,10 @@ make -C sw/web/test PICO_SDK_PATH=/path/to/pico-sdk test
 | `web_http.c` | HTTP server on the lwIP raw API |
 | `web_api.cpp` | API handlers |
 | `web_upload.c` | firmware and SysEx uploads, MIDI message checks |
-| `www/index.html` | the web page, gzipped into the firmware by `scripts/web_embed.py` |
+| `web_assets.c` | the files of the web page, read from their pack in flash |
+| `www/index.html`, `www/app.js`, `www/app.css` | the web page |
+| `www/textmode/` | the Textmode design system: colours, components, font |
+| `scripts/web_pack.py` | packs the page for the firmware |
+| `test/mock_card.py`, `test/ui_test.js` | a mock card and the browser test of the page |
 | `lwipopts.h`, `web_cyw43_config.h` | lwIP and WiFi driver configuration |
 | `webserver.cmake` | build integration |

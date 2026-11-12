@@ -19,3 +19,5 @@ Set up WiFi with `pgusinit /wifissid` and `/wifipass`; `pgusinit /wifistatus` sh
 - MIDI from the web page follows the MPU-401 changes of firmware v4.2.0: in UART mode the DOS program's bytes go out as they are written, so a web message waits until the program is between messages, and the program's running status is restored after it.
 - The new MPU-401 "extra wait" setting is on the web page.
 - Firmware uploads accept files for the card's own chip only.
+- The page is a text-mode setup program built from the Textmode design system: an 80x25 VGA screen, worked entirely from the keyboard (arrows, Enter, Esc, hotkey letters, F1, F2) or with the mouse.
+- The files of the page are stored once in the firmware file for all modes, not once per mode, and the browser keeps its copy until a firmware update changes them.
