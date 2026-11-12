@@ -23,7 +23,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from digikey_upload import reference  # noqa: E402  (same customer-reference format and length limit)
+from digikey_upload import PREFIX, reference  # noqa: E402  (same customer-reference format and length limit)
 
 BOM = 'docs/BOM-THT.csv'
 API = 'https://wmsc.lcsc.com/ftps/wm/product/detail?productCode='
@@ -57,6 +57,17 @@ def unit_price(d, qty):
         if qty >= p['ladder']:
             price = p['usdPrice']
     return price
+
+
+def merged_reference(cells):
+    """customer reference of several BOM lines that are one LCSC line: all references in order; if that does not
+    fit DigiKey's and LCSC's 48 characters, the first and the last with the count"""
+    refs = [x.strip() for c in cells for x in c.split(',') if x.strip()]
+    refs.sort(key=lambda x: (re.sub(r'\d+$', '', x), int(re.search(r'\d+$', x).group()) if re.search(r'\d+$', x) else 0))
+    try:
+        return reference(', '.join(refs))[0]
+    except SystemExit:
+        return f'{PREFIX}{refs[0]}..{refs[-1]} ({len(refs)} pcs)'
 
 
 def norm(s):
@@ -96,8 +107,7 @@ def main():
         moq, step = max(1, d['minBuyNumber']), max(1, d['split'])
         together = shared[code]['refs']
         if len(together) > 1:
-            cref, _ = reference(', '.join(together))
-            base['Customer Reference'] = cref
+            base['Customer Reference'] = merged_reference(together)
             need = shared[code]['need']
         order = max(need, moq)
         order = math.ceil(order / step) * step

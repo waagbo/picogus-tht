@@ -1,4 +1,4 @@
-References,Value,Needed,Order qty,Buy at,LCSC Part Number,LCSC part,Package,BOM part,Same part as the BOM,LCSC stock 2026-11-11,MOQ / multiple,Unit USD,Line USD,Customer Reference,Note
+References,Value,Needed,Order qty,Buy at,LCSC Part Number,LCSC part,Package,BOM part,Same part as the BOM,LCSC stock 2026-11-12,MOQ / multiple,Unit USD,Line USD,Customer Reference,Note
 "U1, U2",SN74CB3T3257,2,2,LCSC,C544573,TI SN74CB3T3257PWR,TSSOP-16,Texas Instruments SN74CB3T3257PWR,yes,5952,1 / 1,1.2116,2.42,"PicoGUS-THT-2.1.x: U1,U2",
 U3,74AHC14,1,,elsewhere: DigiKey 296-4550-5-ND,,,,Texas Instruments SN74AHC14N,,,,,,PicoGUS-THT-2.1.x: U3,not at LCSC: C2879116 (SN74AHC14N) 0 in stock on 2026-11-06 and no other DIP 74AHC14; buy at DigiKey
 "U4, U5",74AHC00,2,2,LCSC,C2879122,TI SN74AHC00N,PDIP-14,Texas Instruments SN74AHC00N,yes,60,1 / 1,1.4617,2.92,"PicoGUS-THT-2.1.x: U4,U5","Only 60 in stock at LCSC on the day, and dearer than at DigiKey (296-4510-5-ND, about US$0.90)."
@@ -6,32 +6,37 @@ U6,74AHCT126,1,,elsewhere: DigiKey 296-4659-5-ND,,,,Texas Instruments SN74AHCT12
 U7,74AHC244,1,1,LCSC,C1548565,TI SN74LVC244AN,PDIP-20,Texas Instruments SN74AHC244N,equivalent,72,1 / 1,1.5291,1.53,PicoGUS-THT-2.1.x: U7,"SN74LVC244AN instead of SN74AHC244N (none in stock): same pinout, 5 V-tolerant inputs at 3.3 V like the AHC244, stronger outputs."
 U9,MCP1826S-3302E/AB,1,,elsewhere: DigiKey MCP1826S-3302E/AB-ND,,,,Microchip MCP1826S-3302E/AB,,,,,,PicoGUS-THT-2.1.x: U9,not at LCSC: C185586 (MCP1826S-3302E/AB) 0 in stock on 2026-11-06; buy at DigiKey
 U10,PCM5100A,1,1,LCSC,C131154,TI PCM5100APWR,TSSOP-20,Texas Instruments PCM5100APWR,yes,1167,1 / 1,2.4470,2.45,PicoGUS-THT-2.1.x: U10,
-U11,NE5532,1,5,LCSC,C5326,TI NE5532P,PDIP-8,Texas Instruments NE5532P,yes,4495,5 / 5,0.3369,1.68,PicoGUS-THT-2.1.x: U11,
+U11,NE5532,1,5,LCSC,C5326,TI NE5532P,PDIP-8,Texas Instruments NE5532P,yes,4490,5 / 5,0.3369,1.68,PicoGUS-THT-2.1.x: U11,
 U12,Core2350B,1,,"elsewhere: not stocked: waveshare.com SKU 31690 (B2), 31689 (B0), 31818 (B1)",,,,Waveshare Core2350B2,,,,,,PicoGUS-THT-2.1.x: U12,not at LCSC: waveshare.com
 U13,M62429L,1,5,LCSC,C52260216,Wuxi I-core Elec M62429L.TR,SOP-8,Wuxi I-core M62429L.TR,yes,2755,5 / 5,0.1577,0.79,PicoGUS-THT-2.1.x: U13,"M62429L (3-5.5 V, Wuxi I-core): the only buyable M62429 for AVDD = 3.3 V."
 U14,RM2,1,,elsewhere: Farnell 4737257 (DigiKey not looked up),,,,Raspberry Pi RMC20452T,,,,,,PicoGUS-THT-2.1.x: U14,buy at Farnell: 4737257 (LCSC not looked up)
-"J2, J4",1x40 breakaway header,1,5,LCSC,C2337,BOOMELE(Boom Precision Elec) 2.54-1*40P,"Through Hole,P=2.54mm",Sullins PREC040SAAN-RC,equivalent,73570,5 / 5,0.1629,0.81,"PicoGUS-THT-2.1.x: J2,J4",
+U15,SST39SF010A,1,,elsewhere: DigiKey SST39SF010A-70-4C-NHE-ND,,,,Microchip SST39SF010A-70-4C-NHE,,,,,,PicoGUS-THT-2.1.x: U15,not at LCSC: C645930 (SST39SF010A-70-4C-NHE) 0 in stock on 2026-11-12; buy at DigiKey
+(U15 socket),"PLCC-32 socket, through hole",1,,elsewhere: DigiKey 609-4704-ND,,,,Amphenol ICC (FCI) 54020-32030LF,,,,,,PicoGUS-THT-2.1.x: U15 socket,not at LCSC: no through-hole PLCC-32 socket found on 2026-11-12 (C72280 is the SMD one); buy at DigiKey
+U16,74HCT688,1,,elsewhere: DigiKey 296-2131-5-ND,,,,Texas Instruments CD74HCT688E,,,,,,PicoGUS-THT-2.1.x: U16,not at LCSC: no DIP 74HCT688 found on 2026-11-12; buy at DigiKey
+"C48, C49",0.1uF,2,20,LCSC,C527620,muRata RDER71H104K0M1H03A,"Through Hole,P=5mm",Murata RDER71H104K0M1H03A,yes,9465,5 / 5,0.1736,3.47,PicoGUS-THT-2.1.x: C2..C49 (17 pcs),"One LCSC line with C2, C3, C4, C5, C6, C7, C14, C15, C16, C20, C23, C26, C27, C45, C46."
+R35,5.1k,1,50,LCSC,C1369975,YAGEO MFR-25FBF52-5K1,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-5K1,yes,750,50 / 50,0.0210,1.05,"PicoGUS-THT-2.1.x: R19,R20,R35","One LCSC line with R19, R20."
+"J2, J4",1x40 breakaway header,1,5,LCSC,C2337,BOOMELE(Boom Precision Elec) 2.54-1*40P,"Through Hole,P=2.54mm",Sullins PREC040SAAN-RC,equivalent,73485,5 / 5,0.1629,0.81,"PicoGUS-THT-2.1.x: J2,J4",
 J3,IRQ/DMA,1,5,LCSC,C492426,XFCN PZ254V-12-18P,"Through Hole,P=2.54mm",Amphenol 10129381-918001BLF,equivalent,6630,5 / 5,0.1162,0.58,PicoGUS-THT-2.1.x: J3,
-J5,USB-A host,1,1,LCSC,C2798029,MOLEX 676430910,"Through Hole,Right Angle",Molex 0676430910,yes,3670,1 / 1,0.8288,0.83,PicoGUS-THT-2.1.x: J5,
+J5,USB-A host,1,1,LCSC,C2798029,MOLEX 676430910,"Through Hole,Right Angle",Molex 0676430910,yes,3665,1 / 1,0.8288,0.83,PicoGUS-THT-2.1.x: J5,
 J6,USB-C program,1,1,LCSC,C7095263,Global Connector Technology USB4085-GF-A,Through Hole,GCT USB4085-GF-A,yes,1283,1 / 1,1.4074,1.41,PicoGUS-THT-2.1.x: J6,
 J7,SJ1-3535NG,1,5,LCSC,C2884945,XKB Connection PJ-325C5-B,Through Hole,Same Sky (CUI) SJ1-3535NG,equivalent,1200,5 / 5,0.3714,1.86,PicoGUS-THT-2.1.x: J7,XKB clone of the CUI SJ1-3535NG (as on THT v1.3.2): its TN pin sits about 0.4 mm further out (TN is unused); clip it if it does not fit. Genuine CUI SJ1-3535NG: LCSC C4991610.
 J8,Waveblaster,1,5,LCSC,C2894974,HCTL PZ254-2-13-Z-8.5,"Through Hole,P=2.54mm",Sullins PEC13DAAN,equivalent,1600,5 / 5,0.3699,1.85,PicoGUS-THT-2.1.x: J8,
 J9,SJ1-3535NG-GR,1,5,LCSC,C692438,XKB Connection PJ-325C5-G,Through Hole,Same Sky (CUI) SJ1-3535NG-GR,equivalent,11170,5 / 5,0.2944,1.47,PicoGUS-THT-2.1.x: J9,XKB clone of the CUI SJ1-3535NG-GR (as on THT v1.3.2): see J7 about the TN pin.
 D1,LED,1,10,LCSC,C125082,LITEON LTL-4231N,"Through Hole,D=3mm",Lite-On LTL-4231N,yes,6460,10 / 10,0.0664,0.66,PicoGUS-THT-2.1.x: D1,
 "D2, D3",1N5819,2,5,LCSC,C88393,onsemi 1N5819RLG,DO-41,onsemi 1N5819RLG,yes,6755,5 / 5,0.1602,0.80,"PicoGUS-THT-2.1.x: D2,D3",
-"R1, R5, R34",10k,3,50,LCSC,C1519255,YAGEO MFR-25FBF52-10K,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-10K,yes,5550,50 / 50,0.0198,0.99,"PicoGUS-THT-2.1.x: R1,R5,R34,R21,R22","One LCSC line with R21, R22."
+"R1, R5, R34",10k,3,50,LCSC,C1519255,YAGEO MFR-25FBF52-10K,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-10K,yes,5500,50 / 50,0.0198,0.99,"PicoGUS-THT-2.1.x: R1,R5,R21,R22,R34","One LCSC line with R21, R22."
 "R2, R3",220R,2,20,LCSC,C3537012,YAGEO MFR-25FBF52-220R,"Through Hole,D2.4xL6.3mm",Stackpole RNMF14FTC220R,equivalent,15900,20 / 20,0.0226,0.45,"PicoGUS-THT-2.1.x: R2,R3",
 R4,1k,1,50,LCSC,C57435,UNI-ROYAL MFR0W4F1001A50,"Through Hole,D2.2xL6.5mm",Yageo MFR-25FBF52-1K,equivalent,5050,50 / 50,0.0143,0.71,PicoGUS-THT-2.1.x: R4,
 "R10, R11, R13, R33",470R,4,50,LCSC,C58592,UNI-ROYAL MFR0W4F4700A50,"Through Hole,D2.2xL6.5mm",Stackpole RNMF14FTC470R,equivalent,50,50 / 50,0.0122,0.61,"PicoGUS-THT-2.1.x: R10,R11,R13,R33",
 R18,15k,1,50,LCSC,C3556390,YAGEO MFR-25FBF52-15K,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-15K,yes,3100,50 / 50,0.0165,0.83,PicoGUS-THT-2.1.x: R18,
-"R19, R20",5.1k,2,50,LCSC,C1369975,YAGEO MFR-25FBF52-5K1,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-5K1,yes,750,50 / 50,0.0210,1.05,"PicoGUS-THT-2.1.x: R19,R20",
-"R21, R22",10k,2,(above),LCSC,C1519255,YAGEO MFR-25FBF52-10K,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-10K,yes,5550,50 / 50,0.0198,(above),"PicoGUS-THT-2.1.x: R1,R5,R34,R21,R22","One LCSC line with R1, R5, R34."
+"R19, R20",5.1k,2,(above),LCSC,C1369975,YAGEO MFR-25FBF52-5K1,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-5K1,yes,750,50 / 50,0.0210,(above),"PicoGUS-THT-2.1.x: R19,R20,R35",One LCSC line with R35.
+"R21, R22",10k,2,(above),LCSC,C1519255,YAGEO MFR-25FBF52-10K,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-10K,yes,5500,50 / 50,0.0198,(above),"PicoGUS-THT-2.1.x: R1,R5,R21,R22,R34","One LCSC line with R1, R5, R34."
 "R23, R24, R25, R26",20k,4,20,LCSC,C1364283,YAGEO MFR-25FBF52-20K,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-20K,yes,20020,20 / 20,0.0225,0.45,PicoGUS-THT-2.1.x: R23-R26,
 "R27, R28",100R,2,50,LCSC,C1370645,YAGEO MFR-25FTF52-100R,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-100R,equivalent,550,50 / 50,0.0145,0.73,"PicoGUS-THT-2.1.x: R27,R28","Same Yageo MFR-25 1 % resistor, taped (FTF) instead of bulk (FBF)."
 "R29, R30",10R,2,50,LCSC,C119282,CCO(Chian Chia Elec) MF1/4W-10Ω±1% T,"Through Hole,D2.3xL6.5mm",Yageo MFR-25FBF52-10R,equivalent,2300,50 / 50,0.0112,0.56,"PicoGUS-THT-2.1.x: R29,R30",
 "R31, R32",100k,2,50,LCSC,C1370651,YAGEO MFR-25FTF52-100K,"Through Hole,D2.4xL6.3mm",Yageo MFR-25FBF52-100K,equivalent,24900,50 / 50,0.0156,0.78,"PicoGUS-THT-2.1.x: R31,R32","Same Yageo MFR-25 1 % resistor, taped (FTF) instead of bulk (FBF)."
-"C1, C28, C29",47uF,3,10,LCSC,C88761,Rubycon 35YXJ47M5X11,"Through Hole,D5xL11mm",Rubycon 35YXJ47M5X11,yes,203840,10 / 10,0.0558,0.56,"PicoGUS-THT-2.1.x: C1,C28,C29",
-"C2, C3, C4, C5, C6, C7, C14, C15, C16, C20, C23, C26, C27, C45, C46",0.1uF,15,15,LCSC,C527620,muRata RDER71H104K0M1H03A,"Through Hole,P=5mm",Murata RDER71H104K0M1H03A,yes,9465,5 / 5,0.1736,2.60,"PicoGUS-THT-2.1.x: C2-7,14-16,20,23,26,27,45,46",
+"C1, C28, C29",47uF,3,10,LCSC,C88761,Rubycon 35YXJ47M5X11,"Through Hole,D5xL11mm",Rubycon 35YXJ47M5X11,yes,204040,10 / 10,0.0558,0.56,"PicoGUS-THT-2.1.x: C1,C28,C29",
+"C2, C3, C4, C5, C6, C7, C14, C15, C16, C20, C23, C26, C27, C45, C46",0.1uF,15,(above),LCSC,C527620,muRata RDER71H104K0M1H03A,"Through Hole,P=5mm",Murata RDER71H104K0M1H03A,yes,9465,5 / 5,0.1736,(above),PicoGUS-THT-2.1.x: C2..C49 (17 pcs),"One LCSC line with C48, C49."
 C10,1uF,1,5,LCSC,C1620132,muRata RDER71H105K2M1H03A,"Through Hole,P=5mm",Murata RDER71H105K2M1H03A,yes,7835,5 / 5,0.4059,2.03,PicoGUS-THT-2.1.x: C10,
 "C11, C12, C13, C17, C47",10uF,5,5,LCSC,C3690252,muRata RCER71H106MWM1H03A,"Through Hole,P=5mm",Murata RCER71H106MWM1H03A,yes,1195,1 / 1,1.7339,8.67,"PicoGUS-THT-2.1.x: C11-C13,C17,C47",
 "C18, C19",2.2uF,2,5,LCSC,C1623182,TDK FG24X7R1H225KRT06,"Through Hole,P=5mm",TDK FG24X7R1H225KRT06,yes,1050,5 / 5,0.2898,1.45,"PicoGUS-THT-2.1.x: C18,C19",
@@ -42,9 +47,9 @@ C38,100uF,1,10,LCSC,C439880,Rubycon 16ZLH100MEFC5X11,"Through Hole,D5xL11mm",Pan
 "FB1, FB2, FB3, FB4",Ferrite bead,4,20,LCSC,C192455,FH RH3.5x0.8x9P52E,Through Hole,Fair-Rite 2743002112,equivalent,34560,20 / 20,0.0323,0.65,PicoGUS-THT-2.1.x: FB1-FB4,
 F1,0.5A PTC,1,5,LCSC,C208476,BOURNS MF-R050,"Through Hole,P=5.1mm",Bourns MF-R050,yes,4325,5 / 5,0.1325,0.66,PicoGUS-THT-2.1.x: F1,
 "SW1, SW2","BOOTSEL, RUN",2,5,LCSC,C428628,TE Connectivity 1825910-6,"Through Hole-4P,6x6mm",TE Connectivity 1825910-6,yes,3825,5 / 5,0.1898,0.95,"PicoGUS-THT-2.1.x: SW1,SW2",
-(U12 socket),2x8 female header 2.54 mm,4,5,LCSC,C30734,BOOMELE(Boom Precision Elec) 2.54-2*8P,"Through Hole,P=2.54mm",Sullins PPTC082LFBN-RC,equivalent,60135,5 / 5,0.1563,0.78,PicoGUS-THT-2.1.x: U12 socket,
+(U12 socket),2x8 female header 2.54 mm,4,5,LCSC,C30734,BOOMELE(Boom Precision Elec) 2.54-2*8P,"Through Hole,P=2.54mm",Sullins PPTC082LFBN-RC,equivalent,59945,5 / 5,0.1563,0.78,PicoGUS-THT-2.1.x: U12 socket,
 (U12 headers),2x8 male header 2.54 mm,4,5,LCSC,C68234,BOOMELE(Boom Precision Elec) 2.54-2*8P,"Through Hole,P=2.54mm",Sullins PBC08DAAN,equivalent,24370,5 / 5,0.1344,0.67,PicoGUS-THT-2.1.x: U12 headers,
 (J3 jumpers),2.54 mm jumper shunt,3,5,LCSC,C168674,Amphenol 68786-102LF,P=2.54mm,Harwin M7582-05,equivalent,26135,5 / 5,0.1098,0.55,PicoGUS-THT-2.1.x: J3 jumpers,
 "(U3, U4, U5, U6 socket)",DIP-14 socket,4,17,LCSC,C72126,CONNFLY Elec DS1001-01-14BT1NSF6X-JKB,DIP-14,Adam Tech ICM-314-1-GT-HT,equivalent,4131,17 / 17,0.3381,5.75,PicoGUS-THT-2.1.x: U3-U6 socket,
-(U7 socket),DIP-20 socket,1,1,LCSC,C72127,CONNFLY Elec DS1001-01-20BT1NSF6S-JKB,DIP-20,On Shore Technology SA203000,equivalent,2184,1 / 1,0.5300,0.53,PicoGUS-THT-2.1.x: U7 socket,
+"(U7, U16 socket)",DIP-20 socket,2,2,LCSC,C72127,CONNFLY Elec DS1001-01-20BT1NSF6S-JKB,DIP-20,On Shore Technology SA203000,equivalent,2184,1 / 1,0.5300,1.06,"PicoGUS-THT-2.1.x: U7,U16 socket",
 (U11 socket),DIP-8 socket,1,5,LCSC,C72129,CONNFLY Elec DS1001-01-08BT1NSF6X-JKB,DIP-8,On Shore Technology SA083000,equivalent,8695,5 / 5,0.1927,0.96,PicoGUS-THT-2.1.x: U11 socket,

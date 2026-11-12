@@ -17375,7 +17375,7 @@
 				)
 			)
 		)
-		(property "Value" "10k"
+		(property "Value" "5.1k"
 			(at 5.08 2.37 90)
 			(layer "F.Fab")
 			(uuid "e15a470c-01d6-4a1c-b006-52e02f3122fc")
@@ -17397,7 +17397,7 @@
 				)
 			)
 		)
-		(property "Description" "10k 1/4W 1% metal film: holds ROM_EN low (boot ROM off) until the firmware drives it"
+		(property "Description" "5.1k 1/4W 1% metal film: holds ROM_EN low (boot ROM off) until the firmware drives it; 8.2k or less, RP2350-E9"
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -17432,7 +17432,7 @@
 				)
 			)
 		)
-		(property "MPN" "MFR-25FBF52-10K"
+		(property "MPN" "MFR-25FBF52-5K1"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -17444,7 +17444,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "10.0KXBK-ND"
+		(property "DigiKey" "MFR-25FBF52-5K1-ND"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -17456,7 +17456,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C1519255"
+		(property "LCSC" "C1369975"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -33146,7 +33146,7 @@
 			(uuid "34a35c6f-b220-4749-83ac-534b79b862f1")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_LCC.3dshapes/PLCC-32_THT-Socket.step"
+		(model "${KIPRJMOD}/parts/PLCC-32_THT-Socket.wrl"
 			(offset
 				(xyz 0 0 0)
 			)

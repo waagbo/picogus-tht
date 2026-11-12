@@ -76,7 +76,7 @@
 
 // --- Boot ROM (experimental; U15 flash in a PLCC-32 socket, U16 74HCT688): ROM_EN.
 // High = the option ROM answers at its base address (solder jumpers JP1-JP3,
-// default D0000h-D7FFFh). A 10k pull-down keeps it off until the firmware
+// default D0000h-D7FFFh). A 5.1k pull-down (R35) keeps it off until the firmware
 // drives the pin; the firmware only drives it high when built with
 // -DBOOTROM_ENABLE=ON.
 #define PICOGUS_BOOTROM_EN_PIN 2

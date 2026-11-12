@@ -99,6 +99,10 @@ silkscreen. Each round found real faults. Apply these from the start on the next
 - **The 3D models of the jacks, the pot and F1 live in `hw-common/parts`**, which the board folder links as `parts`
   (`${KIPRJMOD}/parts/...`). A copy of the board folder (for a render or a review) must keep that link pointing at
   the real folder, or those parts silently vanish from the 3D view; `hw-common/tools/render.sh` re-points it.
+- **`hw-common/tools/render.sh` copies the board folder** for every colour: do not write into that folder while it
+  runs (it stops with "file changed as we read it"), or render from a copy of the repository.
+- **KiCad's library has no 3D model for some footprints** (the through-hole PLCC-32 socket): the part is then
+  missing from the renders without a warning. Check new footprints' model files exist.
 - **Copying sheets between projects**: give the new items their own UUIDs. Reused UUIDs mixed up ERC markers.
 - **KiCad 10 draws an empty pin name `~` literally.** Use `""` instead.
 - **Check `Edge.Cuts` after every hand-edited upload.** The 6.35 mm step next to the ISA fingers (x 197.41) was
@@ -116,6 +120,19 @@ silkscreen. Each round found real faults. Apply these from the start on the next
   - After a rip-up, compare each net's track length with the old board, power nets first. DRC only knows connected
     or not: on THT v2.1 (radio module, USB-C move) an autorouter pass rejoined +5V by a long detour on the far
     side of the card instead of the short run that had been ripped up, and the report was clean.
+  - **A bus has an order, and an autorouter cannot change it.** Lines that leave the ISA fingers side by side arrive
+    in the same order (or its mirror image) wherever they go on one layer. Before placing a chip at the far end of a
+    bus, write down the order its pins need: on THT v2.1's boot ROM strip three autorouter runs each left two or
+    three lines over, because the socket's lines and the decoder's lines had to cross on the same layer. What
+    worked: choose the pin assignment where it is free (the eight inputs of a 74HCT688 are interchangeable), split
+    the lines into groups that each arrive in the right order, lay those by hand, and leave only short hops to the
+    router.
+  - **Both inner layers are empty under the gold fingers** (the planes end above them, and the keep-outs between
+    the fingers only cover the outer layers): room for about twelve lanes per layer along the whole connector. THT
+    v2.1's boot ROM runs 15 lines there.
+  - **A pad between two tracks on a plane layer is cut off from the plane**, however wide the gap looks: the
+    plane cannot follow the tracks back to where they come from. Tie such a pin elsewhere (the boot ROM's OE# went
+    to CE#).
 - **Starved thermals**: a few pads get one spoke. The v1.3.2 README lists where each one joins GND.
 - **Cloud environment**: `.claude/cloud-env-setup.sh` installs KiCad 10, the libraries, a `kipython` wrapper,
   Freerouting, gerbv and ngspice. `kipython -I` drops the path it needs, so use `kipython -P -s` and run it
