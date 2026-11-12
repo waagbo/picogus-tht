@@ -15237,6 +15237,10 @@
 		(uuid "8d82ccf3-d524-474d-b9bc-6e894d820c7c")
 	)
 	(no_connect
+		(at 28.575 49.53)
+		(uuid "9361ef78-a7af-4fca-8ac6-f11f03300cc9")
+	)
+	(no_connect
 		(at 145.415 136.525)
 		(uuid "9d623e49-32f0-4a5e-86aa-a83ed8b817c1")
 	)
@@ -39321,30 +39325,6 @@
 			)
 		)
 	)
-	(global_label "~{SMEMW}"
-		(shape output)
-		(at 28.575 49.53 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "4baf14a1-22da-51f2-9947-97a61d8496c6")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 28.575 49.53 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
 	(global_label "~{SMEMR}"
 		(shape output)
 		(at 28.575 52.07 180)
@@ -39450,7 +39430,7 @@
 		)
 		(uuid "babf9a33-49a3-5c48-9b22-a0ef94acc69f")
 	)
-	(text "SST39SF010A in a PLCC-32 socket + 74HCT688: uses the global nets A0-A19, D0-D7, ~SMEMR, ~SMEMW and ROM_EN (GPIO2)."
+	(text "SST39SF010A in a PLCC-32 socket + 74HCT688: uses the global nets A0-A19, D0-D7, ~SMEMR and ROM_EN (GPIO2)."
 		(exclude_from_sim no)
 		(at 25.4 266.7 0)
 		(effects

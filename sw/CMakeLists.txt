@@ -91,6 +91,9 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
+# PicoGUS v2.1 THT, experimental boot ROM (hw-tht-v2.1, sheet bootrom.kicad_sch): the option ROM only answers
+# while ROM_EN (GPIO2) is high. OFF leaves the pin low, as its pull-down does.
+option(BOOTROM_ENABLE "PicoGUS v2.1: switch the experimental boot ROM on at start-up" OFF)
 # Use the first Python on PATH rather than the newest version CMake knows about
 # (older CMakes won't look for newer Pythons)
 set(Python3_FIND_STRATEGY LOCATION)
@@ -129,6 +132,10 @@ function(config_target TARGET_NAME MULTIFW)
         PICO_AUDIO_I2S_SM=3
         M62429_PIO=1
     )
+
+    if(BOOTROM_ENABLE)
+        target_compile_definitions(${TARGET_NAME} PRIVATE PICOGUS_BOOTROM_ENABLE=1)
+    endif()
 
     if(USE_LTO)
         # Pico SDK must be patched to allow for LTO so it is not enabled by default.

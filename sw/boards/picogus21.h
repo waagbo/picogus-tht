@@ -74,6 +74,13 @@
 #define CYW43_DEFAULT_PIN_WL_CS 42u
 #endif
 
+// --- Boot ROM (experimental; U15 flash in a PLCC-32 socket, U16 74HCT688): ROM_EN.
+// High = the option ROM answers at its base address (solder jumpers JP1-JP3,
+// default D0000h-D7FFFh). A 10k pull-down keeps it off until the firmware
+// drives the pin; the firmware only drives it high when built with
+// -DBOOTROM_ENABLE=ON.
+#define PICOGUS_BOOTROM_EN_PIN 2
+
 // The flash clock divider for the 370MHz overclock is set at runtime by
 // overclock_370mhz() (RP2350 has no boot2 to take PICO_FLASH_SPI_CLKDIV)
 
