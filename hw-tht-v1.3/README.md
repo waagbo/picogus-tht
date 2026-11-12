@@ -44,8 +44,7 @@ Files:
 | `usb.kicad_sch` | USB host port (J11 USB-A, F1, C34/C35, U12) (as v1.3.1) |
 | `PicoGUS-THT-schematic.pdf` | Schematic PDF |
 | `docs/BOM-THT.csv` | BOM with DigiKey **and** LCSC part numbers, stock (2026-11-07) and a digikey.no link per line |
-| `docs/BOM-THT-digikey.csv`, `-lcsc.csv`, `-mouser.csv`, `-farnell.csv` (+ `-optional`) | DigiKey, LCSC, Mouser and Farnell upload files for one board, made from `BOM-THT.csv` (see [Ordering](#ordering)); optional: sockets (U12 is in the main files, marked "(optional)") |
-| `docs/BOM-THT-sockets.csv` (+ `-digikey-optional`, `-lcsc-optional`, `-mouser-optional`, `-farnell-optional`) | Socket build: every DIP IC and the Pico socketed, with heights (see [Socket build](#socket-build)) |
+| `docs/BOM-THT-digikey.csv`, `-lcsc.csv`, `-mouser.csv` | DigiKey, LCSC and Mouser upload files for one board, made from `BOM-THT.csv` (see [Ordering](#ordering)); the optional parts (sockets, U12) are at the bottom, marked "(optional)" |
 | `docs/renders/` | 3D renders of the routed card: red from the front and the back, green, purple, white and black from the front (ENIG; white silkscreen, black on white). Made with `hw-common/tools/render.sh` |
 | `docs/figures/` | Figures for the README's exceptions and design choices (e.g. the test pads, the placement options, the accepted courtyard overlaps), with the scripts that make them in `docs/figures/src/` |
 
@@ -490,19 +489,19 @@ line-out cable (868 against 285 µV/A without a Waveblaster).
 
 ## Socket build
 
-`docs/BOM-THT-sockets.csv` (with its DigiKey, LCSC, Mouser and Farnell upload files) lists everything needed to build the
-card with every DIP IC and the Pico socketed. The same parts are the optional socket lines of `docs/BOM-THT.csv`. U3, U4
-and U9 are soldered TSSOPs and U8/U12 SMD parts: they are never socketed.
+The optional socket lines of `docs/BOM-THT.csv` (at the bottom of the upload files, marked "(optional)") socket every
+DIP IC and the Pico. U3, U4 and U9 are soldered TSSOPs and U8/U12 SMD parts: they are never socketed.
 
 | Socket for | Part (DigiKey) | Height above the board | Top of the part |
 |---|---|---|---|
 | U2 (DIP-20) | On Shore SA203000 (ED3020-ND) | 4.6 mm | ≤ 9.8 mm, **under the daughterboard** |
 | U5, U6, U7, U10 (DIP-14 ×4) | Adam Tech ICM-314-1-GT-HT (2057-ICM-314-1-GT-HT-ND) | 4.6 mm | ≤ 9.8 mm, **under the daughterboard** |
 | U11 (DIP-8) | On Shore SA083000 (ED3038-ND) | 4.6 mm | ≤ 9.8 mm, outside |
-| U1 Pico | Adafruit 5585 short sockets (1528-5585-ND) + 5584 short plug headers (1528-5584-ND) | 5.0 mm | Pico board at ~7.5 mm |
+| U1 Pico | Sullins PPTC201LFBN-RC 1x20 ×2 (S7018-ND), the BOM's line | 8.5 mm | Pico board at ~11–12 mm |
+| U1 Pico, low profile (with a daughterboard) | Adafruit 5585 short sockets (1528-5585-ND) + 5584 short plug headers (1528-5584-ND), in the line's Alternatives | 5.0 mm | Pico board at ~7.5 mm |
 
 * All are machined (round-pin) sockets with 0.5 mm tails that fit the 0.8 mm DIP holes. LCSC equivalents
-  (CONNFLY DS1001-01) are in the CSV.
+  (CONNFLY DS1001-01) are in `BOM-THT.csv`.
 * **Daughterboard clearance**: a Waveblaster daughterboard sits ~11 mm above the card. U2, U5, U6, U7 and U10 are
   under it, and a socketed DIP reaches ~9.8 mm (about 1.2 mm worst-case margin, 2 mm typical). That is fine for a
   daughterboard with a flat underside; if yours has parts underneath, solder those ICs directly, or use the
@@ -818,28 +817,26 @@ The **SMD** version of this board is in [`hw-smd/`](../hw-smd/README.md).
 plus alternatives. Stock was re-read on 2026-11-07: LCSC from its product API, DigiKey from digikey.no (a `*` marks
 the few DigiKey figures that could not be re-read and are from the earlier checks of 2026-09-28 to 2026-10-23).
 
-**Upload files.** `docs/BOM-THT-digikey.csv` (DigiKey cart upload) and `docs/BOM-THT-lcsc.csv` (LCSC BOM tool) hold
-one board; `-optional` adds the sockets. Each line's Customer Reference is the board and its positions, e.g.
-`PicoGUS-THT-1.3.2: C30,C31`, so every bag arrives labelled for sorting. Both files include the optional U12 as
-`PicoGUS-THT-1.3.2: U12 (optional)`, so it comes with the order (`--main U12`). The quantities are for one board: set
-the number of boards in the shop's BOM tool. LCSC raises lines to its minimum order quantities (50 for some
-resistors).
+**Upload files.** `docs/BOM-THT-digikey.csv` (DigiKey cart upload), `docs/BOM-THT-lcsc.csv` (LCSC BOM tool) and
+`docs/BOM-THT-mouser.csv` (Mouser BOM tool) hold one board. Each line's Customer Reference is the board and its
+positions, e.g. `PicoGUS-THT-1.3.2: C30,C31`, so every bag arrives labelled for sorting. The optional parts (the
+sockets and U12) come last, marked `(optional)` (`PicoGUS-THT-1.3.2: U12 (optional)`; the DIP-14 socket line,
+which would be too long, `(opt.)`): delete them in the shop's BOM tool for a minimal build. The quantities are for
+one board: set the number of boards in the shop's BOM tool. LCSC raises lines to its minimum order quantities (50
+for some resistors).
 
-`docs/BOM-THT-mouser.csv` (Mouser BOM tool) and `docs/BOM-THT-farnell.csv` (Farnell BOM upload) list the same lines
-by manufacturer and MPN (the DigiKey line's), with no shop part numbers: the shops' BOM tools match them, and a line
-with no match is one that shop does not sell (pick an alternative from `BOM-THT.csv`). Columns: Quantity,
-Manufacturer Part Number, Manufacturer, Customer Part Number, Description. Mouser's Customer # takes only 21
-characters, so the Mouser file has the positions without the board name (`C30,C31`, `U12 (optional)`), and the
-20 × 0.1 µF line reads `0.1uF x20`. Farnell gets the DigiKey text (Farnell's length limit is not checked yet).
+The Mouser file lists the lines by manufacturer and MPN (the DigiKey line's), with no Mouser part numbers: Mouser's
+BOM tool matches them, and a line with no match is a part Mouser does not sell (pick an alternative from
+`BOM-THT.csv`). Columns: Quantity, Manufacturer Part Number, Manufacturer, Customer Part Number, Description.
+Mouser's Customer # takes only 21 characters, so it has the positions without the board name (`C30,C31`,
+`U12 (optional)`, `U5,U6,U7,U10 (opt.)`), and the 20 × 0.1 µF line reads `0.1uF x20`.
 
 After changing `BOM-THT.csv`, regenerate them (from this folder):
 
 ```
 python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT.csv docs/BOM-THT --prefix 'PicoGUS-THT-1.3.2: ' \
     --label '(jumpers)=J1,J7 shunts' --label '(U1-socket)=U1 sockets' --label '(DIP14-socket)=U5,U6,U7,U10 sockets' \
-    --label '(DIP20-socket)=U2 socket' --label '(DIP8-socket)=U11 socket' --main U12
-python3 ../hw-common/tools/bom_uploads.py docs/BOM-THT-sockets.csv docs/BOM-THT-sockets \
-    --prefix 'PicoGUS-THT-1.3.2: ' --all-optional
+    --label '(DIP20-socket)=U2 socket' --label '(DIP8-socket)=U11 socket'
 ```
 
 * **Logic ICs (U2, U5, U6, U7, U10): order from DigiKey.** LCSC lists the DIPs, but had 0 of U2, U5 and U10 and
