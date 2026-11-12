@@ -15,14 +15,17 @@ four of the module's free GPIOs, for the NE2000 (Wi-Fi) firmware: see [Radio mod
 
 **This branch (`hw2.1-tht-experimental`) adds an experimental boot ROM**: a 128 KB flash in a PLCC-32 socket (U15) and
 a 74HCT138 address decoder (U16), enabled by one GPIO. **It is on the same 102.0 × 99.95 mm card**: the logic column
-moved up 12.9 mm, the socket sits in the bottom left corner, and that corner is routed with 0.15 mm tracks and
-clearances instead of 0.2 mm: see [Boot ROM](#boot-rom-experimental). Without those parts the card works as the
+moved up 12.9 mm, the socket sits in the bottom left corner with the decoder on the back between its pins, and
+that corner is routed with 0.15 mm tracks and clearances instead of 0.2 mm: see
+[Boot ROM](#boot-rom-experimental). Without those parts the card works as the
 plain v2.1.
 
 The parts that only exist as SMD are soldered on the card: U1/U2 (SN74CB3T3257, TSSOP-16) and U10 (PCM5100A,
 TSSOP-20) on THT v1.3.2's test-pad TSSOP footprints (hand-solder toes and a 0.7 mm test pad per pin), U13 (M62429L)
 on v2.0's SOIC-8; the radio module is a castellated module on hand-solder lands. On this branch the boot ROM's
-decoder U16 (74HCT138) is a TSSOP-16 too, on U1/U2's footprint: its DIP does not fit. Everything else is through hole; see
+decoder U16 (74HCT138) is a TSSOP-16 too, **on the back of the card** between the pin rows of the flash socket, on
+KiCad's standard TSSOP-16 lands (there is no room for test pads there): its DIP does not fit. Everything else is
+through hole; see
 [Parts with no through-hole version](#parts-with-no-through-hole-version).
 
 > **Status: schematic done; board placed and routed (4 layers, DRC clean, matches the schematic), for review. Not
@@ -88,7 +91,7 @@ module's U14, R33, R34 and C47, and the boot ROM's U15, U16, R35, C48, C49 and J
 | C11 47 µF (+3V3) | C11 10 µF | MCP1826S: at most 22 µF on its output |
 | C38 100 µF ceramic | C38 100 µF electrolytic | Through hole |
 | Card outline 102.87 × 96.74 mm, v2.0 bracket | **THT v1.3.2's outline** (102.0 × 99.95 mm) and bracket: J7 (MIDI out, top), J9 (line out) and J5 (USB-A, now v1.3.2's **Molex 67643**), H1/H2 and the ISA fingers at v1.3.2's positions | Reuses the v1.3.2 bracket; the 102 mm card is v1.3.2's cheaper JLCPCB size. The bracket's volume-pot hole is unused (v2.1's Waveblaster volume is digital) |
-| (no ROM) | **Experimental boot ROM** on this branch: U15 SST39SF010A in a PLCC-32 socket, U16 74HCT138 (TSSOP-16), R35, C48, C49, JP1–JP3, in the bottom left corner of the same 102 mm card | An option ROM the BIOS runs at start-up; see [Boot ROM](#boot-rom-experimental) |
+| (no ROM) | **Experimental boot ROM** on this branch: U15 SST39SF010A in a PLCC-32 socket, U16 74HCT138 (TSSOP-16, on the back inside the socket's outline), R35, C48, C49, JP1–JP3, in the bottom left corner of the same 102 mm card | An option ROM the BIOS runs at start-up; see [Boot ROM](#boot-rom-experimental) |
 | 4 layers: In1 GND + AGND, In2 +3V3 + AVDD | 4 layers: In1.Cu GND plane + AGND island, In2.Cu +3V3 plane + AVDD island, under the audio section | As v2.0 |
 | `+3.3V` power symbols | `+3V3` | The RP2040 sheet joined the two names; without it they would have split |
 
@@ -330,9 +333,10 @@ two chips and one GPIO. Schematic sheet `bootrom.kicad_sch`.
 * **U16 74HCT138** (TSSOP-16, on +5 V) decodes the address: SA19 on its active-high enable, SA17 on an active-low
   one, SA18, SA16 and SA15 on the select inputs. Its outputs 5, 6 and 7 are then low in C8000–CFFFF, D0000–D7FFF
   and D8000–DFFFF. The third enable is `~ROM_EN`.
-* **Base address** on three solder jumpers on the back, under U16 (addresses on the silkscreen): **close exactly
-  one**. Each joins one decoder output to `~ROM_CS`, the flash's CE#. As built a track closes JP2; to change the
-  base, cut that track and bridge another jumper with solder.
+* **Base address** on three solder jumpers on the back, in a row above the socket's pins (segment addresses
+  `C800`, `D000` and `D800` on the silkscreen): **close exactly one**. Each joins one decoder output to `~ROM_CS`,
+  the flash's CE#. As built a track closes JP2; to change the base, cut that track and bridge another jumper with
+  solder.
 
   | Jumper | Window |
   |---|---|
@@ -356,19 +360,25 @@ two chips and one GPIO. Schematic sheet `bootrom.kicad_sch`.
   EPROM of an NE2000 clone does. Its data sheet only promises its output levels at 100 µA, so on a full bus with
   pull-ups the levels are not guaranteed. This is the main thing to check on a built card.
 * **Longer bus stubs.** The socket is at the far end from the data fingers, so SD0–SD7 grow from 35–107 mm to
-  64–142 mm of track; SA0–SA7 stay about as long as they were (51–79 mm), SA8–SA14 are 29–58 mm, SA15–SA19 34–43
-  mm and SMEMR 87 mm. That is ordinary for an ISA card.
+  59–138 mm of track; SA0–SA7 stay about as long as they were (49–69 mm), SA8–SA14 are 29–65 mm, SA15–SA19 44–63
+  mm and SMEMR 61 mm. That is ordinary for an ISA card.
 * **It fits on the 102 mm card, at a price** (the first version of this branch had it on an 18 mm longer card,
   with a DIP decoder and 0.2 mm rules everywhere; that board is in the branch's history, commit 22df124):
   * The logic column (U3–U7 with their capacitors and R1, R5, R18) moved **12.86 mm up**; C46 went to the top
     left corner, and R31/R32 stand right of J8.
   * The socket is in the bottom left corner, right above the fingers of SA0–SA7; **J3 moved one pin pitch to the
     right** to clear it. C48 and C49 sit between U7 and the socket, R35 stands below U9.
-  * **U16 is a TSSOP**, between the socket and U1: a DIP-16 or DIP-20 there would be a wall across the 16 bus
-    lines that run between the socket and the bus switches.
+  * **U16 is a TSSOP on the back, inside the socket's outline.** A through-hole PLCC-32 socket has no pins in
+    its middle: between its inner pin rows 6.2 × 8.7 mm of board is free. A TSSOP-16 (4.95 × 7.2 mm over its
+    lands) fits there, with 0.6 mm to the socket's pads at its ends and 0.76 mm along its pin rows. Its six
+    inputs come in between the socket's right-hand pins, three 0.15 mm tracks per gap; its three outputs go up
+    between two pins of the top row to JP1–JP3. **Solder U16 before the socket**: afterwards the socket's solder
+    joints stand round it. A TSSOP-20 is too long for that field, and a DIP-16 or DIP-20 between the socket and
+    the bus switches would be a wall across the 16 bus lines that run there. The previous commit of this branch
+    (f51e07e) has U16 on the front instead, between the socket and U1, on U1/U2's test-pad footprint.
   * **That corner is too dense for 0.2 mm tracks and clearances.** The rule area `bootrom` (x 116.0–174.6, y from
     79.0 down) allows **0.15 mm** there; the rest of the card keeps 0.2 mm (`PicoGUS-THT.kicad_dru`). 0.15 mm is
-    within JLCPCB's standard 4-layer capability (0.09 mm). About 1.5 m of track is 0.15 mm wide.
+    within JLCPCB's standard 4-layer capability (0.09 mm). About 1.6 m of track is 0.15 mm wide.
   * Most of that corner was **autorouted** (see [Layout status](#layout-status)).
 * **Without the boot ROM** leave out U15, its socket, U16, R35, C48 and C49: nothing else on the card depends on
   them (GPIO2 is then unused).
@@ -407,8 +417,8 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
 
 * **Outline**: THT v1.3.2's (101.90 × 99.85 mm at the line centres, 102.0 × 99.95 mm over the lines), without its
   Pico micro-USB relief slots. The [boot ROM](#boot-rom-experimental) of this branch is inside that outline. **A
-  full-size Waveblaster daughterboard reaches over its corner** (down to y 121.9, about 11 mm above the card): U16
-  is under it and so is most of U15, whose socket height was not checked against it.
+  full-size Waveblaster daughterboard reaches over its corner** (down to y 121.9, about 11 mm above the card): most
+  of U15 is under it, and its socket height was not checked against it.
 * **Bracket end as on THT v1.3.2's final layout (commit 258c8f8)**, top to bottom: J7 MIDI OUT at (217.00, 49.00),
   J9 LINE OUT at (217.00, 75.50) and J5 USB-A (Molex 67643) at (208.64, 92.50), with the bracket tab holes H1/H2 at
   x 214.70 and the ISA fingers in v1.3.2's places, so the [v1.3.2 bracket](../hw-tht-v1.3/README.md#bracket) fits
@@ -448,8 +458,8 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   island** (see [Audio](#audio)); FB3 (GND–AGND) and FB4 (+3V3–AVDD) are the only ties. 0.2 mm signal tracks (0.15 mm
   in the boot ROM corner of this branch), 0.4 mm
   for +5V, VSYS, the USB VBUS nets and ±12 V; the plane nets reach their planes through short stubs and vias. 0.6/0.3
-  mm vias. About 2.97 m of track on each outer layer, 0.56 m on In2.Cu and 195 vias (plain v2.1: 2.5 m, 0.05 m and
-  152). In1.Cu carries no signal.
+  mm vias. About 2.93 m of track on F.Cu, 3.00 m on B.Cu, 0.66 m on In2.Cu and 190 vias (plain v2.1: 2.5 m on each
+  outer layer, 0.05 m and 152). In1.Cu carries no signal.
 * **On the plain v2.1, In2.Cu carries eight short signal hops** (52 mm in all, the longest 12 mm: D5, ADS, D4, D7,
   GPIO23, D2, AD3, AD1) where the band above the ISA fingers is full on both outer layers. They cut slots in the
   +3V3 plane, not in GND. The boot ROM of this branch uses In2.Cu much more: see the next point.
@@ -459,19 +469,22 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   * **By hand**: SA0–SA7 from their fingers straight up into the socket on F.Cu, without vias (the socket is turned
     so that they arrive in pin order); SA10–SA14 through a via beside each finger, then on **In2.Cu** under J3 and
     under the socket, round its bottom left corner and into its left-hand pins (SA12 straight up into its pin);
-    U16's pins, its jumpers and `~ROM_CS` (on the back, between the two pin rows of the socket's top side); the
-    +12 V track past R1; R31/R32; the Waveblaster header's AGND pins back into the analog island; a via for the
-    ground finger B31.
+    U16 on the back inside the socket: its six inputs through the gaps between the socket's right-hand pins, its
+    three outputs up through one gap of the top row to the jumpers, `~ROM_CS` from the jumpers to CE#, +5 V from
+    C49 and a ground via under the chip; the +12 V track past R1; R31/R32; the Waveblaster header's AGND pins
+    back into the analog island; a via for the ground finger B31.
   * **Autorouted** (Freerouting): first the 13 nets with open links outside the corner, at 0.2 mm; then the corner
-    at 0.15 mm, with In2.Cu opened for signals inside x 116.6–172.0, y 101.9–128.2. It left nine links open. Those
-    were closed with a grid router (0.05 mm grid, same rules), two of them (SA18 and `~ROM_EN`) after placing
-    their way in under U16 by hand: U16's inner test pads are boxed in by their neighbours.
-  * **In2.Cu now carries 0.56 m of signal track** (28 nets, the longest `~SMEMR` 77 mm and SA10–SA14 23–46 mm
-    each), nearly all of it in that corner. The +3V3 plane is cut into strips there; it is still one piece, and
-    the GND plane has no track in it.
-  * **What is not pretty**: `~SMEMR` (from the far end of the connector to the socket's OE#) changes layer five
-    times, SD4 eight times in all (four more than before), and the autorouted corner has none of the order of the
-    rest of the board. It passes DRC; it was not reviewed line by line.
+    at 0.15 mm, with In2.Cu opened for signals inside x 116.6–172.0, y 101.9–128.2. It left seven links open.
+    Those, and `~ROM_EN` (which the autorouter had taken through the analog section), were closed with a grid
+    router (0.05 mm grid, same rules), all but `~SMEMR`: that one was laid by hand, between the vias of SA3 and
+    SA4 east of the socket after moving both a little.
+  * **In2.Cu now carries 0.66 m of signal track** (28 nets, the longest SD5 and SD7 with 49 mm each and
+    SA10–SA14 with 23–46 mm each), nearly all of it in that corner. The +3V3 plane is cut into strips there. **One
+    strip of 15 mm² under U1 is cut off from the rest of the plane**; the only thing on it is U1's supply pin,
+    which a 0.2 mm track on the back joins to its capacitor C2. The GND plane has no track in it.
+  * **What is not pretty**: ADS changes layer twelve times (eight on the plain v2.1), SD4 and SD6 six times each
+    (four and two), IOCHRDY four times (none), and the autorouted corner has none of the order of the rest of the
+    board. It passes DRC; it was not reviewed line by line.
 * **Routing rules**: no copper between the gold fingers (rule areas between them; tracks leave each finger straight
   up) and no vias over the fingers (rule area from y 128.3); digital tracks kept off the analog islands where possible
   (see [Audio](#audio) for what crosses). No track or via runs on F.Cu under U9, whose metal back (GND) lies on the
@@ -509,8 +522,8 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   larger under them, and a rule area that keeps tracks and vias off them. `v2.1.0` stands right of it (Jost 1.2 mm).
 * **Silkscreen labels** (Jost, embedded in the board file as on v1.3.2): `WAVEBLASTER`, `MIXER`, `DAC`, `WT VOL`,
   `MIDI OUT`, `LINE OUT`, `USB HOST`, `WIFI`, `USB-C FLASH`, `RUN`, `BOOTSEL`, `UART`, `SWD`, and `IRQ`/`DMA` over J3.
-  On this branch, in KiCad's stroke font: `BOOT ROM` below the socket and, on the back, `BOOT ROM BASE`, the three
-  addresses beside JP1–JP3 and `CLOSE ONE`.
+  On this branch, in KiCad's stroke font: `BOOT ROM` below the socket and, on the back, `U16`, `BOOT ROM SEGMENT`,
+  `CLOSE ONE` and the segment addresses `C800`, `D000` and `D800` over JP1–JP3.
 * **Groups, as on v1.3.2**, so a block moves as one: `74AHCT126 (U6)`, `74AHC00 (U4)`, `74AHC00 (U5)`,
   `74AHC14 (U3)` (with the column resistors), `74AHC244 (U7)`, `ISA bus switches (U1, U2)`,
   `Waveblaster header (J8)`, `DAC (U10)`, `Mixer + line out (U11, J9)`, `WT volume (U13)`, `MIDI out (J7)`,

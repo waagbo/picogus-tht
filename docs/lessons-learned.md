@@ -152,6 +152,15 @@ silkscreen. Each round found real faults. Apply these from the start on the next
   - **Trim stubs against the connectivity, not against the DRC list.** Deleting every track DRC calls dangling
     breaks T-junctions. Shorten each one to its last junction, or delete it, and keep the change only if
     `GetConnectivity().GetUnconnectedCount()` stays the same.
+  - **Trim stubs only when every link is closed.** A net with an open link ends in stubs the router still needs.
+    A clean-up run between two routing passes on THT v2.1 cut them back, and the next pass started further away.
+  - **A rule area that only carries a custom DRC rule is still exported to the autorouter as a keep-out** (KiCad
+    10, Specctra export). Delete it from the copy that goes to Freerouting, or the router cannot enter the area.
+  - **The middle of a through-hole PLCC socket is free on the back.** A PLCC-32 socket leaves 6.2 × 8.7 mm
+    between its inner pin rows: a TSSOP-16 fits there (0.6 mm to the socket's pads), with three 0.15 mm tracks
+    through each gap between the socket pins. A TSSOP-20 does not. THT v2.1's boot ROM decoder went there.
+  - **A via is an obstacle on every layer.** When laying a track by hand through a group of vias, check it
+    against every via near it, not only against the tracks on its own layer.
 - **Starved thermals**: a few pads get one spoke. The v1.3.2 README lists where each one joins GND.
 - **Cloud environment**: `.claude/cloud-env-setup.sh` installs KiCad 10, the libraries, a `kipython` wrapper,
   Freerouting, gerbv and ngspice. `kipython -I` drops the path it needs, so use `kipython -P -s` and run it
