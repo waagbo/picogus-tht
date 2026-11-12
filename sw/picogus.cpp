@@ -1264,13 +1264,13 @@ int main()
     gpio_set_dir(23, GPIO_OUT);
     BOARD_TYPE = PICOGUS_2;
 #ifdef PICOGUS_BOOTROM_EN_PIN
-    // Experimental boot ROM: the flash answers on the ISA memory bus while ROM_EN is high. This runs
+    // Experimental boot ROM: the flash answers on the ISA memory bus while ~ROM_EN is low. This runs
     // within a fraction of a second of reset, long before the BIOS scans for option ROMs.
 #ifndef PICOGUS_BOOTROM_ENABLE
 #define PICOGUS_BOOTROM_ENABLE 0
 #endif
     gpio_init(PICOGUS_BOOTROM_EN_PIN);
-    gpio_put(PICOGUS_BOOTROM_EN_PIN, PICOGUS_BOOTROM_ENABLE);
+    gpio_put(PICOGUS_BOOTROM_EN_PIN, !PICOGUS_BOOTROM_ENABLE);
     gpio_set_dir(PICOGUS_BOOTROM_EN_PIN, GPIO_OUT);
 #endif
 #else

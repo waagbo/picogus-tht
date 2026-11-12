@@ -92,7 +92,7 @@ endfunction()
 
 option(PGDEBUG "Enable debug printf framework" OFF)
 # PicoGUS v2.1 THT, experimental boot ROM (hw-tht-v2.1, sheet bootrom.kicad_sch): the option ROM only answers
-# while ROM_EN (GPIO2) is high. OFF leaves the pin low, as its pull-down does.
+# while ~ROM_EN (GPIO2) is low. OFF drives the pin high, as its pull-up holds it.
 option(BOOTROM_ENABLE "PicoGUS v2.1: switch the experimental boot ROM on at start-up" OFF)
 # Use the first Python on PATH rather than the newest version CMake knows about
 # (older CMakes won't look for newer Pythons)

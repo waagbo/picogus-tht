@@ -39349,7 +39349,7 @@
 			)
 		)
 	)
-	(global_label "ROM_EN"
+	(global_label "~{ROM_EN}"
 		(shape output)
 		(at 92.71 42.545 180)
 		(fields_autoplaced yes)
@@ -39359,7 +39359,7 @@
 			)
 			(justify right)
 		)
-		(uuid "51292137-5bf5-5a53-b6fb-2fbbd209c6d9")
+		(uuid "9e1a409e-0100-54e3-ab4d-e78959016654")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 92.71 42.545 0)
 			(hide yes)
@@ -39430,7 +39430,7 @@
 		)
 		(uuid "babf9a33-49a3-5c48-9b22-a0ef94acc69f")
 	)
-	(text "SST39SF010A in a PLCC-32 socket + 74HCT688: uses the global nets A0-A19, D0-D7, ~SMEMR and ROM_EN (GPIO2)."
+	(text "SST39SF010A in a PLCC-32 socket + 74HCT138: uses the global nets A0-A19, D0-D7, ~SMEMR and ~ROM_EN (GPIO2)."
 		(exclude_from_sim no)
 		(at 25.4 266.7 0)
 		(effects

@@ -122,17 +122,36 @@ silkscreen. Each round found real faults. Apply these from the start on the next
     side of the card instead of the short run that had been ripped up, and the report was clean.
   - **A bus has an order, and an autorouter cannot change it.** Lines that leave the ISA fingers side by side arrive
     in the same order (or its mirror image) wherever they go on one layer. Before placing a chip at the far end of a
-    bus, write down the order its pins need: on THT v2.1's boot ROM strip three autorouter runs each left two or
+    bus, write down the order its pins need: on THT v2.1's first boot ROM layout three autorouter runs each left two or
     three lines over, because the socket's lines and the decoder's lines had to cross on the same layer. What
     worked: choose the pin assignment where it is free (the eight inputs of a 74HCT688 are interchangeable), split
     the lines into groups that each arrive in the right order, lay those by hand, and leave only short hops to the
     router.
   - **Both inner layers are empty under the gold fingers** (the planes end above them, and the keep-outs between
     the fingers only cover the outer layers): room for about twelve lanes per layer along the whole connector. THT
-    v2.1's boot ROM runs 15 lines there.
+    v2.1's first boot ROM layout ran 15 lines there.
   - **A pad between two tracks on a plane layer is cut off from the plane**, however wide the gap looks: the
-    plane cannot follow the tracks back to where they come from. Tie such a pin elsewhere (the boot ROM's OE# went
-    to CE#).
+    plane cannot follow the tracks back to where they come from. Tie such a pin elsewhere (on the first boot ROM
+    layout the flash's OE# went to CE# for that reason).
+  - **Check that a part exists in the package before placing it.** THT v2.1's boot ROM decoder was placed twice
+    as a 74HCT688 in TSSOP-20 before the BOM showed that only the HC version is made in TSSOP. The HCT comes in
+    DIP and SOIC.
+  - **Before moving a routed block, count the tracks that cross its edge.** Moving THT v2.1's logic column 12.9
+    mm cut 17 nets; each needs a jog of that length and a lane to make it in.
+  - **A through-hole part between the two ends of a bus is a wall**: one track per pin gap and layer. A DIP-20
+    between the boot ROM socket and the bus switches left two autorouters 25 to 50 links short. A TSSOP in the
+    same place blocks neither the back nor the inner layers.
+  - **When an autorouter stalls, try finer rules before more layers.** In THT v2.1's boot ROM corner a second
+    inner layer took the open links from 26 to 20; 0.15 mm instead of 0.2 mm took them to about 10. Limit the
+    finer rule to a named rule area (`A.intersectsArea('bootrom')` in the `.kicad_dru`) and lower the board
+    minimum only so far that the rule can apply.
+  - **Freerouting with two rule sets**: route the nets outside the fine area first, at the normal rules; then
+    the fine area. A session written with a narrower default width narrows some existing tracks when it is
+    imported: set what lies outside the area back afterwards. `--router.job_timeout=00:15:00` ends a run
+    and writes the session; `-mp` alone did not stop it.
+  - **Trim stubs against the connectivity, not against the DRC list.** Deleting every track DRC calls dangling
+    breaks T-junctions. Shorten each one to its last junction, or delete it, and keep the change only if
+    `GetConnectivity().GetUnconnectedCount()` stays the same.
 - **Starved thermals**: a few pads get one spoke. The v1.3.2 README lists where each one joins GND.
 - **Cloud environment**: `.claude/cloud-env-setup.sh` installs KiCad 10, the libraries, a `kipython` wrapper,
   Freerouting, gerbv and ngspice. `kipython -I` drops the path it needs, so use `kipython -P -s` and run it

@@ -4783,7 +4783,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
 			(at 116.84 143.51 0)
 			(hide yes)
 			(show_name no)
@@ -4805,7 +4805,7 @@
 				)
 			)
 		)
-		(property "Description" "100k 1/4W 1% metal film"
+		(property "Description" "100k 1/4W 1% metal film: Waveblaster input pull-down; standing"
 			(at 116.84 143.51 0)
 			(hide yes)
 			(show_name no)
@@ -5017,7 +5017,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
 			(at 146.05 143.51 0)
 			(hide yes)
 			(show_name no)
@@ -5039,7 +5039,7 @@
 				)
 			)
 		)
-		(property "Description" "100k 1/4W 1% metal film"
+		(property "Description" "100k 1/4W 1% metal film: Waveblaster input pull-down; standing"
 			(at 146.05 143.51 0)
 			(hide yes)
 			(show_name no)

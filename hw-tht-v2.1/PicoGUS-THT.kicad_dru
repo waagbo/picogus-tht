@@ -12,3 +12,13 @@
 (rule "0.2 mm everywhere else"
 	(condition "!(A.Parent == 'J6' && B.Parent == 'J6')")
 	(constraint clearance (min 0.2mm)))
+
+# Boot ROM (experimental): the corner with the PLCC socket, U16, J3 and the bus switches is too dense for 0.2 mm.
+# Inside the rule area "bootrom" tracks may be 0.15 mm wide with 0.15 mm clearance; the board minimum track width
+# (Board Setup > Constraints) is 0.15 mm only so that this can apply, and the second rule keeps 0.2 mm elsewhere.
+(rule "Boot ROM corner: 0.15 mm clearance"
+	(condition "A.intersectsArea('bootrom') && B.intersectsArea('bootrom')")
+	(constraint clearance (min 0.15mm)))
+(rule "0.2 mm tracks outside the boot ROM corner"
+	(condition "A.Type == 'Track' && !A.intersectsArea('bootrom')")
+	(constraint track_width (min 0.2mm)))
