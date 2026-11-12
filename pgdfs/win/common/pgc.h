@@ -27,12 +27,16 @@
  *    the same medium carry on, the way FAT on a floppy keeps its handles when
  *    the same disk goes back into the drive.
  *
- *    The card does not report a mount counter, so a replug can go unnoticed
- *    between two requests. Only this driver opens files on the card, so the
- *    card's open-file table mirrors pgc_card.slot[] exactly until the card
- *    forgets it; afterwards, either a request on a stale id answers "invalid
- *    handle" (6), or the card hands out an id the table still holds. Both are
- *    taken as proof of a remount.
+ *    A replug of the same drive shows in neither the status byte nor the
+ *    volume string. The card counts its mounts (DIAG record, version 3), and
+ *    the count is read with every look at the medium: at most once in
+ *    PGC_RECHECK_MS, and whenever a request says the drive is gone. Between
+ *    two looks, and with firmware that has no mount count, a replug is
+ *    inferred: only this driver opens files on the card, so the card's
+ *    open-file table mirrors pgc_card.slot[] exactly until the card forgets
+ *    it; afterwards, either a request on a stale id answers "invalid handle"
+ *    (6), or the card hands out an id the table still holds. Both are taken
+ *    as proof of a remount.
  *
  * The core is plain C (C99 without its library), uses no C library function and
  * does no memory allocation; it is compiled into ring 0 code by OpenWatcom
@@ -134,6 +138,8 @@ typedef struct {
   /* the medium */
   uint8_t  present;         /* a USB drive is mounted, as far as known      */
   uint8_t  seen;            /* a medium has been seen since the probe       */
+  uint8_t  mounts;          /* the card's mount count at the last look, 0 = not known */
+  uint8_t  mounts_known;    /* 0 not asked yet, 1 the firmware counts, 2 it does not */
   uint32_t media_gen;       /* bumped when a different medium appears       */
   uint32_t mount_gen;       /* bumped whenever the card may have lost its ids */
   uint32_t change_count;    /* bumped on every arrival/removal (for the OS) */

@@ -30,6 +30,9 @@
 #define AL_DIAG      0xF2
 
 /* DIAG record fields used here (sw/dfs/dfs_server.h, DFS_DIAG_*) */
+#define DIAG_OFF_VERSION  0
+#define DIAG_OFF_MOUNTS   3       /* record version 3: changes with every mount, never 0 then */
+#define DIAG_MOUNTS_VER   3
 #define DIAG_OFF_FREECLST 4
 #define DIAG_OFF_NFATENT  8
 #define DIAG_OFF_CSIZE    12
@@ -264,13 +267,35 @@ static void read_info(char *dst) {
   dst[n] = 0;
 }
 
-/* status byte = presence, volume string = identity. The card reports
- * NODRIVE in place of IDLE and ABORTED only, not while an answer is READY,
- * so the status is read after an abort (harmless between transactions: the
- * next CMD_DFSREQ starts afresh). */
+/* the card's mount count, if the firmware has one (DIAG works with or
+ * without a drive). Uses the frame buffer; runs the transaction itself, so
+ * that a failure here does not come back into check_medium(). */
+static uint8_t read_mounts(pgc_card *c) {
+  uint16_t len;
+  if (c->mounts_known == 2) return 0;
+  put16(c->buf, PGC_HDR);
+  c->buf[2] = 0;
+  c->buf[3] = AL_DIAG;
+  if (xact(c) != X_OK) return 0;        /* ask again at the next look */
+  len = get16(c->buf);
+  if (get16(c->buf + 2) != PGC_OK || len <= PGC_HDR + DIAG_OFF_MOUNTS ||
+      c->buf[PGC_HDR + DIAG_OFF_VERSION] < DIAG_MOUNTS_VER) {
+    c->mounts_known = 2;                /* firmware before the mount count */
+    return 0;
+  }
+  c->mounts_known = 1;
+  return c->buf[PGC_HDR + DIAG_OFF_MOUNTS];
+}
+
+/* status byte = presence, volume string = identity, mount count = whether
+ * the card has started afresh since the last look. The card reports NODRIVE
+ * in place of IDLE and ABORTED only, not while an answer is READY, so the
+ * status is read after an abort (harmless between transactions: the next
+ * CMD_DFSREQ starts afresh). The frame buffer is used: callers are done with
+ * the answer in it before they get here. */
 static void check_medium(pgc_card *c) {
   char info[PGC_INFO_MAX];
-  uint8_t st;
+  uint8_t st, mounts;
   abort_xact();
   st = status(c);
   c->checked_ms = pgc_plat_ms();
@@ -283,6 +308,7 @@ static void check_medium(pgc_card *c) {
     return;
   }
   read_info(info);
+  mounts = read_mounts(c);
   if (!c->present) {
     c->present = 1;
     c->change_count++;
@@ -293,7 +319,12 @@ static void check_medium(pgc_card *c) {
     c->change_count++;
     lost_ids(c);
     c->media_gen++;
+  } else if (mounts != 0 && c->mounts != 0 && mounts != c->mounts) {
+    /* the same drive, pulled and plugged in again between two looks */
+    c->change_count++;
+    lost_ids(c);
   }
+  if (mounts != 0) c->mounts = mounts;
   if (!c->seen || pgc_strcmp(info, c->info) != 0) {
     pgc_memcpy(c->info, info, sizeof(info));
     c->seen = 1;

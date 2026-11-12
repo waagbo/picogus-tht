@@ -83,7 +83,10 @@ The USB stick can come and go while Windows runs:
   same as an empty floppy drive; DOS programs: "Not ready reading drive P").
 * **The same stick plugged in again** (same volume label, serial number and
   size): open files carry on where they were, as FAT does with a floppy
-  that goes back into the drive. Every write is written through to the
+  that goes back into the drive. The card counts its mounts (`DFSDIAG /INFO`
+  shows the count), which is how the drivers notice a stick that was pulled
+  and put back; with firmware older than that count they work it out from
+  the card having forgotten its open files. Every write is written through to the
   stick by the card, so pulling the stick between two writes loses nothing
   that was reported as written.
 * **A different stick**: files that were open on the previous one fail with

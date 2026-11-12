@@ -230,6 +230,8 @@ static void test_probe(void) {
     format("PGTEST");
     plug();
     CHECK(pgc_media(&card, 1) == PGC_OK && card.present, "media present after plug");
+    CHECK(card.mounts_known == 1 && card.mounts != 0, "the card counts its mounts: known %u, count %u",
+          card.mounts_known, card.mounts);
     {
         pgc_volinfo v;
         CHECK(pgc_volinfo_get(&card, &v) == PGC_OK, "volinfo");
@@ -477,6 +479,27 @@ static void test_removal(void) {
     plug();
     CHECK(verify(&a, 5000, 1) && verify(&b, 6000, 2), "same stick back: open files carry on");
     CHECK(card.present && card.media_gen == gen, "same medium");
+
+    /* 1b. the same stick replugged between two looks: the card's mount count
+     * tells, the ids are dropped before any is used, the files carry on */
+    {
+        uint32_t mg = card.mount_gen, cc = card.change_count;
+        uint8_t count = card.mounts;
+        CHECK(a.id != 0 && b.id != 0, "a and b hold card ids");
+        unplug();
+        plug();
+        CHECK(pgc_media(&card, 1) == PGC_OK, "present");
+        CHECK(card.mounts != count && card.mounts != 0, "mount count moved: %u -> %u", count, card.mounts);
+        CHECK(card.mount_gen != mg && card.change_count != cc, "the replug was noticed: mount_gen %u -> %u, changes %u -> %u",
+              mg, card.mount_gen, cc, card.change_count);
+        CHECK(card.media_gen == gen, "the same medium still");
+        CHECK(a.id == 0 && b.id == 0, "the stale ids are gone: %u %u", a.id, b.id);
+        CHECK(verify(&a, 5000, 1) && verify(&b, 6000, 2), "open files carry on");
+        mg = card.mount_gen;
+        cc = card.change_count;
+        CHECK(pgc_media(&card, 1) == PGC_OK && card.mount_gen == mg && card.change_count == cc,
+              "another look without a replug changes nothing");
+    }
 
     /* 2. replugged between two requests, unnoticed: a stale id answers 6 */
     unplug();

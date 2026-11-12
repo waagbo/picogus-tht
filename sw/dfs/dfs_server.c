@@ -61,6 +61,7 @@ enum {
 
 static char        info_str[48] = "";
 static bool        drive_present;
+static uint8_t     mount_count;     /* DIAG: changes with every mount, 0 = none since power-on */
 
 /* scratch, static on purpose (core 1 stack) */
 static char        path_a[DFS_PATH_MAX];
@@ -285,6 +286,7 @@ static uint16_t do_diag(uint8_t *answ, uint16_t maxpl) {
     rec[DFS_DIAG_OFF_VERSION] = DFS_DIAG_VERSION;
     rec[DFS_DIAG_OFF_FLAGS] = drive_present ? 1 : 0;
     rec[DFS_DIAG_OFF_FSTYPE] = fs_type;
+    rec[DFS_DIAG_OFF_MOUNTS] = mount_count;
     put32(rec + DFS_DIAG_OFF_FREECLST, free_clst);
     put32(rec + DFS_DIAG_OFF_NFATENT, n_fatent);
     put16(rec + DFS_DIAG_OFF_CSIZE, csize);
@@ -539,11 +541,21 @@ void dfs_server_init(void) {
     dfs_fs_reset();
     drive_present = false;
     info_str[0] = 0;
+    mount_count = 0;
 }
 
 void dfs_server_drive_mounted(void) {
     dfs_fs_invalidate();                /* nothing from an earlier drive may survive */
     if (!dfs_fs_volume_info(info_str, sizeof(info_str))) info_str[0] = 0;
+    /* Every mount drops the open files and search ids, also when the same drive
+     * comes back, which neither the status byte nor the info string can show:
+     * the mount count is how a driver that keeps state tells. The first count
+     * after power-on starts from the clock, so that a card that was reset
+     * (and forgot everything) is unlikely to come back with the count the
+     * driver saw last; 0 is never a count. */
+    if (mount_count == 0) mount_count = (uint8_t)dfs_platform_millis();
+    else mount_count++;
+    if (mount_count == 0) mount_count = 1;
     drive_present = true;
 }
 

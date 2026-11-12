@@ -55,11 +55,12 @@
 
 /* DIAG record layout: a copy of the DFS_DIAG_* table in sw/dfs/dfs_server.h
  * (and sw/dfs/PROTOCOL.md). Little-endian; u16 counters saturate at FFFFh. */
-#define DIAG_VERSION       2
+#define DIAG_VERSION       3
 #define DIAG_LEN           60
 #define DIAG_OFF_VERSION    0  /* u8  */
 #define DIAG_OFF_FLAGS      1  /* u8  bit 0: drive present */
 #define DIAG_OFF_FSTYPE     2  /* u8  0 none, 1 FAT12, 2 FAT16, 3 FAT32, 4 exFAT */
+#define DIAG_OFF_MOUNTS     3  /* u8  mount count (record version 3): changes with every mount, 0 = none yet */
 #define DIAG_OFF_FREECLST   4  /* u32 free clusters as FatFs believes, > n_fatent-2 = unknown */
 #define DIAG_OFF_NFATENT    8  /* u32 FAT entries = clusters + 2 */
 #define DIAG_OFF_CSIZE     12  /* u16 sectors per cluster */
@@ -282,6 +283,13 @@ static int printdiag(void) {
   nfatent = rd32(r + DIAG_OFF_NFATENT);
   printf("--- card diagnostics (DIAG v%u) ---\n", r[DIAG_OFF_VERSION]);
   printf("Drive present (server):  %s\n", (r[DIAG_OFF_FLAGS] & 1) ? "yes" : "no");
+  if (r[DIAG_OFF_VERSION] < 3) {
+    printf("Mount count:             not reported by this firmware\n");
+  } else if (r[DIAG_OFF_MOUNTS] == 0) {
+    printf("Mount count:             0 (no drive mounted since power-on)\n");
+  } else {
+    printf("Mount count:             %u (changes with every mount)\n", r[DIAG_OFF_MOUNTS]);
+  }
   printf("FatFs volume:            %s, %lu clusters of %u sectors\n",
          fsname(r[DIAG_OFF_FSTYPE]), (nfatent >= 2) ? nfatent - 2 : 0, rd16(r + DIAG_OFF_CSIZE));
   if ((nfatent >= 2) && (freeclst <= nfatent - 2)) {

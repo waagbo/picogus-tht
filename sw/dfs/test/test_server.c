@@ -282,7 +282,7 @@ static int has_name(char names[][12], int n, const char *fcb) {
 /* ---- DIAG helpers ---------------------------------------------------------- */
 
 typedef struct {
-    uint8_t  version, flags, fs_type;
+    uint8_t  version, flags, fs_type, mounts;
     uint32_t free_clst, n_fatent;
     uint16_t csize;
     uint8_t  last_fr, last_call, hard_fr, hard_call;
@@ -304,6 +304,7 @@ static void op_diag(diag_t *d) {
     d->version     = pl[DFS_DIAG_OFF_VERSION];
     d->flags       = pl[DFS_DIAG_OFF_FLAGS];
     d->fs_type     = pl[DFS_DIAG_OFF_FSTYPE];
+    d->mounts      = pl[DFS_DIAG_OFF_MOUNTS];
     d->free_clst   = rd32(pl + DFS_DIAG_OFF_FREECLST);
     d->n_fatent    = rd32(pl + DFS_DIAG_OFF_NFATENT);
     d->csize       = rd16(pl + DFS_DIAG_OFF_CSIZE);
@@ -389,6 +390,7 @@ static void test_setup(void) {
      * notification must not trigger the FAT scan), counters from f_mkfs */
     op_diag(&d);
     CHECK(d.flags == 1, "diag flags %02X: drive present", d.flags);
+    CHECK(d.mounts != 0, "diag mount count is never 0 once a drive was mounted");
     CHECK(d.fs_type == FS_FAT32, "diag fs type %u", d.fs_type);
     CHECK(d.csize == 1, "diag sectors per cluster %u", d.csize);
     CHECK(d.n_fatent > 100000 && d.n_fatent < 140000, "diag n_fatent %u", d.n_fatent);
@@ -1235,7 +1237,14 @@ static void test_diag_faults(void) {
 static void test_unmount(void) {
     uint16_t ax, id = 0;
     search_t s;
+    uint8_t mounts;
     SECTION("unmount / remount");
+    {
+        diag_t d;
+        op_diag(&d);
+        mounts = d.mounts;
+        CHECK(mounts != 0, "mount count before unmount: %u", mounts);
+    }
     ax = op_open(AL_OPEN, 2, 0, 0, "\\T1.TXT", &id, NULL);
     CHECK(ax == 0, "open before unmount");
     ax = op_findfirst(0x10, "\\FF\\????????.???", &s);
@@ -1257,9 +1266,27 @@ static void test_unmount(void) {
         op_diag(&d);
         CHECK(d.flags == 0, "diag after unmount: drive absent, flags %02X", d.flags);
         CHECK(d.writes > 0, "diag counters survive the unmount");
+        CHECK(d.mounts == mounts, "the mount count only moves on a mount: %u", d.mounts);
     }
     dfs_server_drive_mounted();
     CHECK(dfs_server_drive_present(), "present after remount");
+    {
+        /* the same drive again: only the mount count tells */
+        diag_t d;
+        uint8_t prev = mounts;
+        int i;
+        op_diag(&d);
+        CHECK(d.mounts != mounts && d.mounts != 0, "remount changes the mount count: %u -> %u", mounts, d.mounts);
+        /* it wraps past 0, which means "never mounted" */
+        for (i = 0; i < 600; i++) {
+            prev = d.mounts;
+            dfs_server_drive_unmounted();
+            dfs_server_drive_mounted();
+            op_diag(&d);
+            if (d.mounts == 0 || d.mounts == prev) break;
+        }
+        CHECK(i == 600, "600 remounts: the count changes every time and is never 0 (stopped at %d: %u -> %u)", i, prev, d.mounts);
+    }
     CHECK(strncmp(dfs_server_info_string(), "PGTEST|FAT32|", 13) == 0, "info back after remount");
     ax = op_read(id, 0, 4);
     CHECK(ax == 6, "old handle after remount -> 6, got %04X", ax);

@@ -68,12 +68,12 @@ uint32_t dfs_platform_millis(void);
  * has the same table). u8/u16/u32 = unsigned of that width. The u16 event
  * counters saturate at FFFFh; the u32 ones count since power-on.
  */
-#define DFS_DIAG_VERSION       2
+#define DFS_DIAG_VERSION       3 /* 3: mount count at offset 3 (reserved, 0, before) */
 #define DFS_DIAG_LEN           60
 #define DFS_DIAG_OFF_VERSION    0 /* u8  DFS_DIAG_VERSION                                  */
 #define DFS_DIAG_OFF_FLAGS      1 /* u8  bit 0: the server considers a drive present        */
 #define DFS_DIAG_OFF_FSTYPE     2 /* u8  0 none, 1 FAT12, 2 FAT16, 3 FAT32, 4 exFAT (FatFs) */
-#define DFS_DIAG_OFF_RSVD3      3 /* u8  0                                                  */
+#define DFS_DIAG_OFF_MOUNTS     3 /* u8  mount count: changes with every mount, 0 = none yet */
 #define DFS_DIAG_OFF_FREECLST   4 /* u32 free clusters as FatFs believes; > n_fatent-2 = unknown (FAT not scanned yet; FatFs starts at 0xFFFFFFFF) */
 #define DFS_DIAG_OFF_NFATENT    8 /* u32 FAT entries = clusters + 2                         */
 #define DFS_DIAG_OFF_CSIZE     12 /* u16 sectors per cluster                                */

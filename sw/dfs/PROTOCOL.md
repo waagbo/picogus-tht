@@ -12,11 +12,9 @@ Windows NT) speak the same protocol through a shared client core
 (`pgdfs/win/common/pgc.c`), with paths that may carry long names (FatFs
 resolves them) and `LONGNAME` for the listings. The card serves one client at a
 time: its open-file ids and search ids are not tagged with an owner, so only
-one of these drivers, or the DOS tools, may use the card at once. The Windows
-drivers rely on that to notice a USB drive that was replugged between two
-requests: the card forgets its open files when it unmounts the drive, so a
-request on an id the driver still holds answers 6 (invalid handle), or an OPEN
-answers with an id the driver believes to be in use.
+one of these drivers, or the DOS tools, may use the card at once. See
+[Detecting a remount](#detecting-a-remount) for how they follow a USB drive that
+is pulled and plugged in again.
 
 The request/answer payloads are the EtherDFS "EDF5" protocol (Mateusz Viste,
 MIT), which is also what PicoMEM's PMDFS speaks. Only the framing and the
@@ -182,6 +180,32 @@ At install, and on `PGDFS /T`, the driver writes the DOS clock through
 which keeps `dos_time + elapsed` and returns it from `get_fattime()`. Without it, files created from DOS carry the FatFs default
 timestamp (1 Jan 1980 or the firmware's fixed value).
 
+## Detecting a remount
+
+The card forgets every open file and search id when the USB drive is unmounted,
+and starts with an empty table at the next mount. The status byte shows whether
+a drive is mounted (NODRIVE) and `CMD_DFSINFO` which one (label, size, serial),
+but neither shows that the *same* drive went away and came back between two
+looks. A driver that keeps state across requests (open files, cached sizes)
+finds out in two ways:
+
+* The **mount count** in the diagnostics record (`DIAG`, offset 3, record
+  version 3 or later). It changes with every mount and is never 0 once a drive
+  has been mounted; 0 means none since power-on. The first count after
+  power-on is taken from the card's clock, so a card that was reset is unlikely
+  to come back with the count the driver saw before. A driver reads it when it
+  checks the drive (the Windows drivers: at most once a second, and whenever a
+  request says the drive is gone) and drops its file ids when it changed.
+* Between two such checks, and with firmware that has no mount count, by
+  inference. Only one driver uses the card, so the card's open-file table
+  mirrors the driver's own until the card forgets it: afterwards a request on
+  an id the driver still holds answers 6 (invalid handle), or an OPEN answers
+  with an id the driver believes to be in use. Either proves a remount.
+
+`PGDFS.EXE` keeps no such state of its own: DOS holds the file ids, and a
+program that kept a file open across a replug gets error 6 on it, or, after
+other files were opened, the file that now has its id.
+
 ## Drive info
 
 `CMD_DFSINFO` returns `LABEL|FAT32|30528|1A2B3C4D` style strings: volume label
@@ -240,10 +264,10 @@ the u32 ones count since power-on.
 
 | Offset | Size | Field |
 |---|---|---|
-| 0 | u8 | record version, 1 |
+| 0 | u8 | record version, 3 (2 before the mount count; fields are only ever added) |
 | 1 | u8 | flags: bit 0 = the server considers a drive present (status would not read NODRIVE) |
 | 2 | u8 | FatFs volume type: 0 none, 1 FAT12, 2 FAT16, 3 FAT32, 4 exFAT |
-| 3 | u8 | reserved, 0 |
+| 3 | u8 | mount count: changes with every mount of a USB drive (1..255, wrapping past 0); 0 = no drive mounted since power-on, or record version below 3. See [Detecting a remount](#detecting-a-remount) |
 | 4 | u32 | free clusters as FatFs currently believes them; a value greater than the cluster count means "unknown": the FAT has not been scanned since the mount (the first DISKSPACE does it, see FF_FS_NOFSINFO; FatFs starts at FFFFFFFFh) |
 | 8 | u32 | FAT entries = clusters + 2 |
 | 12 | u16 | sectors per cluster |
