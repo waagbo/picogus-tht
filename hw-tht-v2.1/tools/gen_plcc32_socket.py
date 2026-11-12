@@ -59,7 +59,9 @@ def wrl():
     box(CX - 0.5, CY - CHIP_H / 2 + 0.7, 4.9, CX + 0.5, CY - CHIP_H / 2 + 1.5, 5.05, TIN, 0.5)          # pin 1 mark
     for x, y in PADS:                                            # pins through the board
         box(x - 0.25, y - 0.25, -3.2, x + 0.25, y + 0.25, 0.3, TIN, 0.7)
-    faces = [(0, 2, 3, 1), (4, 5, 7, 6), (0, 1, 5, 4), (2, 6, 7, 3), (0, 4, 6, 2), (1, 3, 7, 5)]
+    # counter-clockwise seen from outside (the points' y is already negated): wound the other way, KiCad's
+    # raytracer shades every face as a back face and the model comes out nearly black
+    faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
     out = ['#VRML V2.0 utf8',
            '# Through-hole PLCC-32 socket with a PLCC-32 chip - simple generated model: frame, contacts, pins, chip',
            '# For footprint Package_LCC:PLCC-32_THT-Socket (origin at pin 1), offset 0, rotate 0.',
