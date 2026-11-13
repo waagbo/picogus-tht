@@ -50,8 +50,9 @@
 #endif
 
 #define PGDFS_TAG       0x73666750  /* 'Pgfs' */
-#define PGDFS_VERSION   "0.3.0"
+#define PGDFS_VERSION   "0.4.0"
 #define DEVICE_NAME     L"\\Device\\PgDfs"
+#define CONTROL_LINK    L"\\DosDevices\\PgDfs"   /* \\.\PgDfs: the volume, for control requests */
 #define POLL_MS         2000        /* media check interval */
 #define TIME_PUSH_MS    60000       /* how often the clock goes to the card */
 #define LIST_BLOCK      16384       /* directory snapshot chunk */
@@ -2187,9 +2188,31 @@ static NTSTATUS FsControl(PIRP irp, PIO_STACK_LOCATION sp) {
   }
 }
 
+/* a setup program's request for the card's control registers (pgctl.h).
+ * METHOD_BUFFERED: the request and what it reads share the system buffer;
+ * pgc_ctl() is done with the former before it stores the latter */
+static NTSTATUS ControlRequest(PIRP irp, PIO_STACK_LOCATION sp) {
+  PUCHAR buf = (PUCHAR)irp->AssociatedIrp.SystemBuffer;
+  ULONG inlen = sp->Parameters.DeviceIoControl.InputBufferLength;
+  ULONG outlen = sp->Parameters.DeviceIoControl.OutputBufferLength;
+  pgctl_req rq;
+  uint16_t got = 0;
+  int r;
+  if (!buf || inlen < sizeof(rq)) return STATUS_INVALID_PARAMETER;
+  RtlCopyMemory(&rq, buf, sizeof(rq));
+  if (rq.nwrite > inlen - sizeof(rq) || rq.nread > outlen) return STATUS_INVALID_PARAMETER;
+  r = pgc_ctl(&Card, &rq, buf + sizeof(rq), buf, &got);
+  MediaChanged();               /* a restart of the card takes the drive away */
+  if (r == PGC_EACCESS) return STATUS_ACCESS_DENIED;
+  if (r != PGC_OK) return STATUS_INVALID_PARAMETER;
+  irp->IoStatus.Information = got;
+  return STATUS_SUCCESS;
+}
+
 static NTSTATUS DeviceControl(PIRP irp, PIO_STACK_LOCATION sp) {
-  (void)irp;
   switch (sp->Parameters.DeviceIoControl.IoControlCode) {
+  case PGCTL_IOCTL:
+    return ControlRequest(irp, sp);
   case PG_IOCTL_STORAGE_CHECK_VERIFY:
   case PG_IOCTL_STORAGE_CHECK_VERIFY2:
   case PG_IOCTL_DISK_CHECK_VERIFY: {
@@ -2337,7 +2360,7 @@ static WCHAR ReadLetter(PUNICODE_STRING regpath) {
 }
 
 NTSTATUS NTAPI DriverEntry(PDRIVER_OBJECT drv, PUNICODE_STRING regpath) {
-  UNICODE_STRING devname, linkname;
+  UNICODE_STRING devname, linkname, ctlname;
   WCHAR link[] = L"\\DosDevices\\P:";
   PDEVICE_OBJECT dev;
   HANDLE th;
@@ -2377,6 +2400,8 @@ NTSTATUS NTAPI DriverEntry(PDRIVER_OBJECT drv, PUNICODE_STRING regpath) {
     IoDeleteDevice(dev);
     return st;
   }
+  RtlInitUnicodeString(&ctlname, CONTROL_LINK);
+  (void)IoCreateSymbolicLink(&ctlname, &devname);   /* without it only PGTRAY goes without */
   for (i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++) drv->MajorFunction[i] = Dispatch;
   drv->DriverUnload = NULL;       /* a file system stays */
   dev->Flags &= ~DO_DEVICE_INITIALIZING;

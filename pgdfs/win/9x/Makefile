@@ -24,10 +24,10 @@ all: pgdfs.vxd
 vxd.obj: vxd.asm
 	$(AS) -q -fo=$@ vxd.asm
 
-pgdfs9x.obj: pgdfs9x.c ifs9x.h $(CORE)/pgc.h ../../../common/picogus.h
+pgdfs9x.obj: pgdfs9x.c ifs9x.h $(CORE)/pgc.h $(CORE)/pgctl.h ../../../common/picogus.h
 	$(CC) $(CFLAGS) -fo=$@ pgdfs9x.c
 
-pgc.obj: $(CORE)/pgc.c $(CORE)/pgc.h ../../../common/picogus.h
+pgc.obj: $(CORE)/pgc.c $(CORE)/pgc.h $(CORE)/pgctl.h ../../../common/picogus.h
 	$(CC) $(CFLAGS) -fo=$@ $(CORE)/pgc.c
 
 pgdfs.lnk: Makefile

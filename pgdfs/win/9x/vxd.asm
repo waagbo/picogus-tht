@@ -59,6 +59,7 @@ SVC_UniToUpper          equ 00400043h
 SYS_CRITICAL_INIT       equ 0
 DEVICE_INIT             equ 1
 INIT_COMPLETE           equ 2
+W32_DEVICEIOCONTROL     equ 23h
 
 VXDCALL macro svc
         int     20h
@@ -67,6 +68,7 @@ VXDCALL macro svc
 
         extrn   _pg_device_init:near
         extrn   _pg_init_complete:near
+        extrn   _pg_w32_ioctl:near
 
 ; ---- device descriptor block ------------------------------------------------
 
@@ -76,7 +78,7 @@ PGDFS_DDB label dword
         dd      0                       ; DDB_Next
         dw      0400h                   ; DDB_SDK_Version (Windows 95)
         dw      0                       ; DDB_Req_Device_Number: Undefined_Device_ID
-        db      0, 3                    ; version 0.3
+        db      0, 4                    ; version 0.4
         dw      0                       ; DDB_Flags
         db      'PGDFS   '              ; DDB_Name
         dd      0A0010100h              ; DDB_Init_Order: FSD_Init_Order, after IFSMgr
@@ -135,12 +137,35 @@ not_crit:
         ret
 not_init:
         cmp     eax, INIT_COMPLETE
-        jne     done
+        jne     not_complete
         pushad
         cld
         call    _pg_init_complete       ; void (void)
         popad
 done:   clc
+        ret
+not_complete:
+        cmp     eax, W32_DEVICEIOCONTROL
+        jne     done
+        ; DeviceIoControl of a Win32 program on \\.\PGDFS: ESI -> DIOCParams,
+        ; EAX = 0 or a Win32 error code on return
+        push    ebx
+        push    ecx
+        push    edx
+        push    esi
+        push    edi
+        push    ebp
+        cld
+        push    esi
+        call    _pg_w32_ioctl           ; unsigned (diocparams *)
+        add     esp, 4
+        pop     ebp
+        pop     edi
+        pop     esi
+        pop     edx
+        pop     ecx
+        pop     ebx
+        clc
         ret
 failed: stc
         ret

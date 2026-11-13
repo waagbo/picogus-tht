@@ -59,7 +59,9 @@
 #define ERROR_WRONG_DISK           34
 #define ERROR_BAD_NETPATH          53
 #define ERROR_BAD_NET_NAME         67
+#define ERROR_NOT_SUPPORTED        50
 #define ERROR_FILE_EXISTS          80
+#define ERROR_INVALID_PARAMETER    87
 #define ERROR_DISK_FULL            112
 #define ERROR_INVALID_NAME         123
 #define ERROR_NEGATIVE_SEEK        131
@@ -134,6 +136,7 @@ typedef struct {
 
 static pgc_card card;
 static void *mutex;
+static void *ctl_mutex;         /* one control request (pg_w32_ioctl) at a time */
 static int proid = -1;
 static void *ifs_resource;      /* IFSMgr's handle of our connection */
 static char resource;           /* its address is our resource handle */
@@ -1299,6 +1302,61 @@ static int __cdecl file_enum(pioreq pir) {
   return ret(pir, ERROR_INVALID_FUNCTION);
 }
 
+/* ---- control requests of a Win32 program ------------------------------------------------- */
+
+/* DeviceIoControl on \\.\PGDFS (W32_DEVICEIOCONTROL): the control requests of
+ * pgctl.h, for PGTRAY. Runs in the calling thread. The program's buffers are
+ * copied outside the card's mutex: touching them may page, and paging may
+ * come back here for a file on this drive. */
+typedef struct {
+  unsigned long internal1, vm, internal2;
+  unsigned long code;
+  void *in;
+  unsigned long in_size;
+  void *out;
+  unsigned long out_size;
+  unsigned long *returned;
+  void *overlapped;
+  unsigned long device, process;
+} diocparams;
+
+#define DIOC_OPEN         0UL             /* CreateFile; also DIOC_GETVERSION */
+#define DIOC_CLOSEHANDLE  0xFFFFFFFFUL
+
+unsigned __cdecl pg_w32_ioctl(diocparams *p) {
+  static pgctl_req rq;                    /* under ctl_mutex */
+  static unsigned char data[PGCTL_MAX_DATA];
+  uint16_t got = 0;
+  unsigned err = 0;
+  int r;
+
+  if (p->code == DIOC_OPEN || p->code == DIOC_CLOSEHANDLE) return 0;
+  if (p->code != PGCTL_IOCTL) return ERROR_NOT_SUPPORTED;
+  if (!p->in || p->in_size < sizeof(rq)) return ERROR_INVALID_PARAMETER;
+
+  vx_enter_mutex(ctl_mutex, 0);
+  pgc_memcpy(&rq, p->in, sizeof(rq));
+  if (rq.nwrite > PGCTL_MAX_DATA || rq.nread > PGCTL_MAX_DATA || rq.nwrite > p->in_size - sizeof(rq) ||
+      (rq.nread != 0 && (!p->out || rq.nread > p->out_size))) {
+    err = ERROR_INVALID_PARAMETER;
+  } else {
+    pgc_memcpy(data, (const char *)p->in + sizeof(rq), rq.nwrite);
+    ENTER();
+    r = pgc_ctl(&card, &rq, data, data, &got);
+    LEAVE();
+    if (r == PGC_EACCESS) {
+      err = ERROR_ACCESS_DENIED;
+    } else if (r != PGC_OK) {
+      err = ERROR_INVALID_PARAMETER;
+    } else {
+      if (got) pgc_memcpy(p->out, data, got);
+      if (p->returned) *p->returned = got;
+    }
+  }
+  vx_leave_mutex(ctl_mutex);
+  return err;
+}
+
 /* ---- initialization -------------------------------------------------------------------- */
 
 /* Device_Init: the card must be there and PGDFS enabled on it, or the VxD
@@ -1308,8 +1366,9 @@ int __cdecl pg_device_init(void) {
   no_sleep = 1;                 /* no thread to put to sleep while Windows starts */
   if (vx_ifs_get_version() >= IFSMGRVERSION && pgc_probe(&card) == PGC_OK) {
     mutex = vx_create_mutex(0, 0);
-    if (mutex) proid = vx_ifs_register_net(fs_connect, IFSMGRVERSION, PGDFS_NETID);
-    if (mutex && proid != -1) {
+    ctl_mutex = vx_create_mutex(0, 0);
+    if (mutex && ctl_mutex) proid = vx_ifs_register_net(fs_connect, IFSMGRVERSION, PGDFS_NETID);
+    if (mutex && ctl_mutex && proid != -1) {
       push_time(1);
       ok = 1;
     }

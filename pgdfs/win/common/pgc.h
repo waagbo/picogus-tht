@@ -59,6 +59,7 @@
 #define PICOGUS_NO_MODENAMES
 #endif
 #include "../../../common/picogus.h"
+#include "pgctl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -234,6 +235,14 @@ void     pgc_set_time(pgc_card *c, uint16_t dos_time, uint16_t dos_date);
 /* size and free space in clusters of cluster_bytes. Exact (from the DIAG
  * record) when the firmware has it, else DOS's 32 KB units capped at 2 GB */
 int      pgc_space(pgc_card *c, uint32_t *clusters, uint32_t *free_clusters, uint32_t *cluster_bytes);
+
+/* ---- control requests (pgctl.h) ----------------------------------------------
+ * Runs one request of a setup program on the control port: wr are the
+ * rq->nwrite bytes to write, rd takes up to rq->nread bytes (rd may be wr:
+ * everything is written before anything is read), *got how many were read.
+ * PGC_OK, PGC_EFUNC for a malformed request, PGC_EACCESS for a register that
+ * is not a setup program's. */
+int      pgc_ctl(pgc_card *c, const pgctl_req *rq, const uint8_t *wr, uint8_t *rd, uint16_t *got);
 
 /* ---- paths ---------------------------------------------------------------- */
 

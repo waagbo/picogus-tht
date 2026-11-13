@@ -36,10 +36,10 @@ OBJS    := pgdfs.o pgc.o
 
 all: pgdfs.sys
 
-pgdfs.o: pgdfs.c $(CORE)/pgc.h ../../../common/picogus.h
+pgdfs.o: pgdfs.c $(CORE)/pgc.h $(CORE)/pgctl.h ../../../common/picogus.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-pgc.o: $(CORE)/pgc.c $(CORE)/pgc.h ../../../common/picogus.h
+pgc.o: $(CORE)/pgc.c $(CORE)/pgc.h $(CORE)/pgctl.h ../../../common/picogus.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 pgdfs.sys: $(OBJS) pefix.py

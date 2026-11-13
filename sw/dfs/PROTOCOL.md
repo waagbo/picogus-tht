@@ -16,6 +16,15 @@ one of these drivers, or the DOS tools, may use the card at once. See
 [Detecting a remount](#detecting-a-remount) for how they follow a USB drive that
 is pulled and plugged in again.
 
+A driver that is loaded owns the control port: every access to a register is
+a register select followed by data accesses, and a second program selecting
+registers of its own in between would send the driver's data to the wrong
+register. The Windows drivers therefore run the control-port requests of
+setup programs themselves, between their transactions
+(`pgdfs/win/common/pgctl.h`; `PGTRAY` uses them for the CD images, the card
+mode and WiFi), and refuse the PGDFS registers, firmware programming and the
+reset to defaults there.
+
 The request/answer payloads are the EtherDFS "EDF5" protocol (Mateusz Viste,
 MIT), which is also what PicoMEM's PMDFS speaks. Only the framing and the
 transport differ: EtherDFS uses raw Ethernet frames, PMDFS a shared-RAM window,

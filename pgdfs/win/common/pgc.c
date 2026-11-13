@@ -347,6 +347,59 @@ static void remounted(pgc_card *c) {
   check_medium(c);
 }
 
+/* ---- control requests ---------------------------------------------------------- */
+
+#define SAVE_WAIT_MS 150    /* the card writes its flash; PGUSINIT waits 100 ms */
+
+static int ctl_allowed(uint8_t reg) {
+  if (reg < CMD_DFSSTAT) return 1;      /* identification and settings */
+  return reg == CMD_SAVE || reg == CMD_REBOOT || reg == CMD_HWTYPE || reg == CMD_CHIPTYPE;
+}
+
+int pgc_ctl(pgc_card *c, const pgctl_req *rq, const uint8_t *wr, uint8_t *rd, uint16_t *got) {
+  uint8_t reg = rq->reg, flags = rq->flags, stop = rq->stop;
+  uint16_t nwrite = rq->nwrite, nread = rq->nread;
+  uint32_t skip = rq->skip, k;
+  uint16_t i, n = 0;
+
+  *got = 0;
+  if (rq->version != PGCTL_VERSION || nwrite > PGCTL_MAX_DATA || nread > PGCTL_MAX_DATA ||
+      skip > PGCTL_MAX_SKIP || (flags & ~(PGCTL_WORD | PGCTL_STOP)) != 0) {
+    return PGC_EFUNC;
+  }
+  if (!ctl_allowed(reg)) return PGC_EACCESS;
+
+  sel(reg);
+  for (i = 0; i < nwrite; i++) {
+    pgc_plat_outb((uint16_t)(((flags & PGCTL_WORD) && i == 0) ? DATA_PORT_LOW : DATA_PORT_HIGH), wr[i]);
+  }
+  for (k = 0; k < skip; k++) {
+    if (pgc_plat_inb(DATA_PORT_HIGH) == stop && (flags & PGCTL_STOP)) return PGC_OK;
+  }
+  for (i = 0; i < nread; i++) {
+    uint8_t b = pgc_plat_inb(
+        (uint16_t)(((flags & PGCTL_WORD) && i == 0 && skip == 0) ? DATA_PORT_LOW : DATA_PORT_HIGH));
+    rd[n++] = b;
+    if (b == stop && (flags & PGCTL_STOP)) break;
+  }
+  *got = n;
+
+  if (nwrite != 0 && reg == CMD_SAVE) {
+    uint32_t start = pgc_plat_ms(), waited;
+    while ((waited = pgc_plat_ms() - start) < SAVE_WAIT_MS) pgc_plat_poll(waited);
+  } else if (nwrite != 0 && reg == CMD_REBOOT) {
+    /* the card starts afresh: no drive until it has mounted one again, and
+     * a mount count that starts over */
+    if (c->present) {
+      c->present = 0;
+      c->change_count++;
+    }
+    lost_ids(c);
+    c->mounts = 0;
+  }
+  return PGC_OK;
+}
+
 /* ---- requests --------------------------------------------------------------- */
 
 static uint8_t *payload(pgc_card *c) {
