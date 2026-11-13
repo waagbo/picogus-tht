@@ -29,7 +29,7 @@ The v1.3.2 is currently under quality assurance. The following features have bee
 * [x] Audio Playback ➔ OK (v4.2.0-beta2, SB Mode).
 * [x] Wavetable MIDI Playback  ➔ OK (WavetablePi)
 * [ ] External MIDI Playback
-* [ ] USB-A Connector
+* [x] USB-A Connector (Both CD-ROM and experimental PGDFS filesystem)
 
 The release version v1.3.2 is still pending build/test.
 
