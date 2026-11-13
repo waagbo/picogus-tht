@@ -1,0 +1,87 @@
+// PGTRAY resources. MIT license, see ../../LICENSE.
+// DIALOGEX and "MS Shell Dlg" are there from Windows 95 and NT 4.0 on.
+
+#include <windows.h>
+#include "resource.h"
+
+IDI_CD      ICON "cd.ico"
+IDI_EMPTY   ICON "empty.ico"
+
+IDD_MAIN DIALOGEX 0, 0, 256, 214
+STYLE DS_SETFONT | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
+CAPTION "PicoGUS"
+CLASS "PGTrayWnd"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    CONTROL         "", IDC_TAB, "SysTabControl32", WS_TABSTOP, 4, 4, 248, 160
+    LTEXT           "", IDC_STATUS, 6, 168, 244, 18, SS_NOPREFIX
+    AUTOCHECKBOX    "S&tart with Windows", IDC_AUTOSTART, 6, 197, 100, 10
+    PUSHBUTTON      "&Hide", IDC_HIDE, 146, 194, 50, 14
+    PUSHBUTTON      "E&xit", IDC_EXIT, 200, 194, 50, 14
+END
+
+IDD_CD DIALOGEX 0, 0, 240, 140
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
+FONT 8, "MS Shell Dlg"
+BEGIN
+    LTEXT           "Loaded:", -1, 4, 6, 30, 8
+    LTEXT           "", IDC_CD_CURRENT, 36, 6, 200, 8, SS_NOPREFIX
+    LISTBOX         IDC_CD_LIST, 4, 20, 178, 98, LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | LBS_USETABSTOPS | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    PUSHBUTTON      "&Load", IDC_CD_LOAD, 188, 20, 48, 14
+    PUSHBUTTON      "&Eject", IDC_CD_EJECT, 188, 38, 48, 14
+    PUSHBUTTON      "&Refresh", IDC_CD_REFRESH, 188, 62, 48, 14
+    LTEXT           "", IDC_CD_INFO, 4, 122, 232, 16, SS_NOPREFIX
+END
+
+IDD_MIDI DIALOGEX 0, 0, 240, 140
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
+FONT 8, "MS Shell Dlg"
+BEGIN
+    LTEXT           "MIDI &output:", -1, 4, 7, 46, 8
+    COMBOBOX        IDC_MIDI_DEV, 54, 4, 182, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "mt32-pi: synthesizer", -1, 4, 24, 232, 34
+    PUSHBUTTON      "&MT-32", IDC_MIDI_MT32, 12, 38, 64, 14
+    PUSHBUTTON      "&SoundFont (General MIDI)", IDC_MIDI_SF, 82, 38, 100, 14
+    GROUPBOX        "mt32-pi: MT-32 ROM set", -1, 4, 62, 232, 34
+    PUSHBUTTON      "MT-32 (o&ld)", IDC_MIDI_ROM_OLD, 12, 76, 64, 14
+    PUSHBUTTON      "MT-32 (&new)", IDC_MIDI_ROM_NEW, 82, 76, 64, 14
+    PUSHBUTTON      "&CM-32L", IDC_MIDI_ROM_CM32L, 152, 76, 64, 14
+    GROUPBOX        "mt32-pi: SoundFont", -1, 4, 100, 232, 34
+    LTEXT           "N&umber:", -1, 12, 117, 30, 8
+    EDITTEXT        IDC_MIDI_SFNUM, 46, 114, 30, 13, ES_NUMBER | ES_AUTOHSCROLL
+    PUSHBUTTON      "S&elect", IDC_MIDI_SFSET, 82, 114, 64, 14
+END
+
+IDD_CARD DIALOGEX 0, 0, 240, 140
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
+FONT 8, "MS Shell Dlg"
+BEGIN
+    LTEXT           "Firmware:", -1, 4, 6, 44, 8
+    LTEXT           "", IDC_CARD_FW, 52, 6, 184, 16, SS_NOPREFIX
+    LTEXT           "Reached by:", -1, 4, 26, 44, 8
+    LTEXT           "", IDC_CARD_ACCESS, 52, 26, 184, 8, SS_NOPREFIX
+    GROUPBOX        "Card mode", -1, 4, 40, 232, 96
+    LTEXT           "&Mode:", -1, 12, 57, 24, 8
+    COMBOBOX        IDC_CARD_MODE, 40, 54, 100, 90, CBS_DROPDOWNLIST | WS_TABSTOP
+    PUSHBUTTON      "S&witch", IDC_CARD_SWITCH, 146, 54, 50, 14
+    AUTOCHECKBOX    "&Keep this mode after power-off", IDC_CARD_SAVE, 12, 74, 200, 10
+    LTEXT           "Switching restarts the card as a different device. A Windows driver loaded for the old mode has no card until you switch back. Programs in a DOS box use the new mode at once.", -1, 12, 90, 212, 42
+END
+
+IDD_WEB DIALOGEX 0, 0, 240, 140
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX        "Web server", -1, 4, 2, 232, 52
+    LTEXT           "", IDC_WEB_STATUS, 12, 14, 216, 18, SS_NOPREFIX
+    PUSHBUTTON      "&Refresh", IDC_WEB_REFRESH, 12, 35, 50, 14
+    PUSHBUTTON      "&Open the web page", IDC_WEB_OPEN, 68, 35, 80, 14
+    GROUPBOX        "WiFi network", -1, 4, 58, 232, 78
+    LTEXT           "&Name (SSID):", -1, 12, 74, 50, 8
+    EDITTEXT        IDC_WEB_SSID, 66, 71, 110, 13, ES_AUTOHSCROLL
+    LTEXT           "&Password:", -1, 12, 91, 50, 8
+    EDITTEXT        IDC_WEB_PASS, 66, 88, 110, 13, ES_AUTOHSCROLL | ES_PASSWORD
+    PUSHBUTTON      "&Connect", IDC_WEB_CONNECT, 182, 71, 48, 14
+    AUTOCHECKBOX    "&Save to the card", IDC_WEB_SAVE, 66, 105, 110, 10
+    LTEXT           "The web page has no password: use it on a network you trust.", -1, 12, 121, 216, 10
+END

@@ -13,9 +13,11 @@ of Ethernet. The protocol is documented in `sw/dfs/PROTOCOL.md`.
 
 For Windows there are drivers of their own: `PGDFS.VXD` for Windows 95, 98
 and ME and `pgdfs.sys` for Windows NT 4.0, 2000 and XP, with long file names
-and the USB drive handled as a removable drive. See
-[win/README.md](win/README.md) (`PGDFSWIN.md` in the release files). Use one
-or the other: do not load `PGDFS.EXE` under a Windows that has its driver.
+and the USB drive handled as a removable drive, and `pgtray.exe`, which
+loads CD images, switches the card mode and sets up WiFi from the Windows
+notification area. See [win/README.md](win/README.md) (`PGDFSWIN.md` in the
+release files). Use one or the other: do not load `PGDFS.EXE` under a Windows
+that has its driver.
 
 ## Requirements
 

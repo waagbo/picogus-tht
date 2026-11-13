@@ -188,7 +188,7 @@ jobs:
           version: "2.0-64"
           tag: "2025-07-01-Build"
 
-      # pgdfs.sys, the PGDFS driver for Windows NT 4.0/2000/XP (the DDK headers come with it)
+      # pgdfs.sys, the PGDFS driver for Windows NT 4.0/2000/XP (the DDK headers come with it), and pgtray.exe
       - name: Install MinGW-w64
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-i686
 

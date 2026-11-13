@@ -14,6 +14,17 @@ with long file names, and the drive keeps working when the USB stick is
 pulled and plugged in again. The card serves the files from its own FatFs
 (FAT12, FAT16 or FAT32), so the drivers never see sectors.
 
+`PGDFS.VXD` has been run on a real machine with Windows 98 SE (before it
+learned the control requests PGTRAY uses). `pgdfs.sys` has not been on real
+hardware yet, and PGTRAY has only met an emulated card so far (the host
+tests, and `make demo` under Wine).
+
+With them comes **PGTRAY** (`pgtray.exe`, the same file in both folders), a
+small program in the notification area for what `PGUSINIT` does under DOS:
+loading CD images, switching the card mode, setting up WiFi for the web
+server, and switching an mt32-pi between its synthesizers. See
+[PGTRAY](#pgtray) below.
+
 ## Requirements
 
 * A PicoGUS with firmware that includes PGDFS, with PGDFS enabled (the
@@ -97,6 +108,52 @@ The USB stick can come and go while Windows runs:
   Explorer windows that show the drive refresh themselves when the stick
   comes or goes. On Windows 9x press F5.
 
+## PGTRAY
+
+`pgtray.exe` puts a compact disc into the notification area next to the
+clock (the taskbar's "tray"). It is one program for Windows 95, 98, ME and
+Windows NT 4.0, 2000, XP: copy it from `win9x` or `winnt` to the hard disk
+(not to the USB drive of the PicoGUS: that drive goes away for a moment when
+the card mode is switched) and start it.
+
+* **Right-click the icon** for the menu: the CD images on the USB drive with
+  a check mark on the loaded one, "No image (eject)", the two synthesizers of
+  an mt32-pi, the card modes, and Exit.
+* **Double-click the icon** for the window. Minimizing or closing the window
+  hides it again; the icon stays. Exit ends the program.
+* The icon is a blank disc while no CD image is loaded, and its tip says
+  which image is, or which mode the card is in.
+* **Start with Windows** in the window makes Windows start the program at
+  logon, as the icon only (`pgtray /tray`, in `HKCU\...\Run`).
+
+The window has four tabs:
+
+| Tab | |
+|---|---|
+| **CD-ROM** | The images on the USB drive, as `pgusinit /cdlist` shows them. Load (or a double-click) puts one into the emulated CD-ROM drive, Eject takes it out, Refresh reads the list again after the USB stick was changed. The card's CD-ROM emulation is part of Sound Blaster and USB mode and needs its port set (`pgusinit /cdport`). |
+| **MIDI** | For an [mt32-pi](https://github.com/dwhinham/mt32-pi) on the card's MIDI output: switch between its MT-32 and its SoundFont (General MIDI) synthesizer, choose the MT-32 ROM set (old, new, CM-32L) or a SoundFont by number. The messages are mt32-pi's own SysEx commands and go out through a MIDI output of Windows: choose the one of the card's MPU-401 at the top. It must not be in use by another program at that moment. |
+| **Card mode** | The firmware version and the mode the card runs in. Switch restarts the card in another mode (GUS, Sound Blaster, AdLib, MPU-401, Tandy / CMS, USB), as `pgusinit /mode` does; "Keep this mode after power-off" saves it as well. The card becomes a different device: programs in a DOS box see the new one at once, but a Windows sound driver that was loaded for the old mode has no card until you switch back. The USB drive is "not ready" for the two or three seconds the card needs. |
+| **Web server** | For firmware with the web server (Pico W and Pico 2 W boards): the card's WiFi status and the address of its web page, a button that opens the page in the browser, and the network name and password for it (`pgusinit /wifissid`, `/wifipass`). "Save to the card" keeps the network after power-off (it saves all of the card's settings, as `pgusinit /save`). |
+
+How the program reaches the card:
+
+* **With a PGDFS driver loaded**, through the driver (`\\.\PgDfs` under
+  Windows NT, `\\.\PGDFS` under Windows 9x; `common/pgctl.h` describes the
+  requests). The driver owns the card's control port while Windows runs and
+  fits the program's requests in between its own. Use the drivers of the
+  same release: older ones have no such requests.
+* **Windows 9x without the driver** (also with firmware that has no PGDFS):
+  the program uses the card's I/O ports itself.
+* **Windows NT, 2000, XP without the driver**: not at all. Programs cannot
+  reach I/O ports there, so PGTRAY needs `pgdfs.sys`, and with it a card
+  with PGDFS.
+
+The program looks at the card when its menu or window opens, every few
+seconds while the window shows, and when the mouse rests on its icon;
+otherwise it leaves the card alone. Close its window while `PGUSINIT` writes
+new firmware from a DOS box: a firmware update must have the control port to
+itself.
+
 ## What works how
 
 * **Long file names** in both directions. The card returns 8.3 names in its
@@ -142,8 +199,8 @@ and its long name).
 
 ## Building
 
-From this directory, `make` builds both drivers, `make test` runs the host
-tests of the shared client core, `make clean` removes the results.
+From this directory, `make` builds both drivers and PGTRAY, `make test` runs
+the host tests of the shared client core, `make clean` removes the results.
 
 * `9x/`: Open Watcom 2.0 (`wcc386`, `wasm`, `wlink`; `make INCLUDE="$WATCOM"/h`
   as for the DOS tools) and Python 3 for `fixle.py`, which applies the LE
@@ -153,16 +210,25 @@ tests of the shared client core, `make clean` removes the results.
   `pefix.py`, which clears the DLL flag and writes the PE checksum. The
   driver uses only kernel exports that Windows NT 4.0 has (`make imports`
   lists them).
+* `tray/`: PGTRAY, with the same MinGW-w64 compiler (its `windres` compiles
+  the resources, `mkicon.py` draws the icons). The program is linked without
+  a C runtime and imports only what Windows 95 has (`make imports` lists
+  it). `pgcard.c` is what it does with the card, `backend.c` the way there,
+  `pgtray.c` the window. `make demo` builds `pgtray-demo.exe`, the same
+  program with an emulated card inside, to work on the window without a
+  PicoGUS (it also runs under Wine).
 * `common/`: the client core both drivers share, `pgc.c`: the ISA transport,
-  the PGDFS requests, the sharing of the card's eight file slots and the
-  tracking of the removable drive (`pgc.h` explains how).
+  the PGDFS requests, the sharing of the card's eight file slots, the
+  tracking of the removable drive (`pgc.h` explains how) and the control
+  requests of a setup program such as PGTRAY (`pgctl.h`).
 * `test/`: the core against an emulated card at the I/O port level, behind
   which run the real firmware transport and file server on a FatFs RAM
   disk: unplug, replug, swapped sticks, a hung card, more open files than
-  the card has slots.
+  the card has slots; and PGTRAY's card part through the core's control
+  requests against the card's CD, mode and WiFi registers (`emuctl.c`).
 
-`sw/scripts/build_release.sh` builds the drivers with the DOS tools into
-`win9x/` and `winnt/` of the release files.
+`sw/scripts/build_release.sh` builds the drivers and PGTRAY with the DOS
+tools into `win9x/` and `winnt/` of the release files.
 
 ## Credits
 

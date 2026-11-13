@@ -16,8 +16,9 @@
 # Firmware needs PICO_SDK_PATH, PICO_EXTRAS_PATH and arm-none-eabi-gcc; the DOS
 # tools need OpenWatcom (wcl on PATH and WATCOM set) and are skipped without it.
 # A tree with the PGDFS Windows drivers (pgdfs/win) builds them with the DOS
-# tools: PGDFS.VXD with OpenWatcom as well, pgdfs.sys with the MinGW-w64 cross
-# compiler (i686-w64-mingw32-gcc), which is skipped with a notice without it.
+# tools: PGDFS.VXD with OpenWatcom as well, pgdfs.sys and pgtray.exe with the
+# MinGW-w64 cross compiler (i686-w64-mingw32-gcc), which are skipped with a
+# notice without it.
 #
 # CI runs this script once per flavor, chip and kind of file, in a checkout
 # that already has the experimental features merged in for the experimental
@@ -108,7 +109,8 @@ build_dos_tools() {
 }
 
 # The PGDFS drivers for Windows, where the tree has them: win9x/ (PGDFS.VXD and
-# its INF) and winnt/ (pgdfs.sys, its INF and a .reg file for Windows NT 4.0)
+# its INF) and winnt/ (pgdfs.sys, its INF and a .reg file for Windows NT 4.0),
+# and in both PGTRAY, the one program for either Windows
 build_windows_drivers() {
     local tree="$1" out="$2" win="$1/pgdfs/win"
     [[ -f "${win}/Makefile" ]] || return 0
@@ -125,8 +127,15 @@ build_windows_drivers() {
         mkdir -p "${out}/winnt"
         cp "${win}/nt/pgdfs.sys" "${win}/nt/pgdfsnt.inf" "${win}/nt/pgdfsnt.reg" "${out}/winnt/"
         echo "  winnt/pgdfs.sys"
+        if [[ -f "${win}/tray/Makefile" ]]; then
+            make -C "${win}/tray" > "${BUILD_ROOT}/win-tray.log" 2>&1 \
+                || { echo "build failed, see ${BUILD_ROOT}/win-tray.log" >&2; tail -30 "${BUILD_ROOT}/win-tray.log" >&2; return 1; }
+            cp "${win}/tray/pgtray.exe" "${out}/win9x/"
+            cp "${win}/tray/pgtray.exe" "${out}/winnt/"
+            echo "  win9x/pgtray.exe, winnt/pgtray.exe"
+        fi
     else
-        echo "  winnt/pgdfs.sys skipped: no MinGW-w64 cross compiler (i686-w64-mingw32-gcc)"
+        echo "  winnt/pgdfs.sys, pgtray.exe skipped: no MinGW-w64 cross compiler (i686-w64-mingw32-gcc)"
     fi
 }
 

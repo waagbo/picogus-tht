@@ -10,7 +10,9 @@
  * Covered: the transaction sequence, files bigger than a frame, more open
  * files than the card has ids, long names, directory listing, and the
  * removable medium: unplugged, plugged back (noticed and unnoticed), and
- * replaced by a different one.
+ * replaced by a different one; the control requests of a setup program
+ * (pgc_ctl()) and, through them, the card part of PGTRAY (../tray/pgcard.c)
+ * against the setup registers of emuctl.c.
  *
  * Copyright (C) 2026 PicoGUS contributors. MIT license, see ../../LICENSE.
  */
@@ -24,6 +26,8 @@
 #include "dfs_server.h"
 #include "ramdisk_diskio.h"
 #include "pgc.h"
+#include "emuctl.h"
+#include "../tray/pgcard.h"
 
 /* ---- checks ------------------------------------------------------------------ */
 
@@ -56,27 +60,31 @@ static uint8_t  selreg;
 static uint16_t dfs_port = DFS_DEFAULT_DATA_PORT;
 static bool     hang;           /* core 1 stops serving: the timeout path */
 static uint32_t port_ops;
+static int      dead_reads;     /* the card restarts: nobody drives the bus for this many reads */
+static uint32_t pgdfs_selects;  /* selects of PGDFS registers, firmware programming, defaults */
 
 uint8_t pgc_plat_inb(uint16_t port) {
     port_ops++;
+    if (dead_reads > 0) {
+        dead_reads--;
+        return 0xFF;
+    }
     if (dfs_port && (port & ~1u) == dfs_port) return dfs_data_read();
     if (port == CONTROL_PORT) return selreg;
     if (port == DATA_PORT_LOW) {
         switch (selreg) {
         case CMD_DFSMAXLEN: return dfs_port ? (uint8_t)(DFS_MAX_PAYLOAD & 0xFF) : 0;
         case CMD_DFSPORT:   return (uint8_t)(dfs_port & 0xFF);
-        default:            return 0;
+        default:            return emuctl_read_low(selreg);
         }
     }
     if (port == DATA_PORT_HIGH) {
         switch (selreg) {
-        case CMD_MAGIC:     return 0xDD;
-        case CMD_PROTOCOL:  return PICOGUS_PROTOCOL_VER;
         case CMD_DFSSTAT:   return dfs_ctl_status();
         case CMD_DFSINFO:   return dfs_ctl_info_read();
         case CMD_DFSMAXLEN: return dfs_port ? (uint8_t)(DFS_MAX_PAYLOAD >> 8) : 0;
         case CMD_DFSPORT:   return (uint8_t)(dfs_port >> 8);
-        default:            return 0;
+        default:            return emuctl_read_high(selreg);
         }
     }
     return 0xFF;
@@ -93,6 +101,7 @@ void pgc_plat_outb(uint16_t port, uint8_t v) {
             knocked = true;
         } else if (knocked) {
             selreg = v;
+            if ((v >= CMD_DFSSTAT && v <= CMD_DFSPORT) || v == CMD_FLASH || v == CMD_DEFAULTS) pgdfs_selects++;
             switch (v) {
             case CMD_MAGIC: case CMD_PROTOCOL: case CMD_DFSSTAT: case CMD_DFSEXEC: case CMD_DFSMAXLEN:
                 break;
@@ -101,9 +110,13 @@ void pgc_plat_outb(uint16_t port, uint8_t v) {
             case CMD_DFSINFO: dfs_ctl_info_rewind(); break;
             case CMD_DFSTIME: dfs_ctl_time_rewind(); break;
             case CMD_DFSPORT: break;
-            default:          knocked = false; break;
+            default:          if (!emuctl_select(v)) knocked = false; break;
             }
         }
+        return;
+    }
+    if (port == DATA_PORT_LOW && knocked) {
+        emuctl_write_low(selreg, v);
         return;
     }
     if (port == DATA_PORT_HIGH && knocked) {
@@ -111,7 +124,7 @@ void pgc_plat_outb(uint16_t port, uint8_t v) {
         case CMD_DFSSTAT: dfs_ctl_abort(); break;
         case CMD_DFSEXEC: dfs_ctl_exec(); break;
         case CMD_DFSTIME: dfs_ctl_time_write(v); break;
-        default: break;
+        default:          emuctl_write_high(selreg, v); break;
         }
     }
 }
@@ -139,6 +152,24 @@ void pgc_plat_poll(uint32_t waited_ms) {
     (void)waited_ms;
     clock_ms++;
     if (!hang) dfs_tasks();     /* core 1 */
+}
+
+/* ---- PGTRAY's way to the card: the driver's control request ------------------------- */
+
+static pgc_card card;
+static int ctl_requests;
+
+int pgcard_plat_ctl(const pgctl_req *rq, const unsigned char *wr, unsigned char *rd, unsigned *got) {
+    uint16_t n = 0;
+    int r = pgc_ctl(&card, rq, wr, rd, &n);
+    ctl_requests++;
+    *got = n;
+    return r == PGC_OK ? PGCARD_OK : PGCARD_EIO;
+}
+
+void pgcard_plat_sleep(unsigned ms) {
+    clock_ms += ms;
+    emuctl_task();              /* core 1 */
 }
 
 /* ---- the USB drive ---------------------------------------------------------------- */
@@ -170,8 +201,6 @@ static void unplug(void) {
 }
 
 /* ---- helpers ---------------------------------------------------------------------- */
-
-static pgc_card card;
 
 static void pattern(uint8_t *p, uint32_t n, uint32_t seed) {
     for (uint32_t i = 0; i < n; i++) p[i] = (uint8_t)(i * 7 + seed * 13 + (i >> 8));
@@ -215,6 +244,7 @@ static bool verify(pgc_file *f, uint32_t size, uint32_t seed) {
 
 static void test_probe(void) {
     SECTION("probe");
+    emuctl_reset();
     dfs_init();
     dfs_port = 0;
     CHECK(pgc_probe(&card) == PGC_ENOCARD, "PGDFS disabled: no card");
@@ -573,6 +603,287 @@ static void test_space(void) {
           "exact: %u/%u clusters of %u (FatFs %u/%u)", freec, clusters, bytes, (unsigned)nfree, (unsigned)(fs->n_fatent - 2));
 }
 
+/* ---- control requests ---------------------------------------------------------------- */
+
+static int ctl(uint8_t reg, uint8_t flags, uint8_t stop, const void *wr, uint16_t nwrite, uint32_t skip,
+               void *rd, uint16_t nread, uint16_t *got) {
+    pgctl_req rq = { PGCTL_VERSION, reg, flags, stop, nwrite, nread, skip };
+    return pgc_ctl(&card, &rq, wr, rd, got);
+}
+
+/* the card restarts: PGDFS starts afresh without a drive, the bus is dead for a while */
+static void card_reboot(void) {
+    dfs_on_drive_unmounted();
+    f_unmount("");
+    dfs_init();
+    dead_reads = 40;
+}
+
+static void card_dies(void) {
+    card_reboot();
+    dead_reads = 1000000;
+}
+
+static void test_ctl(void) {
+    static pgc_file a;
+    uint8_t buf[PGCTL_MAX_DATA];
+    uint16_t got = 77;
+    uint32_t ops, sels, t0, n;
+    int res;
+    const char *fw = emuctl.fw;
+    SECTION("control requests");
+    CHECK(sizeof(pgctl_req) == 12, "request header is 12 bytes: %u", (unsigned)sizeof(pgctl_req));
+
+    /* malformed and refused requests never reach the bus */
+    ops = port_ops;
+    {
+        pgctl_req rq = { 0, CMD_FWSTRING, 0, 0, 0, 1, 0 };
+        CHECK(pgc_ctl(&card, &rq, buf, buf, &got) == PGC_EFUNC && got == 0, "version 0 refused");
+    }
+    CHECK(ctl(CMD_FWSTRING, 0, 0, NULL, 0, 0, buf, PGCTL_MAX_DATA + 1, &got) == PGC_EFUNC, "too long a read");
+    CHECK(ctl(CMD_FWSTRING, 0, 0, buf, PGCTL_MAX_DATA + 1, 0, buf, 0, &got) == PGC_EFUNC, "too long a write");
+    CHECK(ctl(CMD_FWSTRING, 0x80, 0, NULL, 0, 0, buf, 1, &got) == PGC_EFUNC, "unknown flag");
+    CHECK(ctl(CMD_FWSTRING, 0, 0, NULL, 0, PGCTL_MAX_SKIP + 1, buf, 1, &got) == PGC_EFUNC, "too long a skip");
+    for (int reg = CMD_DFSSTAT; reg <= 0xFF; reg++) {
+        bool ok = reg == CMD_SAVE || reg == CMD_REBOOT || reg == CMD_HWTYPE || reg == CMD_CHIPTYPE;
+        if (ok) continue;
+        res = ctl((uint8_t)reg, 0, 0, buf, 1, 0, buf, 1, &got);
+        if (res != PGC_EACCESS) CHECK(0, "register %02X -> %d, not refused", reg, res);
+    }
+    CHECK(ctl(CMD_FLASH, 0, 0, NULL, 0, 0, buf, 1, &got) == PGC_EACCESS, "firmware programming refused");
+    CHECK(ctl(CMD_DFSPORT, PGCTL_WORD, 0, buf, 2, 0, NULL, 0, &got) == PGC_EACCESS, "PGDFS port refused");
+    CHECK(ctl(CMD_DEFAULTS, 0, 0, buf, 1, 0, NULL, 0, &got) == PGC_EACCESS, "defaults refused");
+    CHECK(port_ops == ops, "nothing on the bus: %u port operations", port_ops - ops);
+
+    /* a string register, to its NUL */
+    memset(buf, 0xAA, sizeof(buf));
+    CHECK(ctl(CMD_FWSTRING, PGCTL_STOP, 0, NULL, 0, 0, buf, 200, &got) == PGC_OK, "firmware string");
+    CHECK(got == strlen(fw) + 1 && strcmp((char *)buf, fw) == 0 && buf[got] == 0xAA, "read to the NUL: %u '%s'", got, buf);
+    CHECK(ctl(CMD_FWSTRING, 0, 0, NULL, 0, 0, buf, 4, &got) == PGC_OK && got == 4 && memcmp(buf, fw, 4) == 0, "fixed count");
+    CHECK(ctl(CMD_FWSTRING, PGCTL_STOP, 0, NULL, 0, 3, buf, 200, &got) == PGC_OK && strcmp((char *)buf, fw + 3) == 0,
+          "skip 3: '%s'", buf);
+    CHECK(ctl(CMD_FWSTRING, PGCTL_STOP, 0, NULL, 0, 150, buf, 200, &got) == PGC_OK && got == 0, "the end is among the skipped: %u", got);
+    CHECK(ctl(CMD_MAGIC, 0, 0, NULL, 0, 0, buf, 1, &got) == PGC_OK && got == 1 && buf[0] == 0xDD, "magic");
+
+    /* 16-bit registers */
+    CHECK(ctl(CMD_CDPORT, PGCTL_WORD, 0, NULL, 0, 0, buf, 2, &got) == PGC_OK && got == 2 && buf[0] == 0x50 && buf[1] == 0x02,
+          "CD port read: %02X %02X", buf[0], buf[1]);
+    buf[0] = 0x30;
+    buf[1] = 0x02;
+    CHECK(ctl(CMD_CDPORT, PGCTL_WORD, 0, buf, 2, 0, NULL, 0, &got) == PGC_OK && emuctl.cd_port == 0x230, "CD port written: %X",
+          emuctl.cd_port);
+    buf[0] = 0x50;
+    CHECK(ctl(CMD_CDPORT, PGCTL_WORD, 0, buf, 2, 0, buf, 2, &got) == PGC_OK && emuctl.cd_port == 0x250 && buf[0] == 0x50 &&
+          buf[1] == 0x02, "written and read back in one request (same buffer)");
+
+    /* written strings */
+    CHECK(ctl(CMD_WIFISSID, 0, 0, "abc", 4, 0, NULL, 0, &got) == PGC_OK && strcmp(emuctl.ssid, "abc") == 0, "string written: '%s'",
+          emuctl.ssid);
+
+    /* saving: the card is left alone while it writes its flash */
+    t0 = clock_ms;
+    buf[0] = 0xFF;
+    CHECK(ctl(CMD_SAVE, 0, 0, buf, 1, 0, NULL, 0, &got) == PGC_OK && emuctl.saves == 1, "save");
+    CHECK(clock_ms - t0 >= 150, "waited %u ms", clock_ms - t0);
+
+    /* between the requests of an open file */
+    CHECK(make_file("\\CTL.BIN", 9000, 5) == PGC_OK, "make");
+    CHECK(pgc_open(&card, &a, "\\CTL.BIN", PGC_OPEN_EXISTING, PGC_READ, 0, &res, NULL, NULL, NULL, NULL) == PGC_OK, "open");
+    CHECK(pgc_read(&card, &a, 0, buf, 100, &n) == PGC_OK && n == 100, "read");
+    sels = pgdfs_selects;
+    CHECK(ctl(CMD_FWSTRING, PGCTL_STOP, 0, NULL, 0, 0, buf, 200, &got) == PGC_OK, "request while a file is open");
+    CHECK(pgdfs_selects == sels, "no PGDFS register touched");
+    CHECK(verify(&a, 9000, 5), "the file reads on");
+
+    /* restart: the drive is gone until the card has mounted it again, the
+     * open file then carries on */
+    {
+        uint32_t cc = card.change_count, mg = card.mount_gen;
+        emuctl.on_reboot = card_reboot;
+        emuctl.boot_request = SB_MODE;
+        buf[0] = 0xFF;
+        CHECK(a.id != 0, "the file holds a card id");
+        CHECK(ctl(CMD_REBOOT, 0, 0, buf, 1, 0, NULL, 0, &got) == PGC_OK && emuctl.reboots == 1, "reboot");
+        CHECK(!card.present && card.change_count == cc + 1 && card.mount_gen != mg && a.id == 0 && card.mounts == 0,
+              "the drive counts as unplugged, the ids are gone");
+        CHECK(pgc_read(&card, &a, 0, buf, 10, &n) == PGC_ENOTREADY, "not ready while the card restarts");
+        dead_reads = 0;
+        CHECK(pgc_read(&card, &a, 0, buf, 10, &n) == PGC_ENOTREADY, "not ready before the drive is mounted");
+        clock_ms += 2500;
+        plug();
+        CHECK(verify(&a, 9000, 5), "mounted again: the open file carries on");
+        CHECK(card.present && card.change_count == cc + 2, "arrival counted");
+    }
+    CHECK(pgc_close(&card, &a) == PGC_OK, "close");
+    CHECK(pgc_delete(&card, "\\CTL.BIN") == PGC_OK, "delete");
+}
+
+/* ---- PGTRAY's card part ------------------------------------------------------------- */
+
+static void test_tray(void) {
+    static char names[200][48];
+    static char list[16384];
+    char err[PGCARD_TEXT], name[PGCARD_TEXT], url[64];
+    pgcard_info info;
+    unsigned count = 99;
+    unsigned char idx = 99, now = 0;
+    uint16_t got;
+    uint8_t st;
+    int r, saves;
+    const char *p;
+    SECTION("PGTRAY: the card");
+
+    CHECK(pgcard_get_info(&info) == PGCARD_OK, "info");
+    CHECK(strcmp(info.fw, emuctl.fw) == 0 && info.protocol == PICOGUS_PROTOCOL_VER && info.mode == SB_MODE && info.has_cd &&
+          info.cd_port == 0x250, "fw '%s' protocol %u mode %u cd %u port %X", info.fw, info.protocol, info.mode, info.has_cd,
+          info.cd_port);
+    CHECK(strcmp(pgcard_mode_name(SB_MODE), "Sound Blaster") == 0 && strcmp(pgcard_mode_name(0), "?") == 0, "mode names");
+
+    /* CD images */
+    emuctl.image[0] = "Doom II.cue";
+    emuctl.image[1] = "QUAKE.ISO";
+    emuctl.image[2] = "Tomb Raider (Disc 1).cue";
+    emuctl.images = 3;
+    emuctl.busy_polls = 3;
+    CHECK(pgcard_cd_current(&idx, name, sizeof(name)) == PGCARD_OK && idx == 0 && name[0] == 0, "nothing loaded");
+    CHECK(pgcard_cd_list(list, sizeof(list), &count, err, sizeof(err)) == PGCARD_OK && count == 3, "list: %u", count);
+    p = list;
+    CHECK(strcmp(p, "Doom II.cue") == 0, "1: '%s'", p);
+    p += strlen(p) + 1;
+    CHECK(strcmp(p, "QUAKE.ISO") == 0, "2: '%s'", p);
+    p += strlen(p) + 1;
+    CHECK(strcmp(p, "Tomb Raider (Disc 1).cue") == 0, "3: '%s'", p);
+    CHECK(ctl(CMD_CDSTATUS, 0, 0, NULL, 0, 0, &st, 1, &got) == PGC_OK && st == CD_STATUS_IDLE, "the card let go of its list: %u", st);
+    CHECK(emuctl.list_overruns == 0, "the list was never read past its end");
+
+    CHECK(pgcard_cd_load(2, err, sizeof(err)) == PGCARD_OK, "load 2: '%s'", err);
+    CHECK(pgcard_cd_current(&idx, name, sizeof(name)) == PGCARD_OK && idx == 2 && strcmp(name, "QUAKE.ISO") == 0, "loaded: %u '%s'",
+          idx, name);
+    emuctl.bad_image = "Doom II.cue";
+    r = pgcard_cd_load(1, err, sizeof(err));
+    CHECK(r == PGCARD_ECARD && strcmp(err, "Error loading iso 'Doom II.cue'") == 0, "bad image: %d '%s'", r, err);
+    CHECK(pgcard_cd_current(&idx, name, sizeof(name)) == PGCARD_OK && idx == 0, "nothing loaded after the failure");
+    emuctl.bad_image = NULL;
+    CHECK(pgcard_cd_load(3, err, sizeof(err)) == PGCARD_OK && pgcard_cd_current(&idx, name, sizeof(name)) == PGCARD_OK && idx == 3,
+          "load 3");
+    CHECK(pgcard_cd_load(0, err, sizeof(err)) == PGCARD_OK && pgcard_cd_current(&idx, name, sizeof(name)) == PGCARD_OK && idx == 0 &&
+          name[0] == 0, "unload");
+
+    /* a command that takes longer than the patience */
+    emuctl.busy_polls = 100000;
+    r = pgcard_cd_load(1, err, sizeof(err));
+    CHECK(r == PGCARD_ETIMEOUT, "a card that stays busy: %d", r);
+    emuctl.busy_polls = 0;
+    emuctl_task();
+    emuctl_task();
+
+    /* the card's own errors */
+    emuctl.drive = false;
+    r = pgcard_cd_list(list, sizeof(list), &count, err, sizeof(err));
+    CHECK(r == PGCARD_ECARD && count == 0 && strcmp(err, "No USB disk or error mounting it") == 0, "no drive: %d '%s'", r, err);
+    emuctl.drive = true;
+    emuctl.images = 0;
+    r = pgcard_cd_list(list, sizeof(list), &count, err, sizeof(err));
+    CHECK(r == PGCARD_ECARD && strcmp(err, "No image files on USB disk") == 0, "no images: %d '%s'", r, err);
+
+    /* a list longer than one request, and one longer than the buffer */
+    for (int i = 0; i < 200; i++) {
+        snprintf(names[i], sizeof(names[i]), "Image number %03d of the collection.iso", i + 1);
+        emuctl.image[i] = names[i];
+    }
+    emuctl.images = 200;
+    emuctl.busy_polls = 1;
+    r = pgcard_cd_list(list, sizeof(list), &count, err, sizeof(err));
+    CHECK(r == PGCARD_OK && count == 200, "200 images: %d, %u", r, count);
+    p = list;
+    for (int i = 0; i < 200 && count == 200; i++) {
+        if (strcmp(p, names[i]) != 0) {
+            CHECK(0, "name %d: '%s'", i + 1, p);
+            break;
+        }
+        p += strlen(p) + 1;
+    }
+    r = pgcard_cd_list(list, 100, &count, err, sizeof(err));
+    CHECK(r == PGCARD_OK && count == 2 && strcmp(list, names[0]) == 0 && strcmp(list + strlen(list) + 1, names[1]) == 0,
+          "a small buffer takes the names that fit: %d, %u", r, count);
+    CHECK(ctl(CMD_CDSTATUS, 0, 0, NULL, 0, 0, &st, 1, &got) == PGC_OK && st == CD_STATUS_IDLE, "and the list is read to its end");
+    CHECK(emuctl.list_overruns == 0, "the list was never read past its end: %d", emuctl.list_overruns);
+    emuctl.images = 3;
+    emuctl.image[0] = "Doom II.cue";
+    emuctl.image[1] = "QUAKE.ISO";
+    emuctl.image[2] = "Tomb Raider (Disc 1).cue";
+
+    /* the mode: saved, restarted, waited for */
+    saves = emuctl.saves;
+    emuctl.on_reboot = card_reboot;
+    CHECK(pgcard_set_mode(0, 0, &now) == PGCARD_EINVAL && pgcard_set_mode(NE2000_MODE, 0, &now) == PGCARD_EINVAL, "modes that are none");
+    r = pgcard_set_mode(GUS_MODE, 1, &now);
+    CHECK(r == PGCARD_OK && now == GUS_MODE && emuctl.mode == GUS_MODE && emuctl.saves == saves + 1 && emuctl.reboots == 2,
+          "GUS mode, saved: %d now %u", r, now);
+    CHECK(pgcard_get_info(&info) == PGCARD_OK && info.mode == GUS_MODE && !info.has_cd, "no CD-ROM in GUS mode");
+    CHECK(pgcard_cd_list(list, sizeof(list), &count, err, sizeof(err)) == PGCARD_ENOTSUP, "list: not in this mode");
+    CHECK(pgcard_cd_current(&idx, name, sizeof(name)) == PGCARD_ENOTSUP && idx == 0, "current: not in this mode");
+    CHECK(pgcard_cd_load(1, err, sizeof(err)) == PGCARD_ENOTSUP, "load: not in this mode");
+    r = pgcard_set_mode(SB_MODE, 0, &now);
+    CHECK(r == PGCARD_OK && now == SB_MODE && emuctl.saves == saves + 1 && emuctl.reboots == 3, "back to SB, not saved: %d", r);
+    clock_ms += 2500;
+    plug();
+    CHECK(pgc_media(&card, 1) == PGC_OK, "the drive is back after the restarts");
+    /* a card that is not there, and one that does not come back */
+    dead_reads = 1000000;
+    r = pgcard_get_info(&info);
+    CHECK(r == PGCARD_ENOCARD, "a dead bus is no card: %d", r);
+    r = pgcard_set_mode(GUS_MODE, 0, &now);
+    CHECK(r == PGCARD_ENOCARD && emuctl.reboots == 3, "nor is its mode set: %d", r);
+    dead_reads = 0;
+    emuctl.on_reboot = card_dies;
+    {
+        uint32_t t0 = clock_ms;
+        r = pgcard_set_mode(USB_MODE, 0, &now);
+        CHECK(r == PGCARD_ETIMEOUT && clock_ms - t0 >= 10000, "restarted and never seen again: %d after %u ms", r, clock_ms - t0);
+    }
+    dead_reads = 0;
+    emuctl.on_reboot = card_reboot;
+    r = pgcard_set_mode(SB_MODE, 0, &now);
+    CHECK(r == PGCARD_OK && now == SB_MODE, "SB again: %d", r);
+    clock_ms += 2500;
+    plug();
+    CHECK(pgc_media(&card, 1) == PGC_OK, "drive mounted");
+
+    /* WiFi */
+    r = pgcard_wifi_status(name, sizeof(name));
+    CHECK(r == PGCARD_ENOTSUP && name[0] == 0, "firmware without WiFi: %d", r);
+    emuctl.has_wifi = true;
+    emuctl.wifi_status = "Connected to SSID home, Signal -55 dB, web UI: http://192.168.1.42/";
+    r = pgcard_wifi_status(name, sizeof(name));
+    CHECK(r == PGCARD_OK && strcmp(name, emuctl.wifi_status) == 0, "status: %d '%s'", r, name);
+    CHECK(pgcard_wifi_url(name, url, sizeof(url)) && strcmp(url, "http://192.168.1.42/") == 0, "url '%s'", url);
+    CHECK(!pgcard_wifi_url("Err: SSID not found", url, sizeof(url)) && url[0] == 0, "no url");
+    CHECK(!pgcard_wifi_url(name, url, 10), "url that does not fit");
+    emuctl.wifi_busy_reads = 5;
+    r = pgcard_wifi_status(name, sizeof(name));
+    CHECK(r == PGCARD_OK && strcmp(name, emuctl.wifi_status) == 0, "status after 'not ready': %d '%s'", r, name);
+    emuctl.wifi_busy_reads = 0;
+    saves = emuctl.saves;
+    CHECK(pgcard_wifi_set("home", "secret", 1) == PGCARD_OK && strcmp(emuctl.ssid, "home") == 0 &&
+          strcmp(emuctl.pass, "secret") == 0 && emuctl.applies == 1 && emuctl.saves == saves + 1, "set and saved: '%s' '%s'",
+          emuctl.ssid, emuctl.pass);
+    CHECK(pgcard_wifi_set("cafe", "", 0) == PGCARD_OK && strcmp(emuctl.ssid, "cafe") == 0 && emuctl.pass[0] == 0 &&
+          emuctl.applies == 2 && emuctl.saves == saves + 1, "open network, not saved");
+    CHECK(pgcard_wifi_set("", "x", 0) == PGCARD_EINVAL, "no SSID");
+    CHECK(pgcard_wifi_set("123456789012345678901234567890123", "x", 0) == PGCARD_EINVAL, "SSID of 33");
+    CHECK(pgcard_wifi_set("12345678901234567890123456789012", "x", 0) == PGCARD_OK && strlen(emuctl.ssid) == 32, "SSID of 32");
+    {
+        char pass[65];
+        memset(pass, 'p', 64);
+        pass[64] = 0;
+        CHECK(pgcard_wifi_set("a", pass, 0) == PGCARD_EINVAL, "password of 64");
+        pass[63] = 0;
+        CHECK(pgcard_wifi_set("a", pass, 0) == PGCARD_OK && strlen(emuctl.pass) == 63, "password of 63");
+    }
+    CHECK(card.present && pgc_media(&card, 1) == PGC_OK, "PGDFS untouched by all of it");
+}
+
 int main(void) {
     test_probe();
     test_files();
@@ -581,6 +892,8 @@ int main(void) {
     test_removal();
     test_timeout();
     test_space();
+    test_ctl();
+    test_tray();
     printf("%d checks, %d failures (%u transactions, %u port operations)\n", n_checks, n_fails,
            card.transactions, port_ops);
     ramdisk_free();

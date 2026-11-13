@@ -1,0 +1,4 @@
+*.o
+*.ico
+pgtray.exe
+pgtray-demo.exe
