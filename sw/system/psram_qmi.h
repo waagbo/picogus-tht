@@ -53,9 +53,10 @@ typedef struct psram_spi_inst {
 psram_spi_inst_t psram_qmi_init(void);
 
 // Re-program QMI window 1's timing and command formats for the current
-// clk_sys. Call after any clk_sys change and after flash writes (the SDK's
-// flash functions keep CS1's timing and read setup, but reset its write
-// format). Does nothing until psram_qmi_init() found a PSRAM.
+// clk_sys. Call after any clk_sys change. psram_qmi_init() also registers it
+// with the SDK's flash functions, which run it after every flash erase and
+// program (they would otherwise leave the window without its write format).
+// Does nothing until psram_qmi_init() found a PSRAM.
 void psram_qmi_reconfigure(void);
 
 // Write/read test of the GUS memory (first 1MB), reading every 'increment'

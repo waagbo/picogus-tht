@@ -21,23 +21,16 @@
 #include <hardware/flash.h>
 #include "../include/pg_debug.h"
 #include "hardware/clocks.h"
-#include "hardware/watchdog.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "hardware/sync.h"
-#include "overclock.h"
+#include "hardware/watchdog.h"
+#include "platform.h"
 
-// Flash is read at clk_sys / divider while the firmware runs at 370MHz, and that must stay within the flash's 133MHz.
-#if PICO_RP2040
-// RP2040: boot2 sets the divider (PICO_FLASH_SPI_CLKDIV) and the SDK re-runs boot2 after every flash write
+// Flash is erased and programmed without leaving 370MHz, so the flash clock divider that boot2 (RP2040) or the embedded
+// XIP setup function (RP2350) applies after each flash operation has to be within spec at that speed
 #if RP2_CLOCK_SPEED / PICO_FLASH_SPI_CLKDIV > 133000
 #error "PICO_FLASH_SPI_CLKDIV must be at least 4 when running at 370MHz"
-#endif
-#else
-// RP2350 has no boot2: overclock_370mhz() and overclock_flash_write_done() set the QMI divider
-#if RP2_CLOCK_SPEED / PICOGUS_FLASH_QMI_CLKDIV > 133000
-#error "PICOGUS_FLASH_QMI_CLKDIV must be at least 3 when running at 370MHz"
-#endif
 #endif
 
 static union {
@@ -58,11 +51,6 @@ static union {
 } uf2_buf;
 
 #define UF2_FLAG_FAMILY_ID_PRESENT 0x00002000u
-#if PICO_RP2040
-#define UF2_FAMILY_ID_THIS_CHIP 0xe48bff56u // RP2040
-#else
-#define UF2_FAMILY_ID_THIS_CHIP 0xe48bff59u // RP2350, Arm Secure
-#endif
 
 // Settings live in the last flash sector (see flash_settings.c)
 #define FIRMWARE_MAX_SIZE (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
@@ -107,16 +95,14 @@ static void pico_firmware_erase_to(uint32_t end)
         }
         uint32_t ints = save_and_disable_interrupts();
         flash_range_erase(pico_firmware_erasedEnd, len);
-        overclock_flash_write_done();
         restore_interrupts(ints);
         pico_firmware_erasedEnd += len;
     }
 }
 
-// Blocks are programmed back to back from the start of flash, so only accept
-// UF2s for this chip that are laid out that way. The first block is checked
-// before anything is erased, so a UF2 for the wrong chip (e.g. an RP2350 build
-// on an RP2040 card) is refused without harming the installed firmware.
+// Blocks are programmed back to back from the start of flash, so only accept UF2s for this chip that are laid out that
+// way. The first block is checked before anything is erased, so a UF2 for the wrong chip (e.g. an RP2350 build on an
+// RP2040 card) is refused without harming the installed firmware.
 static bool pico_firmware_block_valid(void)
 {
     if (uf2_buf.uf2.magicStart0 != 0x0A324655 || uf2_buf.uf2.magicStart1 != 0x9E5D5157 || uf2_buf.uf2.magicEnd != 0x0AB16F30) {
@@ -125,25 +111,27 @@ static bool pico_firmware_block_valid(void)
         return false;
     }
     if (uf2_buf.uf2.flags & UF2_FLAG_FAMILY_ID_PRESENT) {
-        if (uf2_buf.uf2.fileSize != UF2_FAMILY_ID_THIS_CHIP) {
+        if (uf2_buf.uf2.fileSize != PLATFORM_UF2_FAMILY_ID) {
             ERR_PUTS("UF2 is for a different chip!");
             return false;
         }
-    } else {
-#if !PICO_RP2040
-        // Only RP2040 UF2s predate family IDs
+    } else if (!PLATFORM_UF2_FAMILY_ID_OPTIONAL) {
         ERR_PUTS("UF2 has no family ID!");
         return false;
-#endif
     }
     if (uf2_buf.uf2.payloadSize != FLASH_PAGE_SIZE ||
         uf2_buf.uf2.targetAddr != XIP_BASE + pico_firmware_curBlock * FLASH_PAGE_SIZE) {
+        // Also refuses the per-mode -multifw UF2s, which start at their slot in the bundle
         ERR_PUTS("Unsupported UF2 layout!");
         return false;
     }
-    if (pico_firmware_curBlock == 0 &&
-        (uf2_buf.uf2.numBlocks == 0 || uf2_buf.uf2.numBlocks > FIRMWARE_MAX_SIZE / FLASH_PAGE_SIZE)) {
-        ERR_PUTS("Firmware too big!");
+    if (pico_firmware_curBlock == 0) {
+        if (uf2_buf.uf2.numBlocks == 0 || uf2_buf.uf2.numBlocks > FIRMWARE_MAX_SIZE / FLASH_PAGE_SIZE) {
+            ERR_PUTS("Firmware too big!");
+            return false;
+        }
+    } else if (uf2_buf.uf2.numBlocks != pico_firmware_numBlocks) {
+        ERR_PUTS("Invalid UF2 data!");
         return false;
     }
     return true;
@@ -168,7 +156,6 @@ static void pico_firmware_process_block(void)
     pico_firmware_erase_to(curAddress + pico_firmware_payloadSize);
     uint32_t ints = save_and_disable_interrupts();
     flash_range_program(curAddress, uf2_buf.uf2.data, pico_firmware_payloadSize);
-    overclock_flash_write_done();
     restore_interrupts(ints);
     DBG_PRINTF("curBlock: %u\n", pico_firmware_curBlock);
     ++pico_firmware_curBlock;
@@ -237,8 +224,8 @@ static void pico_firmware_reboot()
     #define AIRCR_Register (*((volatile uint32_t*)(PPB_BASE + 0x0ED0C)))
     AIRCR_Register = 0x5FA0004;
 #else
-    // On RP2350 SYSRESETREQ is only a processor warm reset; a watchdog reset
-    // restarts the rest of the chip as well (the scratch registers survive)
+    // On RP2350 SYSRESETREQ only resets the processors. A watchdog reset restarts the rest of the chip as well, as
+    // CMD_REBOOT does
     watchdog_reboot(0, 0, 0);
     for (;;) {
         tight_loop_contents();

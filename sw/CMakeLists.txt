@@ -4,7 +4,8 @@ cmake_minimum_required(VERSION 3.13)
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards)
 # Chip selection: build for RP2350 (Raspberry Pi Pico 2 / Pico 2 W) with
-# -DPICO_PLATFORM=rp2350, or pick an RP2350 board directly with -DPICO_BOARD.
+# -DPICO_PLATFORM=rp2350, or pick an RP2350 board directly with -DPICO_BOARD
+# (-DPICO_BOARD=picogus21 for the RP2350B PicoGUS v2.1 THT board).
 # The default is RP2040. PICO_PLATFORM may also come from the environment,
 # as it does for the Pico SDK itself.
 if(NOT PICO_PLATFORM AND DEFINED ENV{PICO_PLATFORM})
@@ -15,12 +16,12 @@ if(PICO_PLATFORM MATCHES "riscv")
 endif()
 if(NOT PICO_BOARD)
     if(PICO_PLATFORM MATCHES "^rp2350")
-        if(PROJECT_TYPE MATCHES "NE2K")
+        if(PROJECT_TYPE MATCHES "^(SB_)?NE2K$")
             set(PICO_BOARD "pico2w_fast")
         else()
             set(PICO_BOARD "pico2_fast")
         endif()
-    elseif(PROJECT_TYPE MATCHES "NE2K")
+    elseif(PROJECT_TYPE MATCHES "^(SB_)?NE2K$")
         set(PICO_BOARD "picow_fast")
     else()
         set(PICO_BOARD "picogus2")
@@ -47,6 +48,19 @@ project(picogus
 # CMake's project(VERSION) only allows numeric components, so the suffix lives here.
 set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.2")
 
+# Experimental features describe themselves in experimental/<feature>.md (see
+# experimental/README.md). Name the ones this source tree carries in the
+# version, e.g. 4.2.0+pgdfs, so such firmware can be told from the mainline.
+file(GLOB PICOGUS_EXPERIMENTAL_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/experimental/*.md)
+list(SORT PICOGUS_EXPERIMENTAL_FILES)
+foreach(FEATURE_FILE ${PICOGUS_EXPERIMENTAL_FILES})
+    get_filename_component(FEATURE ${FEATURE_FILE} NAME_WE)
+    if(NOT FEATURE STREQUAL "README")
+        string(APPEND PICOGUS_VERSION "+${FEATURE}")
+    endif()
+endforeach()
+message("PicoGUS firmware version: ${PICOGUS_VERSION}")
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -71,17 +85,24 @@ pico_sdk_init()
 if(PICO_PLATFORM MATCHES "^rp2350")
     set(PICOGUS_CHIP "rp2350")
     set(PICOGUS_UF2_FAMILY_ID "0xe48bff59") # RP2350, Arm Secure
+    # fw_memmap_c2ram.ld, included by the generated multifw scripts, is chip-specific
+    set(PICOGUS_MULTIFW_LD_DIR ${CMAKE_SOURCE_DIR}/multifw/rp2350)
+    # The RP2350 has no boot2 in front of the image. Embed the SDK's XIP setup
+    # function instead, so the flash clock divider from the board header
+    # (PICO_FLASH_SPI_CLKDIV) is applied at startup and after every flash write,
+    # as boot2 does on the RP2040.
+    add_compile_definitions(PICO_EMBED_XIP_SETUP=1)
 else()
     set(PICOGUS_CHIP "rp2040")
     set(PICOGUS_UF2_FAMILY_ID "0xe48bff56")
+    set(PICOGUS_MULTIFW_LD_DIR ${CMAKE_SOURCE_DIR}/multifw)
 endif()
 message("Building PicoGUS firmware for ${PICOGUS_CHIP} on board ${PICO_BOARD}")
 
 ################################################################################
 # Helper function for setting linker script
 function(set_linker_script TARGET script)
-    # fw_memmap_c2ram.ld, included by the generated script, is chip-specific
-    target_link_directories(${TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/multifw/${PICOGUS_CHIP})
+    target_link_directories(${TARGET} PRIVATE ${PICOGUS_MULTIFW_LD_DIR})
     pico_set_linker_script(${TARGET} ${script})
 
     # Add dependencies on the 'included' linker scripts so that the target gets
@@ -615,7 +636,8 @@ function(build_usb TARGET_NAME MULTIFW)
 endfunction()
 
 
-# NE2000 emulation over the CYW43 WiFi chip of a Pico W / Pico 2 W
+# NE2000 emulation over the CYW43 WiFi chip of a Pico W / Pico 2 W, or of the
+# Radio Module 2 on the PicoGUS v2.1 THT board
 function(add_ne2000 TARGET_NAME)
     # The CYW43 PIO SPI takes 2 PIO cycles per bit. On RP2350 keep the clock
     # within the CYW43439's 50MHz gSPI limit: 370MHz / 4 / 2 = 46.25MHz.

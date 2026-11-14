@@ -16,16 +16,20 @@ Firmware files that comes with release:
   modes, use the `/mode x` option in pgusinit.
 * `pg-ne2k.uf2` - Special firmware for NE2000/WiFi. Only works on PicoGUS
   Femto and PicoGUS v1.x boards with a Pico W installed.
-* `picogus-rp2350.uf2` and `pg-ne2k-rp2350.uf2` - the same firmwares for boards
-  with an RP2350-based Raspberry Pi Pico 2 (or Pico 2 W for NE2000) installed
-  instead of a Pico (or Pico W). The RP2040 and RP2350 firmwares are not
-  interchangeable; firmware from this release onwards refuses to `/flash` a
-  file made for the other chip.
-* `picogus-v21.uf2` - for the PicoGUS v2.1 THT board (Waveshare Core2350B2
-  module, RP2350B), with the GUS sample RAM in the module's PSRAM. `/flash`
-  tells chips apart, not boards: it would accept `picogus-rp2350.uf2` on a
-  v2.1 card (or this file on a Pico 2 card), which then does not work, so
-  pick the file for the board.
+* `pgus2350.uf2` and `ne2k2350.uf2` - the same two firmwares for PicoGUS Femto
+  and PicoGUS v1.x boards with an RP2350-based Raspberry Pi Pico 2 (Pico 2 W
+  for NE2000) installed instead of a Pico (Pico W).
+* `core2350.uf2` - the all-modes firmware for the PicoGUS v2.1 THT board
+  (RP2350B on a Core2350B module).
+* `pg-ne2k-v21.uf2` - the NE2000/WiFi firmware for a PicoGUS v2.1 THT board
+  with the optional Radio Module 2 fitted.
+
+Firmware for the RP2040 (Pico) and for the RP2350 (Pico 2) is not
+interchangeable. pgusinit shows which one a card has on its `Hardware:` line
+and `/flash` refuses a file made for the other one. `/flash` tells chips
+apart, not boards: it would accept a Pico 2 file on a PicoGUS v2.1 card (or a
+v2.1 file on a Pico 2 card), which then does not work, so pick the file for
+the board.
 
 pgusinit must be run with firmware it is compatible with. If run with an
 incompatible firmware, pgusinit will complain about a protocol mismatch. One

@@ -52,6 +52,13 @@ This is an experimental extension of the PicoGUS 2.0 SMD design, made possible u
 ### Experimental Firmware
 We have added experimental features that adds upon community ideas on top of the original firmware and software components. The features are submitted as Pull Requests to the original PicoGUS repository as well but there is no guarantee that they will ever be included in the official software releases:
 * DFS drive support inspired by PicoMEM so the USB drive can be accessed from MS-DOS.
+* CD images in a `CDROM` folder on the USB drive.
+* A web page on boards with a Pico W or Pico 2 W: status, volumes, settings, mode switching, mt32-pi control and firmware updates from a browser.
+
+The experimental features live on their own branches and are built into a separate *experimental* set of firmware and DOS tools next to the regular one, see [sw/experimental](sw/experimental/README.md).
+
+### RP2350 Firmware
+The firmware builds for the RP2350 as well as the RP2040, from the same source: for the v1.x boards with a Raspberry Pi Pico 2 (W) instead of a Pico (W), and for the v2.1 board's Core2350B module. Releases contain the firmware for both microcontrollers. See [RP2350 support](sw/docs/rp2350.md) for the firmware files, how to build them and what is left to test on hardware.
 
 <br/>
 
@@ -87,8 +94,6 @@ Want to buy a PicoGUS? Fully assembled PicoGUS 2.0 sound cards are available fro
 Want to make your own PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). Note that the more DIY friendly v1.1.1 hardware has some documented issues with reset – a forthcoming v1.2 revision will fix these issues. **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
 Have a PicoGUS and want to use it? See the [configuring and using your PicoGUS guide](https://github.com/polpo/picogus/wiki/Configuring-and-using-your-PicoGUS).
-
-Firmware can also be built for Pico-based PicoGUS boards fitted with an RP2350 Raspberry Pi Pico 2 or Pico 2 W instead of a Pico or Pico W. This is new and not yet hardware tested: see [RP2350 support](sw/docs/rp2350.md).
 
 Want to support PicoGUS? I have a limited number of machines to test PicoGUS in and donating either money or motherboards would be greatly appreciated and help increase the compatibility of PicoGUS.
 

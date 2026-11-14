@@ -25,7 +25,6 @@
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
-#include "overclock.h"
 
 static const Settings defaultSettings = {
     .magic = SETTINGS_MAGIC,
@@ -223,7 +222,6 @@ void saveSettings(const Settings* settings)
     flash_range_erase(SETTINGS_SECTOR, FLASH_SECTOR_SIZE);    // last sector
     DBG_PUTCHAR('/');
     flash_range_program(SETTINGS_SECTOR, data, FLASH_PAGE_SIZE);
-    overclock_flash_write_done();
     restore_interrupts(ints);
     if (locked_out) {
         multicore_lockout_end_blocking();

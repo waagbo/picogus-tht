@@ -44,11 +44,25 @@
 
 #if PICO_RP2040
 #define PICOGUS_CHIP_NAME "RP2040"
+// What CMD_CHIPTYPE reports (chip_type_t in common/picogus.h)
+#define PICOGUS_CHIP_TYPE CHIP_RP2040
 // RP2040 is the original target, so its firmware string stays as it always was
 #define PICOGUS_FW_STRING_SUFFIX ""
+// UF2 family of firmware for this chip. RP2040 UF2s made before family IDs existed are accepted too.
+#define PLATFORM_UF2_FAMILY_ID 0xe48bff56u
+#define PLATFORM_UF2_FAMILY_ID_OPTIONAL 1
+#else
+#if PICOGUS_BOARD_V21
+// PicoGUS v2.1 THT: its firmware is not interchangeable with the Pico 2's
+#define PICOGUS_CHIP_NAME "RP2350B"
+#define PICOGUS_CHIP_TYPE CHIP_RP2350B_V21
 #else
 #define PICOGUS_CHIP_NAME "RP2350"
+#define PICOGUS_CHIP_TYPE CHIP_RP2350
+#endif
 #define PICOGUS_FW_STRING_SUFFIX " (" PICOGUS_CHIP_NAME ")"
+#define PLATFORM_UF2_FAMILY_ID 0xe48bff59u // RP2350, Arm Secure
+#define PLATFORM_UF2_FAMILY_ID_OPTIONAL 0
 #endif
 
 // Chip reset status register, and the bits in it that record why we reset

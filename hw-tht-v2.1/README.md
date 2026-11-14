@@ -29,7 +29,7 @@ through hole; see
 [Parts with no through-hole version](#parts-with-no-through-hole-version).
 
 > **Status: schematic done; board placed and routed (4 layers, DRC clean, matches the schematic), for review. Not
-> built or tested. Firmware: ported and built (`picogus-v21.uf2`, and `pg-ne2k-v21.uf2` for the radio module), not tested on hardware** (see
+> built or tested. Firmware: ported and built (`core2350.uf2`, and `pg-ne2k-v21.uf2` for the radio module), not tested on hardware** (see
 > [Firmware](#firmware) and [Layout status](#layout-status)). The boot ROM of this branch is in the schematic and
 > on the board (same checks), with a firmware switch for its enable pin; nothing of it is tested. JLCPCB files: `hw-common/tools/jlcpcb.sh
 > hw-tht-v2.1/PicoGUS-THT.kicad_pcb` with `ALLOW_DRC=courtyards_overlap` (the 12 accepted overlaps in the logic
@@ -385,7 +385,7 @@ two chips and one GPIO. Schematic sheet `bootrom.kicad_sch`.
 
 ## Firmware
 
-**The firmware for v2.1 is on this branch, built but not tested on hardware**: `picogus-v21.uf2` (the multi-mode
+**The firmware for v2.1 is on this branch, built but not tested on hardware**: `core2350.uf2` (the multi-mode
 bundle, like `picogus.uf2`) and single-mode `pg-*-v21.uf2` images. Build them with
 
 ```
@@ -403,7 +403,7 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
   accesses; at boot the PSRAM is identified, reset, switched to QPI and set up for quad reads/writes at 92.5 MHz
   (370 MHz / 4), with the read sample delay calibrated on a test pattern. The setup is re-applied after every clock
   change and settings save, and a settings save holds core 1 (which plays from the PSRAM) while the flash is written.
-* Use the `-v21` files on this board: the bootloader and `pgusinit /flash` accept any RP2350 image and cannot tell
+* Use `core2350.uf2` and the `-v21` files on this board: the bootloader and `pgusinit /flash` accept any RP2350 image and cannot tell
   a Pico 2 image from a v2.1 one.
 * A Core2350B0 (no PSRAM) runs every mode except GUS, which stops at the PSRAM check.
 * **With the radio module fitted**: `pg-ne2k-v21.uf2` (NE2000 over Wi-Fi; `build_variants.sh -p picogus21 ne2k`),

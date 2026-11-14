@@ -27,6 +27,7 @@
 #include "system/psram_qmi.h"
 
 #include "hardware/clocks.h"
+#include "hardware/flash.h"
 #include "hardware/gpio.h"
 #include "hardware/structs/qmi.h"
 #include "hardware/structs/xip_ctrl.h"
@@ -207,6 +208,9 @@ psram_spi_inst_t __no_inline_not_in_flash_func(psram_qmi_init)(void) {
         PSRAM_QMI_DBG("QMI PSRAM does not read back at any delay\n");
         return inst;
     }
+    // The SDK's flash functions leave window 1 without its write format; have them put it back
+    // after every flash erase and program (settings saves, firmware flashing)
+    flash_set_qmi_cs1_setup_function(psram_qmi_reconfigure);
 
     // Density from the EID's top 3 bits: 0 = 2MB (16Mbit), 1 = 4MB, 2 = 8MB
     switch (eid >> 5) {

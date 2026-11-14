@@ -7,7 +7,8 @@
 // pico_cmake_set PICO_PLATFORM = rp2350
 // pico_cmake_set PICO_CYW43_SUPPORTED = 1
 // pico_cmake_set_default PICO_FLASH_SIZE_BYTES = (16 * 1024 * 1024)
-// PICO_RP2350_A2_SUPPORTED is deliberately not set, as for pico2_fast.h.
+// pico_cmake_set PICO_RP2350_A2_SUPPORTED = 0
+// (no RP2350-E10 workaround block in UF2s, see pico2_fast.h)
 
 #ifndef _BOARDS_PICOGUS21_H
 #define _BOARDS_PICOGUS21_H
@@ -81,7 +82,11 @@
 // -DBOOTROM_ENABLE=ON.
 #define PICOGUS_BOOTROM_EN_PIN 2
 
-// The flash clock divider for the 370MHz overclock is set at runtime by
-// overclock_370mhz() (RP2350 has no boot2 to take PICO_FLASH_SPI_CLKDIV)
+// --- FLASH: W25Q128-class, set up by the embedded XIP setup function ---
+#define PICO_BOOT_STAGE2_CHOOSE_W25Q080 1
+
+// Slower flash for running at 370MHz, see pico2_fast.h
+#define PICO_FLASH_SPI_CLKDIV 6
+#define PICO_FLASH_SPI_RXDELAY 4
 
 #endif

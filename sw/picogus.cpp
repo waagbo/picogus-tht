@@ -274,6 +274,7 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_DEFAULTS: // Select reset to defaults register
         break;
     case CMD_HWTYPE: // Hardware version
+    case CMD_CHIPTYPE: // Microcontroller type
         break;
     case CMD_FLASH: // Firmware write mode
         break;
@@ -684,6 +685,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.Volume.psgVol;
     case CMD_HWTYPE: // Hardware version
         return BOARD_TYPE;
+    case CMD_CHIPTYPE: // Microcontroller type
+        return PICOGUS_CHIP_TYPE;
     case CMD_FLASH:
         // Get status of firmware write
         return pico_firmware_getStatus();

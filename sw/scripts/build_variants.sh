@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
-# Build PicoGUS firmware variants for RP2040 and/or RP2350.
+# Build PicoGUS firmware variants for RP2040 and/or RP2350 from this source tree.
 #
-# Every chip/variant pair gets its own CMake build directory, and the UF2s are
-# collected into one output directory. RP2040 files keep their historical names
-# (picogus.uf2, pg-ne2k.uf2, ...); RP2350 files get an "-rp2350" suffix
-# (picogus-rp2350.uf2, pg-ne2k-rp2350.uf2, ...). The "picogus21" target is the
-# RP2350B PicoGUS v2.1 THT board (PICO_BOARD=picogus21), with a "-v21" suffix
-# (picogus-v21.uf2, ...).
+# Every platform/variant pair gets its own CMake build directory, and the UF2s
+# are collected into one output directory. The platforms are
+#   rp2040     Pico, Pico W and PicoGUS 2.0: the files keep their historical
+#              names (picogus.uf2, pg-ne2k.uf2, ...)
+#   rp2350     Pico 2 and Pico 2 W: pgus2350.uf2 and ne2k2350.uf2
+#   picogus21  the RP2350B PicoGUS v2.1 THT board (PICO_BOARD=picogus21):
+#              core2350.uf2, and pg-ne2k-v21.uf2 for a card with the Radio
+#              Module 2 fitted
+# The RP2350 release files have names that stay intact on a DOS (8.3) file
+# system; the other variants get an "-rp2350" or "-v21" suffix.
+#
+# Some variants only exist in source trees that carry an experimental feature
+# (sw/experimental/README.md), and are part of the default set there: "web",
+# all modes with the web server for Pico W and Pico 2 W boards, is
+# picogusw.uf2 and pg2350w.uf2.
 #
 # Needs PICO_SDK_PATH and PICO_EXTRAS_PATH like a normal SDK build. Uses
 # CMake's default generator unless CMAKE_GENERATOR is set (e.g. to Ninja);
 # stick to one generator, as the SDK's picotool fetch directory is shared.
+#
+# sw/scripts/build_release.sh builds the release set with this script, for the
+# mainline firmware and for the experimental flavor.
 
 set -euo pipefail
 
@@ -32,7 +44,8 @@ declare -A PROJECT_TYPES=(
     [sb-ym3812]=SB_YM3812          [sb-emu8950]=SB_EMU8950
     [adlib]=ADLIB                  [adlib-ymf262]=ADLIB_YMF262
     [adlib-ym3812]=ADLIB_YM3812    [adlib-dbopl3]=ADLIB_DBOPL3
-    [analyzer]=ANALYZER            [sb-ne2k]=SB_NE2K
+    [analyzer]=ANALYZER            [web]=MULTIFW
+    [sb-ne2k]=SB_NE2K
 )
 declare -A OUTPUTS=(
     [multifw]=picogus              [ne2k]=pg-ne2k
@@ -42,22 +55,81 @@ declare -A OUTPUTS=(
     [sb-ym3812]=pg-sb-ym3812       [sb-emu8950]=pg-sb-emu8950
     [adlib]=pg-adlib               [adlib-ymf262]=pg-adlib-ymf262
     [adlib-ym3812]=pg-adlib-ym3812 [adlib-dbopl3]=pg-adlib-dbopl3
-    [analyzer]=pg-analyzer         [sb-ne2k]=pg-sb-ne2k
+    [analyzer]=pg-analyzer         [web]=picogus
+    [sb-ne2k]=pg-sb-ne2k
+)
+# Names of the collected files where they differ from what the build calls
+# them; otherwise RP2350 files are <RP2040 name>-rp2350 or <RP2040 name>-v21
+declare -A RP2040_OUTPUTS=(
+    [web]=picogusw
+)
+declare -A RP2350_OUTPUTS=(
+    [multifw]=pgus2350             [ne2k]=ne2k2350
+    [web]=pg2350w
+)
+declare -A PICOGUS21_OUTPUTS=(
+    [multifw]=core2350
 )
 ALL_VARIANTS=(multifw ne2k gus sb sb-ymf262 sb-ym3812 sb-emu8950 adlib adlib-ymf262 adlib-ym3812 adlib-dbopl3 mpu psg usb analyzer sb-ne2k)
 DEFAULT_VARIANTS=(multifw ne2k)
-# The ISA analyzer uses RP2350-only hardware (QMI PSRAM); SB + NE2000 is an
-# RP2350 experiment (sw/docs/sb-ne2000-rp2350.md)
+# The ISA analyzer is written for RP2350 boards (QMI registers, optional QMI PSRAM);
+# SB + NE2000 is an RP2350 experiment (sw/docs/sb-ne2000-rp2350.md)
 declare -A CHIP_ONLY=([analyzer]=rp2350 [sb-ne2k]=rp2350)
+# RP2350 variants that are not for the v2.1 board
+declare -A NOT_FOR_V21=([analyzer]=1)
+# Variants that need a Pico W or Pico 2 W, so not for the v2.1 board. The NE2000
+# variants are not among them: the v2.1 board's Radio Module 2 has the same CYW43.
+declare -A NEEDS_PICOW=([web]=1)
+# Variants built for the Pico W / Pico 2 W board rather than the platform's
+# default board (the NE2K project type picks that board by itself)
+declare -A PICOW_BOARDS=([rp2040]=picow_fast [rp2350]=pico2w_fast)
+declare -A ON_PICOW_BOARD=([web]=1)
+# Variants of experimental features: the directory under sw/ the feature adds.
+# They join the lists above in source trees that have it.
+declare -A FEATURE_DIR=([web]=web)
+for variant in "${!FEATURE_DIR[@]}"; do
+    if [[ -d "${SW_DIR}/${FEATURE_DIR[$variant]}" ]]; then
+        ALL_VARIANTS+=("${variant}")
+        DEFAULT_VARIANTS+=("${variant}")
+    fi
+done
+
+# Name of the collected UF2 for a chip/variant pair
+dest_name() {
+    local chip="$1" variant="$2"
+    case "${chip}" in
+        rp2350) echo "${RP2350_OUTPUTS[$variant]:-${OUTPUTS[$variant]}-rp2350}.uf2" ;;
+        picogus21) echo "${PICOGUS21_OUTPUTS[$variant]:-${OUTPUTS[$variant]}-v21}.uf2" ;;
+        *) echo "${RP2040_OUTPUTS[$variant]:-${OUTPUTS[$variant]}}.uf2" ;;
+    esac
+}
+
+# Why a variant isn't built for a platform, or nothing if it is
+skip_reason() {
+    local chip="$1" variant="$2" only="${CHIP_ONLY[$2]:-}"
+    if [[ -n "${FEATURE_DIR[$variant]:-}" && ! -d "${SW_DIR}/${FEATURE_DIR[$variant]}" ]]; then
+        echo "this source tree has no sw/${FEATURE_DIR[$variant]}"
+    elif [[ "${chip}" == picogus21 ]]; then
+        if [[ -n "${NEEDS_PICOW[$variant]:-}" ]]; then
+            echo "needs a Pico W"
+        elif [[ -n "${NOT_FOR_V21[$variant]:-}" ]]; then
+            echo "not for the v2.1 board"
+        elif [[ -n "${only}" && "${only}" != rp2350 ]]; then
+            echo "${only} only"
+        fi
+    elif [[ -n "${only}" && "${only}" != "${chip}" ]]; then
+        echo "${only} only"
+    fi
+}
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [options] [variant...]
 
-Builds the given firmware variants (default: ${DEFAULT_VARIANTS[*]}) for each chip.
+Builds the given firmware variants (default: ${DEFAULT_VARIANTS[*]}) for each platform.
 
 Options:
-  -p, --platform CHIP   rp2040, rp2350, picogus21 (RP2350B PicoGUS v2.1) or all (default: all)
+  -p, --platform NAME   rp2040, rp2350, picogus21 (RP2350B PicoGUS v2.1) or all (default: all)
   -o, --out DIR         where to collect UF2 files (default: ${REPO_DIR}/binaries)
   -b, --build-dir DIR   parent of the per-build directories (default: ${REPO_DIR}/build)
   -j, --jobs N          parallel build jobs (default: number of CPUs)
@@ -97,8 +169,11 @@ while [[ $# -gt 0 ]]; do
         -k|--keep-going) KEEP_GOING=1; shift ;;
         -l|--list)
             for v in "${ALL_VARIANTS[@]}"; do
-                printf '%-14s PROJECT_TYPE=%-13s %s.uf2%s\n' "$v" "${PROJECT_TYPES[$v]}" "${OUTPUTS[$v]}" \
-                    "${CHIP_ONLY[$v]:+ (${CHIP_ONLY[$v]} only)}"
+                names=()
+                for chip in rp2040 rp2350 picogus21; do
+                    [[ -z "$(skip_reason "${chip}" "$v")" ]] && names+=("$(dest_name "${chip}" "$v")")
+                done
+                printf '%-14s PROJECT_TYPE=%-13s %s\n' "$v" "${PROJECT_TYPES[$v]}" "${names[*]}"
             done
             exit 0 ;;
         -h|--help) usage; exit 0 ;;
@@ -126,20 +201,20 @@ build_one() {
     local chip="$1" variant="$2"
     local build_dir="${BUILD_ROOT}/${chip}/${variant}"
     local out_name="${OUTPUTS[$variant]}"
-    local dest_name="${out_name}.uf2"
-    local platform="${chip}" board_args=()
-    [[ "${chip}" == rp2350 ]] && dest_name="${out_name}-rp2350.uf2"
+    local dest_name platform="${chip}" board_args=()
+    dest_name="$(dest_name "${chip}" "${variant}")"
     if [[ "${chip}" == picogus21 ]]; then
         platform=rp2350
         board_args=(-DPICO_BOARD=picogus21)
-        dest_name="${out_name}-v21.uf2"
+    elif [[ -n "${ON_PICOW_BOARD[$variant]:-}" ]]; then
+        board_args=(-DPICO_BOARD="${PICOW_BOARDS[$chip]}")
     fi
 
     echo "==== ${chip} ${variant} (PROJECT_TYPE=${PROJECT_TYPES[$variant]}) -> ${dest_name}"
     [[ ${CLEAN} -eq 1 ]] && rm -rf "${build_dir}"
     cmake -S "${SW_DIR}" -B "${build_dir}" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DPICO_PLATFORM="${platform}" "${board_args[@]}" \
+        -DPICO_PLATFORM="${platform}" ${board_args[@]+"${board_args[@]}"} \
         -DPROJECT_TYPE="${PROJECT_TYPES[$variant]}" \
         -DPGDEBUG="${PGDEBUG}" \
         > "${build_dir}.configure.log" 2>&1 \
@@ -155,14 +230,9 @@ mkdir -p "${BUILD_ROOT}"
 for chip in "${PLATFORMS[@]}"; do
     mkdir -p "${BUILD_ROOT}/${chip}"
     for variant in "${VARIANTS[@]}"; do
-        only="${CHIP_ONLY[$variant]:-}"
-        if [[ "${chip}" == picogus21 && "${variant}" == analyzer ]]; then
-            echo "==== ${chip} ${variant}: skipped (Pico Plus 2 tool)"
-            continue
-        fi
-        [[ "${only}" == rp2350 && "${chip}" == picogus21 ]] && only=picogus21
-        if [[ -n "${only}" && "${only}" != "${chip}" ]]; then
-            echo "==== ${chip} ${variant}: skipped (${only} only)"
+        reason="$(skip_reason "${chip}" "${variant}")"
+        if [[ -n "${reason}" ]]; then
+            echo "==== ${chip} ${variant}: skipped (${reason})"
             continue
         fi
         if ! build_one "${chip}" "${variant}"; then
