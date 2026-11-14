@@ -1,0 +1,6 @@
+# Experimental feature branches, one per line. The experimental build flavor
+# merges them, in this order, on top of the commit being built
+# (sw/scripts/experimental.sh, see README.md in this directory).
+sw/cdrom-subdir
+sw/pgdfs
+sw/webserver
