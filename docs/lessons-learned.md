@@ -161,6 +161,19 @@ silkscreen. Each round found real faults. Apply these from the start on the next
     through each gap between the socket pins. A TSSOP-20 does not. THT v2.1's boot ROM decoder went there.
   - **A via is an obstacle on every layer.** When laying a track by hand through a group of vias, check it
     against every via near it, not only against the tracks on its own layer.
+  - **Line parts up by their bodies, not by KiCad's outlines.** A DIP's fab and silkscreen outline ends 1.33 mm
+    past the end pins; the package (and its 3D model) ends 1.9 mm past them. THT v2.1's PLCC socket looked 0.75
+    mm out of line with the DIP column in the render and 1.41 mm in the board editor. Measure the 3D models.
+  - **A routed block can be moved as a block.** Shift the part with every track and via inside its pad field; a
+    lane that crosses the field's edge horizontally only changes length. What is left to lay again is what crosses
+    the edge at an angle, the fan-out next to it and the tracks from fixed points (fingers, other parts). THT
+    v2.1's boot ROM socket moved 0.75 mm that way: about fifty crossing tracks handled one by one, DRC clean at
+    the first check, no autorouter.
+  - **A standing resistor can usually lie if two tracks move.** R31/R32 stood because their lower pads would
+    have sat on two diagonal tracks; the tracks now run as a vertical pair between the two pads.
+  - **Silkscreen checks are off in these projects** (`silk_overlap`, `silk_over_copper` are ignored). Switch them
+    to warnings in a copy of the project before sending renders out: the three jumper labels of THT v2.1 lay on
+    the jumper outlines and nothing reported it.
 - **Starved thermals**: a few pads get one spoke. The v1.3.2 README lists where each one joins GND.
 - **Cloud environment**: `.claude/cloud-env-setup.sh` installs KiCad 10, the libraries, a `kipython` wrapper,
   Freerouting, gerbv and ngspice. `kipython -I` drops the path it needs, so use `kipython -P -s` and run it

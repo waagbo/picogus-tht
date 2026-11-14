@@ -60,6 +60,8 @@ The shared `PiGUS library` footprints are linked from `hw-common/`. **New in the
 `Waveshare_Core2350B` (with a generated 3D model, `hw-common/parts/Waveshare_Core2350B.wrl`),
 `RaspberryPi_RM2_HandSolder` (the Radio Module 2 with lands 1 mm past the module edge; 3D model
 `hw-common/parts/RaspberryPi_RM2.wrl`),
+`SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm_NoSilk` and `..._Bridged_..._NoSilk` (KiCad's solder jumpers
+without their silkscreen outline, for the boot ROM's base-address jumpers: the labels need that room),
 `USB_C_Receptacle_GCT_USB4085`, `TSSOP-16_4.4x5mm_P0.65mm_HandSolder_TestPads` and
 `TSSOP-20_4.4x6.5mm_P0.65mm_HandSolder_TestPads` (THT v1.3.2's: KiCad's TSSOP with the toes to ±3.9 mm and one
 0.7 mm round test pad per pin in two staggered columns per side, at x ±4.45 / ±5.1 mm),
@@ -360,19 +362,21 @@ two chips and one GPIO. Schematic sheet `bootrom.kicad_sch`.
   EPROM of an NE2000 clone does. Its data sheet only promises its output levels at 100 µA, so on a full bus with
   pull-ups the levels are not guaranteed. This is the main thing to check on a built card.
 * **Longer bus stubs.** The socket is at the far end from the data fingers, so SD0–SD7 grow from 35–107 mm to
-  59–138 mm of track; SA0–SA7 stay about as long as they were (49–69 mm), SA8–SA14 are 29–65 mm, SA15–SA19 44–63
+  59–137 mm of track; SA0–SA7 stay about as long as they were (49–68 mm), SA8–SA14 are 29–66 mm, SA15–SA19 43–62
   mm and SMEMR 61 mm. That is ordinary for an ISA card.
 * **It fits on the 102 mm card, at a price** (the first version of this branch had it on an 18 mm longer card,
   with a DIP decoder and 0.2 mm rules everywhere; that board is in the branch's history, commit 22df124):
   * The logic column (U3–U7 with their capacitors and R1, R5, R18) moved **12.86 mm up**; C46 went to the top
-    left corner, and R31/R32 stand right of J8.
-  * The socket is in the bottom left corner, right above the fingers of SA0–SA7; **J3 moved one pin pitch to the
-    right** to clear it. C48 and C49 sit between U7 and the socket, R35 stands below U9.
+    left corner, and R31/R32 lie below the right end of J8.
+  * The socket is in the bottom left corner, above the fingers of SA0–SA7, **with its body in line with the DIP
+    bodies of the logic column** (KiCad draws a DIP's outline 0.66 mm shorter at each end than the package is, so
+    the outlines on the board differ where the parts do not). **J3 moved one pin pitch to the right** to clear
+    it: the two courtyards touch. C48 and C49 sit between U7 and the socket, R35 lies below U9.
   * **U16 is a TSSOP on the back, inside the socket's outline.** A through-hole PLCC-32 socket has no pins in
     its middle: between its inner pin rows 6.2 × 8.7 mm of board is free. A TSSOP-16 (4.95 × 7.2 mm over its
     lands) fits there, with 0.6 mm to the socket's pads at its ends and 0.76 mm along its pin rows. Its six
     inputs come in between the socket's right-hand pins, three 0.15 mm tracks per gap; its three outputs go up
-    between two pins of the top row to JP1–JP3. **Solder U16 before the socket**: afterwards the socket's solder
+    through three gaps of the socket's top rows, each straight into its jumper pad. **Solder U16 before the socket**: afterwards the socket's solder
     joints stand round it. A TSSOP-20 is too long for that field, and a DIP-16 or DIP-20 between the socket and
     the bus switches would be a wall across the 16 bus lines that run there. The previous commit of this branch
     (f51e07e) has U16 on the front instead, between the socket and U1, on U1/U2's test-pad footprint.
@@ -394,15 +398,17 @@ sw/scripts/build_variants.sh -p picogus21 all
 
 or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/docs/rp2350.md](../sw/docs/rp2350.md#picogus-v21-tht-core2350b2-rp2350b):
 
-* Built on the RP2350 port (Pico 2) merged from branch `claude/sweet-goodall-x5r6j6`, plus a board header
-  (`sw/boards/picogus21.h`: RP2350B, 16 MB flash, PSRAM CS on GPIO47).
+* This is the `sw/v4.2.0-rp2350` software line (the RP2350 port for the Pico 2 with this board's header,
+  `sw/boards/picogus21.h`: RP2350B, 16 MB flash, PSRAM CS on GPIO47), merged into this branch; the radio module
+  pins, the boot ROM switch and the Sound Blaster + NE2000 build are this branch's additions to it.
 * **Board type at compile time**: v2.0 is recognised by GPIO29 on the ADC, which the RP2350B cannot do (its ADC is
   GPIO40–47), so the v2.1 build is a PicoGUS 2.0 by definition: LED on GPIO23, M62429 on GPIO24/25, same ISA, I2S
   and MIDI pins.
 * **GUS sample RAM in the module's PSRAM** (QMI window 1, memory mapped). The GUS code's `psram_*` calls become memory
   accesses; at boot the PSRAM is identified, reset, switched to QPI and set up for quad reads/writes at 92.5 MHz
-  (370 MHz / 4), with the read sample delay calibrated on a test pattern. The setup is re-applied after every clock
-  change and settings save, and a settings save holds core 1 (which plays from the PSRAM) while the flash is written.
+  (370 MHz / 4), with the read sample delay calibrated on a test pattern. The set-up runs again after every flash erase and
+  program (it is registered with the SDK's flash functions), and a settings save holds core 1 (which plays from the
+  PSRAM) while the flash is written.
 * Use `core2350.uf2` and the `-v21` files on this board: the bootloader and `pgusinit /flash` accept any RP2350 image and cannot tell
   a Pico 2 image from a v2.1 one.
 * A Core2350B0 (no PSRAM) runs every mode except GUS, which stops at the PSRAM check.
@@ -445,7 +451,7 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
 
 ## Layout status
 
-**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12), for review.** The placement and the silkscreen labels are the user's (the DAC
+**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12; its socket lined up with the DIPs and R31, R32, R35 laid flat 2026-11-14), for review.** The placement and the silkscreen labels are the user's (the DAC
 block turned and moved under the daughterboard; regulator, module, USB-C parts and headers moved), with the changes
 listed below. **DRC with schematic parity: 0 unconnected items, no clearance, hole or parity errors.** What is left:
 the 12 accepted courtyard overlaps of the logic column (U3–U7 on v1.3.2's 12.05 mm pitch with their decoupling discs
@@ -458,7 +464,7 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   island** (see [Audio](#audio)); FB3 (GND–AGND) and FB4 (+3V3–AVDD) are the only ties. 0.2 mm signal tracks (0.15 mm
   in the boot ROM corner of this branch), 0.4 mm
   for +5V, VSYS, the USB VBUS nets and ±12 V; the plane nets reach their planes through short stubs and vias. 0.6/0.3
-  mm vias. About 2.93 m of track on F.Cu, 3.00 m on B.Cu, 0.66 m on In2.Cu and 190 vias (plain v2.1: 2.5 m on each
+  mm vias. About 2.92 m of track on F.Cu, 2.99 m on B.Cu, 0.66 m on In2.Cu and 189 vias (plain v2.1: 2.5 m on each
   outer layer, 0.05 m and 152). In1.Cu carries no signal.
 * **On the plain v2.1, In2.Cu carries eight short signal hops** (52 mm in all, the longest 12 mm: D5, ADS, D4, D7,
   GPIO23, D2, AD3, AD1) where the band above the ISA fingers is full on both outer layers. They cut slots in the
@@ -470,16 +476,21 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
     so that they arrive in pin order); SA10–SA14 through a via beside each finger, then on **In2.Cu** under J3 and
     under the socket, round its bottom left corner and into its left-hand pins (SA12 straight up into its pin);
     U16 on the back inside the socket: its six inputs through the gaps between the socket's right-hand pins, its
-    three outputs up through one gap of the top row to the jumpers, `~ROM_CS` from the jumpers to CE#, +5 V from
-    C49 and a ground via under the chip; the +12 V track past R1; R31/R32; the Waveblaster header's AGND pins
-    back into the analog island; a via for the ground finger B31.
+    three outputs each up through its own gap of the top rows into a jumper pad, `~ROM_CS` along the jumpers and
+    down to CE#, +5 V from C49 and a ground via under the chip; the +12 V track past R1; R31/R32; the Waveblaster
+    header's AGND pins back into the analog island; a via for the ground finger B31.
   * **Autorouted** (Freerouting): first the 13 nets with open links outside the corner, at 0.2 mm; then the corner
     at 0.15 mm, with In2.Cu opened for signals inside x 116.6–172.0, y 101.9–128.2. It left seven links open.
     Those, and `~ROM_EN` (which the autorouter had taken through the analog section), were closed with a grid
     router (0.05 mm grid, same rules), all but `~SMEMR`: that one was laid by hand, between the vias of SA3 and
     SA4 east of the socket after moving both a little.
-  * **In2.Cu now carries 0.66 m of signal track** (28 nets, the longest SD5 and SD7 with 49 mm each and
-    SA10–SA14 with 23–46 mm each), nearly all of it in that corner. The +3V3 plane is cut into strips there. **One
+  * **Moved as a block afterwards**: to bring the socket in line with the DIPs it went 0.75 mm to the right with
+    U16 and every track and via inside its pad field. The lanes that cross the field's edge horizontally just got
+    shorter or longer; the eight address lines from the fingers, the fan-out on its right (with the four vias of
+    SA3, SA4, `~SMEMR` and `~IOR`, which now sit in two columns), A8 and IRQ past its top right corner and the
+    jumper wiring were laid again by hand. No autorouter run was needed for that.
+  * **In2.Cu now carries 0.66 m of signal track** (28 nets, the longest SD7 and SD5 with 49 and 48 mm and
+    SA10–SA14 with 22–47 mm each), nearly all of it in that corner. The +3V3 plane is cut into strips there. **One
     strip of 15 mm² under U1 is cut off from the rest of the plane**; the only thing on it is U1's supply pin,
     which a 0.2 mm track on the back joins to its capacitor C2. The GND plane has no track in it.
   * **What is not pretty**: ADS changes layer twelve times (eight on the plain v2.1), SD4 and SD6 six times each
@@ -523,11 +534,17 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
 * **Silkscreen labels** (Jost, embedded in the board file as on v1.3.2): `WAVEBLASTER`, `MIXER`, `DAC`, `WT VOL`,
   `MIDI OUT`, `LINE OUT`, `USB HOST`, `WIFI`, `USB-C FLASH`, `RUN`, `BOOTSEL`, `UART`, `SWD`, and `IRQ`/`DMA` over J3.
   On this branch, in KiCad's stroke font: `BOOT ROM` below the socket and, on the back, `U16`, `BOOT ROM SEGMENT`,
-  `CLOSE ONE` and the segment addresses `C800`, `D000` and `D800` over JP1–JP3.
+  `CLOSE ONE` and the segment addresses `C800`, `D000` and `D800` over JP1–JP3. The jumpers have no outline of their
+  own and sit 0.4 mm lower than the capacitor pads above would otherwise allow, so that each label has 0.27 mm to
+  the pads above and below it; `U16` stands below the socket's bottom pin row. With KiCad's silkscreen checks
+  switched on (they are off in the project) the back shows no overlap.
 * **Groups, as on v1.3.2**, so a block moves as one: `74AHCT126 (U6)`, `74AHC00 (U4)`, `74AHC00 (U5)`,
   `74AHC14 (U3)` (with the column resistors), `74AHC244 (U7)`, `ISA bus switches (U1, U2)`,
   `Waveblaster header (J8)`, `DAC (U10)`, `Mixer + line out (U11, J9)`, `WT volume (U13)`, `MIDI out (J7)`,
   `USB host (J5)`, `USB-C (J6)`, `WiFi radio (U14)`, `Core2350B + power (U12)`, `IRQ/DMA jumpers (J3)`, `PicoGUS logo`,
   `Copyright and attribution (back)`, the bracket drawing and, on this branch, `Boot ROM (U15, U16)`.
-* **R21–R30 (mixer) are on 10.16 mm pitch** like every other lying resistor on the card; R19, R20, R33 and R34
-  stand (2.54 mm), and on this branch so do R31, R32 (moved to the right of J8) and R35.
+* **R21–R30 (mixer) are on 10.16 mm pitch** like every other lying resistor on the card, and so are R31, R32
+  (side by side below the right end of J8; -12 V and UART_TX pass between their lower pads) and, on this branch,
+  R35 (below U9). **R19, R20, R33 and R34 still stand** (2.54 mm): between the USB-A connector, the radio module,
+  its antenna keep-out, the USB-C connector and the board edge there is room for one lying resistor above the
+  module and one below it, not for four.

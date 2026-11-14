@@ -3051,7 +3051,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
 			(at 142.24 80.01 0)
 			(hide yes)
 			(show_name no)
@@ -3297,7 +3297,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm"
+		(property "Footprint" "PiGUS library:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm_NoSilk"
 			(at 45.72 138.43 0)
 			(hide yes)
 			(show_name no)
@@ -3461,7 +3461,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm"
+		(property "Footprint" "PiGUS library:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm_NoSilk"
 			(at 91.44 138.43 0)
 			(hide yes)
 			(show_name no)
@@ -3625,7 +3625,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm"
+		(property "Footprint" "PiGUS library:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm_NoSilk"
 			(at 137.16 138.43 0)
 			(hide yes)
 			(show_name no)
