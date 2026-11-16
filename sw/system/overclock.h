@@ -23,6 +23,28 @@
 #include "hardware/timer.h"
 #include "hardware/vreg.h"
 
+// Core voltage while overclocked
+#ifndef PICOGUS_VREG_VOLTAGE
+#if PICO_RP2040
+#define PICOGUS_VREG_VOLTAGE VREG_VOLTAGE_1_25
+#else
+// RP2350 is specified for 150MHz at 1.10V, so it gets further from its rated
+// clock than RP2040 does. 1.30V is the highest voltage the regulator allows
+// without vreg_disable_voltage_limit().
+#define PICOGUS_VREG_VOLTAGE VREG_VOLTAGE_1_30
+#endif
+#endif
+
+// Flash is still read after the overclock (settings, .flashdata tables, CYW43
+// firmware), so its clock has to stay within what the flash chip can do. On
+// both chips the divider comes from the board header (PICO_FLASH_SPI_CLKDIV,
+// checked in pico_reflash.c): RP2040 gets it from boot2, RP2350 from the
+// embedded XIP setup function, and either one runs at startup and again after
+// every flash erase or program.
+#if !PICO_RP2040 && !PICO_EMBED_XIP_SETUP
+#error "RP2350 builds need PICO_EMBED_XIP_SETUP=1 for PICO_FLASH_SPI_CLKDIV to take effect"
+#endif
+
 // 370MHz PLL configuration:
 // 12MHz XOSC / 2 (REFDIV) = 6MHz reference
 // 6MHz * 185 (FBDIV) = 1110MHz VCO
@@ -33,8 +55,8 @@
 // default REFDIV of 1 since 370 is not evenly divisible by 12.
 static inline void overclock_370mhz(void) {
     // Bump voltage for stability at 370MHz
-    if (vreg_get_voltage() < VREG_VOLTAGE_1_25) {
-        vreg_set_voltage(VREG_VOLTAGE_1_25);
+    if (vreg_get_voltage() < PICOGUS_VREG_VOLTAGE) {
+        vreg_set_voltage(PICOGUS_VREG_VOLTAGE);
         busy_wait_us_32(10000);  // 10ms for voltage to settle
     }
 

@@ -19,13 +19,34 @@ __attribute__((always_inline))
 static inline void resampler_compute_fir(int16_t *fir, std::size_t fir_pos,
 		int32_t &c0, int32_t &c1, int32_t &c2, int32_t &c3) {
 	const int32_t* lfir = fir_coeff.data();
+	int32_t lc0,lc1,lc2,lc3;
+#if !defined(__ARM_ARCH_6M__)
+	// Cortex-M33 (RP2350) and host builds. Same arithmetic as the Cortex-M0+
+	// assembly below: 32-bit wrapping multiply-accumulate over the 13 taps,
+	// oldest sample first.
+	uint32_t a0 = 0, a1 = 0, a2 = 0, a3 = 0;
+	for (std::size_t n = 0; n < 13; ++n) {
+		std::size_t i = fir_pos + n;
+		if (i >= 13)
+			i -= 13;
+		const uint32_t s = (uint32_t)(int32_t)fir[i];
+		a0 += s * (uint32_t)lfir[0];
+		a1 += s * (uint32_t)lfir[1];
+		a2 += s * (uint32_t)lfir[2];
+		a3 += s * (uint32_t)lfir[3];
+		lfir += 4;
+	}
+	lc0 = (int32_t)a0;
+	lc1 = (int32_t)a1;
+	lc2 = (int32_t)a2;
+	lc3 = (int32_t)a3;
+#else
 	int16_t* inp = &fir[fir_pos];
 	int16_t* inp2 = &fir[0];
 	int16_t* fir_split = &fir[13];
 	int16_t* fir_split2 = &fir[fir_pos];
 
 	uint32_t TMP,TMP2;
-	int32_t lc0,lc1,lc2,lc3;
 	lc0=0;
 	lc1=0;
 	lc2=0;
@@ -85,6 +106,7 @@ static inline void resampler_compute_fir(int16_t *fir, std::size_t fir_pos,
 	, [FIR_SPLIT2]"+r"(fir_split2)
 	, [INP2]"+r"(inp2)
 	);
+#endif
 	c0=lc0; // maxsignal 2.30 tap 2.
 	c1=lc1>>(30-14); // tap 2.30 -> 2.14
 	c2=lc2>>15; // tap 1.30 -> 1.15

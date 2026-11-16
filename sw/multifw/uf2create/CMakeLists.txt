@@ -5,3 +5,6 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(uf2create uf2create.c)
 target_include_directories(uf2create PRIVATE ${MULTIFW_INCLUDE})
+if(UF2_FAMILY_ID)
+    target_compile_definitions(uf2create PRIVATE UF2_FAMILY_ID=${UF2_FAMILY_ID})
+endif()

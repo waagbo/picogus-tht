@@ -12,6 +12,11 @@
 #define PAYLOAD_SIZE 0x100
 #define INPUT_FILES (NR_OF_FIRMWARES + 1)
 
+// Chip the image is for; the build passes the RP2350 family for RP2350 builds
+#ifndef UF2_FAMILY_ID
+#define UF2_FAMILY_ID RP2040_FAMILY_ID
+#endif
+
 int main(int argc, char *argv[])
 {
 	int total_size = 0;
@@ -66,7 +71,7 @@ int main(int argc, char *argv[])
 	uf2.magic_start0 = UF2_MAGIC_START0;
 	uf2.magic_start1 = UF2_MAGIC_START1;
 	uf2.flags = UF2_FLAG_FAMILY_ID_PRESENT;
-	uf2.file_size = RP2040_FAMILY_ID;
+	uf2.file_size = UF2_FAMILY_ID;
 	uf2.payload_size = PAYLOAD_SIZE;
 	uf2.block_no = 0;
 	uf2.num_blocks = (total_size + PAYLOAD_SIZE - 1) / PAYLOAD_SIZE;
