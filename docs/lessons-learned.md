@@ -171,6 +171,12 @@ silkscreen. Each round found real faults. Apply these from the start on the next
     the first check, no autorouter.
   - **A standing resistor can usually lie if two tracks move.** R31/R32 stood because their lower pads would
     have sat on two diagonal tracks; the tracks now run as a vertical pair between the two pads.
+  - **Freerouting on a few nets in a full corner can run away.** Moving THT v2.1's J3 displaced fourteen links;
+    Freerouting, with everything else locked, sat at seven open links for 15 minutes and grew to 40 GB of
+    memory. The grid router closed all fourteen, but only in one of three net orders: route first the nets with
+    the longest way through the crowded part (there `~SMEMR` and `~IOW`), and try more than one order.
+  - **After a grid-router run, read each net's new layer changes.** It found DRQ's crossing of IOW by going down,
+    across on In2 and back up again; two vias in a free gap between the back-side lanes did the same directly.
   - **Silkscreen checks are off in these projects** (`silk_overlap`, `silk_over_copper` are ignored). Switch them
     to warnings in a copy of the project before sending renders out: the three jumper labels of THT v2.1 lay on
     the jumper outlines and nothing reported it.

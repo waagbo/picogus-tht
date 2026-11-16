@@ -362,24 +362,26 @@ two chips and one GPIO. Schematic sheet `bootrom.kicad_sch`.
   EPROM of an NE2000 clone does. Its data sheet only promises its output levels at 100 µA, so on a full bus with
   pull-ups the levels are not guaranteed. This is the main thing to check on a built card.
 * **Longer bus stubs.** The socket is at the far end from the data fingers, so SD0–SD7 grow from 35–107 mm to
-  59–137 mm of track; SA0–SA7 stay about as long as they were (49–68 mm), SA8–SA14 are 29–66 mm, SA15–SA19 43–62
-  mm and SMEMR 61 mm. That is ordinary for an ISA card.
+  59–137 mm of track; SA0–SA7 stay about as long as they were (49–68 mm; SA5 77 mm), SA8–SA14 are 29–66 mm,
+  SA15–SA19 43–62 mm and SMEMR 63 mm. That is ordinary for an ISA card.
 * **It fits on the 102 mm card, at a price** (the first version of this branch had it on an 18 mm longer card,
   with a DIP decoder and 0.2 mm rules everywhere; that board is in the branch's history, commit 22df124):
   * The logic column (U3–U7 with their capacitors and R1, R5, R18) moved **12.86 mm up**; C46 went to the top
-    left corner, and R31/R32 lie below the right end of J8.
+    left corner, and R31/R32 lie right of J8, their upper pads in line with its top pin row.
   * The socket is in the bottom left corner, above the fingers of SA0–SA7, **with its body in line with the DIP
     bodies of the logic column** (KiCad draws a DIP's outline 0.66 mm shorter at each end than the package is, so
-    the outlines on the board differ where the parts do not). **J3 moved one pin pitch to the right** to clear
-    it: the two courtyards touch. C48 and C49 sit between U7 and the socket, R35 lies below U9.
+    the outlines on the board differ where the parts do not). **J3 moved 5.54 mm to the right** (one pin pitch
+    to clear the socket, then 3 mm more so that there is room between the two): pin 1 is at (141.57, 124.91),
+    3 mm of board lies between their courtyards. C48 and C49 sit between U7 and the socket, R35 lies below U9.
   * **U16 is a TSSOP on the back, inside the socket's outline.** A through-hole PLCC-32 socket has no pins in
     its middle: between its inner pin rows 6.2 × 8.7 mm of board is free. A TSSOP-16 (4.95 × 7.2 mm over its
     lands) fits there, with 0.6 mm to the socket's pads at its ends and 0.76 mm along its pin rows. Its six
     inputs come in between the socket's right-hand pins, three 0.15 mm tracks per gap; its three outputs go up
-    through three gaps of the socket's top rows, each straight into its jumper pad. **Solder U16 before the socket**: afterwards the socket's solder
-    joints stand round it. A TSSOP-20 is too long for that field, and a DIP-16 or DIP-20 between the socket and
-    the bus switches would be a wall across the 16 bus lines that run there. The previous commit of this branch
-    (f51e07e) has U16 on the front instead, between the socket and U1, on U1/U2's test-pad footprint.
+    through three gaps of the socket's top rows, each straight into its jumper pad. **Solder U16 before the
+    socket**: afterwards the socket's solder joints stand round it. A TSSOP-20 is too long for that field, and a
+    DIP-16 or DIP-20 between the socket and the bus switches would be a wall across the 16 bus lines that run there.
+    The previous commit of this branch (f51e07e) has U16 on the front instead, between the socket and U1, on U1/U2's
+    test-pad footprint.
   * **That corner is too dense for 0.2 mm tracks and clearances.** The rule area `bootrom` (x 116.0–174.6, y from
     79.0 down) allows **0.15 mm** there; the rest of the card keeps 0.2 mm (`PicoGUS-THT.kicad_dru`). 0.15 mm is
     within JLCPCB's standard 4-layer capability (0.09 mm). About 1.6 m of track is 0.15 mm wide.
@@ -439,7 +441,8 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
   see [Radio module](#radio-module-optional) for what the bracket does to it.
 * **J8 (Waveblaster)** with pin 1 where v1.3.2 has it, (158.89, 39.63), and like v1.3.2 without daughterboard
   standoff holes (`Wavetable_NoMountingHoles`; v2.0 had two, 6.35 mm right of pin 1): the daughterboard is held by
-  its header. **J3 (IRQ/DMA)** at v1.3.2's position, pin 1 (136.03, 124.91).
+  its header. **J3 (IRQ/DMA)** at v1.3.2's position, pin 1 (136.03, 124.91); on this branch 5.54 mm to the right
+  of it, clear of the boot ROM socket.
 * **Under the Waveblaster daughterboard** (a full-size board's outline ends at x 170.32 and y 121.9; its underside
   is about 11 mm above the card): the logic DIPs, the SMD chips (U1, U2, U10), the DAC block, FB3/FB4, R31/R32, the
   disc capacitors, U9 lying down and D3. C38 (AVDD bulk, 5 × 11 mm) was under it and has moved out (see [Layout
@@ -451,7 +454,7 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
 
 ## Layout status
 
-**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12; its socket lined up with the DIPs and R31, R32, R35 laid flat 2026-11-14), for review.** The placement and the silkscreen labels are the user's (the DAC
+**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12; its socket lined up with the DIPs and R31, R32, R35 laid flat 2026-11-14; J3 3 mm to the right and R31/R32 in line with J8's top row 2026-11-16), for review.** The placement and the silkscreen labels are the user's (the DAC
 block turned and moved under the daughterboard; regulator, module, USB-C parts and headers moved), with the changes
 listed below. **DRC with schematic parity: 0 unconnected items, no clearance, hole or parity errors.** What is left:
 the 12 accepted courtyard overlaps of the logic column (U3–U7 on v1.3.2's 12.05 mm pitch with their decoupling discs
@@ -464,7 +467,7 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   island** (see [Audio](#audio)); FB3 (GND–AGND) and FB4 (+3V3–AVDD) are the only ties. 0.2 mm signal tracks (0.15 mm
   in the boot ROM corner of this branch), 0.4 mm
   for +5V, VSYS, the USB VBUS nets and ±12 V; the plane nets reach their planes through short stubs and vias. 0.6/0.3
-  mm vias. About 2.92 m of track on F.Cu, 2.99 m on B.Cu, 0.66 m on In2.Cu and 189 vias (plain v2.1: 2.5 m on each
+  mm vias. About 2.92 m of track on F.Cu, 2.99 m on B.Cu, 0.69 m on In2.Cu and 197 vias (plain v2.1: 2.5 m on each
   outer layer, 0.05 m and 152). In1.Cu carries no signal.
 * **On the plain v2.1, In2.Cu carries eight short signal hops** (52 mm in all, the longest 12 mm: D5, ADS, D4, D7,
   GPIO23, D2, AD3, AD1) where the band above the ISA fingers is full on both outer layers. They cut slots in the
@@ -489,13 +492,20 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
     shorter or longer; the eight address lines from the fingers, the fan-out on its right (with the four vias of
     SA3, SA4, `~SMEMR` and `~IOR`, which now sit in two columns), A8 and IRQ past its top right corner and the
     jumper wiring were laid again by hand. No autorouter run was needed for that.
-  * **In2.Cu now carries 0.66 m of signal track** (28 nets, the longest SD7 and SD5 with 49 and 48 mm and
+  * **J3 3 mm to the right** (2026-11-16) put its pins where tracks ran between them and its right end into the
+    band of diagonals that run from U1/U2 to the fingers of SA16–SA19, AEN, IOW and SMEMR. Its jumper links were
+    laid again by hand (the IRQ lanes under it 3 mm longer, each DMA line climbing diagonally from its finger to
+    its pin, the IRQ bar fed through a via where pin 2 was). The tracks it displaced (SA5, SA15–SA18, AEN, ADS,
+    `~IOW`, `~SMEMR`, IRQ2, DRQ and DACK) were cut back to two boxes round it and joined again with the grid
+    router. Freerouting stalled at seven open links on that task; the grid router closed all of them once
+    `~SMEMR` and `~IOW` went first. The cost: eight more vias, about 30 mm more on In2.Cu, SA5 17 mm longer.
+  * **In2.Cu now carries 0.69 m of signal track** (30 nets, the longest SD7 and SA5 with 49 mm each and
     SA10–SA14 with 22–47 mm each), nearly all of it in that corner. The +3V3 plane is cut into strips there. **One
     strip of 15 mm² under U1 is cut off from the rest of the plane**; the only thing on it is U1's supply pin,
     which a 0.2 mm track on the back joins to its capacitor C2. The GND plane has no track in it.
-  * **What is not pretty**: ADS changes layer twelve times (eight on the plain v2.1), SD4 and SD6 six times each
-    (four and two), IOCHRDY four times (none), and the autorouted corner has none of the order of the rest of the
-    board. It passes DRC; it was not reviewed line by line.
+  * **What is not pretty**: ADS changes layer eleven times (eight on the plain v2.1), SD4 and SD6 six times each
+    (four and two), IOCHRDY four times (none), SA5, SA17 and DRQ three times each, and the autorouted corner has
+    none of the order of the rest of the board. It passes DRC; it was not reviewed line by line.
 * **Routing rules**: no copper between the gold fingers (rule areas between them; tracks leave each finger straight
   up) and no vias over the fingers (rule area from y 128.3); digital tracks kept off the analog islands where possible
   (see [Audio](#audio) for what crosses). No track or via runs on F.Cu under U9, whose metal back (GND) lies on the
@@ -544,7 +554,8 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   `USB host (J5)`, `USB-C (J6)`, `WiFi radio (U14)`, `Core2350B + power (U12)`, `IRQ/DMA jumpers (J3)`, `PicoGUS logo`,
   `Copyright and attribution (back)`, the bracket drawing and, on this branch, `Boot ROM (U15, U16)`.
 * **R21–R30 (mixer) are on 10.16 mm pitch** like every other lying resistor on the card, and so are R31, R32
-  (side by side below the right end of J8; -12 V and UART_TX pass between their lower pads) and, on this branch,
+  (side by side right of J8, their upper pads in line with its top pin row; -12 V and UART_TX pass between their
+  lower pads) and, on this branch,
   R35 (below U9). **R19, R20, R33 and R34 still stand** (2.54 mm): between the USB-A connector, the radio module,
   its antenna keep-out, the USB-C connector and the board edge there is room for one lying resistor above the
   module and one below it, not for four.
