@@ -808,7 +808,7 @@ static uint16_t do_list(const uint8_t *req, uint16_t req_len, uint8_t *answ, uin
     memcpy(raw, req + BD_LIST_REQ_LEN, plen);       /* answ may alias req: take the path first */
     raw[plen] = 0;
     norm_path(list_path, sizeof(list_path), raw);
-    if (list_path[1] == 0) list_path[0] = 0;        /* "\\" alone is the root, like "" */
+    if (list_path[0] && list_path[1] == 0) list_path[0] = 0;        /* "\\" alone is the root, like "" */
     if (!mounted) {
         *ax = BD_ST_NOTREADY;
         return 0;

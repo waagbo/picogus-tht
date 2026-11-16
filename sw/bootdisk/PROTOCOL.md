@@ -1,10 +1,12 @@
 # PGBOOT: booting floppy and hard disk images from the PicoGUS USB drive
 
-Experimental (branch `bootdisk`). An option ROM (`PGBOOT.ROM`, in an EEPROM on a
-third-party ROM card such as the DoubleROM, or loaded into RAM by `PGBOOT.COM`)
-presents a disk image file on the PicoGUS USB drive to the BIOS as a floppy
-drive (A:) and/or a hard disk (C:), so the machine can boot from it. The
-PicoGUS itself only decodes I/O ports, so it cannot carry the ROM.
+Experimental. An option ROM (`PGBOOT.ROM`, in an EEPROM on a
+third-party ROM card such as the Monotech DoubleROM, or loaded into RAM by
+`PGBOOT.COM`) presents a disk image file on the PicoGUS USB drive to the BIOS
+as a floppy drive (A:) and/or a hard disk (C:), so the machine can boot from
+it. The PicoGUS itself only decodes I/O ports, so it cannot carry the ROM.
+The ROM's boot menu lists the disk images on the drive (BDLIST) and selects
+them through the same registers `pgusinit` writes.
 
 The card serves 512-byte sectors of the image files over the existing PGDFS
 transport (`sw/dfs/PROTOCOL.md`: knock, `CMD_DFSREQ`/`EXEC`/`STAT`/`RESP`, the
@@ -24,7 +26,8 @@ server on core 1.
 All requests use the PGDFS frame header (`LL LL DD AL`, `DD` = 0). The card
 handles these AL values before the PGDFS drive checks (`DD` is not looked
 at, and they are answered with or without a USB drive, like `DIAG`). Firmware
-without PGBOOT answers AX = 0001h (invalid function) to all three. A request
+without PGBOOT answers AX = 0001h (invalid function) to all of them, and
+firmware from before the boot menu to BDLIST. A request
 payload shorter than the fields below, an unknown unit or a count of 0 is
 answered AX = 0001h without a payload. The transport accepts these frames whether or not a USB
 drive is mounted: `CMD_DFSSTAT` reads NODRIVE (FFh) only in place of IDLE or
@@ -116,12 +119,56 @@ Checks in this order: request shape (01h), unit ready (80h), token (floppy: 06h 
 protection (03h, BDWRITE only), range (04h), then the transfer (20h on a
 FatFs or USB error). After a 20h the next request tries the drive again.
 
+### F6h BDLIST
+
+One screenful of a folder for the ROM's boot menu: the way up (`..`, not in
+the root), the folders, then the disk images, each group in the order the
+entries have in the directory. Nothing is kept on the card between requests:
+every request reads the directory again, so the listing follows the drive.
+
+Request payload: `SS SS NN FF` + path
+* `SS SS` index of the first entry wanted (u16)
+* `NN` most entries wanted; the card returns fewer when the frame is smaller
+  (`(CMD_DFSMAXLEN - 4) / 48`, 85 with the default 4096). 0 asks for the
+  total alone, which is how the ROM asks "is a drive mounted?" when no image
+  is configured.
+* `FF` flags, 0
+* path: the folder, without a terminator, at most 127 characters, spelled
+  like an image name (`\DISKS\DOS`, `/disks/dos`, `E:\disks\dos\`). Empty or a
+  separator alone: the root.
+
+Answer: AX = 00h and `TT TT CC 00` followed by `CC` entries of 48 bytes.
+`TT TT` is the number of entries the folder has for the menu (at most
+65535), `CC` the number in this answer.
+
+| Off | Size | Field |
+|---|---|---|
+| 0 | u8 | kind: 0 folder, 1 floppy image (goes to A:), 2 hard disk image (goes to C:) |
+| 1 | u8 | flags: bit 0 the file is read-only |
+| 2 | u32 | size in 512-byte sectors, rounded down; 0 for folders |
+| 6 | u8 | length of the display name |
+| 7 | u8 | reserved, 0 |
+| 8 | 13 | 8.3 name, zero padded, always terminated: what a path is built from (`..` for the way up) |
+| 21 | 27 | display name: the long name, zero padded; a longer one is cut to 24 characters and `...` |
+
+What is listed: folders and files that are neither hidden nor system. A
+file is a disk image by its extension: `IMG`, `IMA`, `VFD`, `FLP`, `DSK`
+(a floppy image up to 2,949,120 bytes = 2.88 MB, a hard disk image above),
+`VHD` and `HDD` (always a hard disk image). The kind is a guess for the menu
+from the name and size alone; whether the image is usable shows when it is
+opened (BDINFO state).
+
+Other answers, without a payload: 01h request shorter than 4 bytes or path
+longer than 127 characters, 02h no such folder, 20h FatFs or USB error, 80h
+no USB drive mounted.
+
 ### Status codes (AX)
 
 | AX | Meaning (as INT 13h AH) |
 |---|---|
 | 00h | success |
 | 01h | invalid unit or request |
+| 02h | BDLIST only: no such folder |
 | 03h | write protected (read-only image) |
 | 04h | sector not found (LBA + count beyond the image) |
 | 06h | media changed: floppy image token mismatch (image swapped since the last BDINFO) |
@@ -140,12 +187,18 @@ instead of a different image. A USB replug reopens the units that were open.
 | 89h | `CMD_BDHDNAME` | string, `DATA_PORT_HIGH` | Hard disk image path, same rules. A commit only stores the name; it is opened at the next BDINFO with OPEN (next boot), never under a running system. |
 | 8Ah | `CMD_BDOPTS` | byte, `DATA_PORT_HIGH` | bit 0 floppy image read-only, bit 1 hard disk image read-only, bit 2 ROM disabled (the ROM installs nothing), bit 3 boot the hard disk image even when a floppy image is configured. Reads return the value with bit 7 set and bit 6 clear (signature: firmware without PGBOOT reads FFh). |
 
-All three live in the persisted settings (`Settings.BootDisk`, settings
-version 7, which makes the settings two flash pages long) and are saved by
-`CMD_SAVE` (`pgusinit /save`). `CMD_DEFAULTS` clears them; the floppy image
+| 8Bh | `CMD_BDMENU` | byte, `DATA_PORT_HIGH` | The ROM's boot menu. Bits 0-1: 0 off, 1 offered at boot (the ROM waits for M), 2 opened at every boot. Bits 2-5: the seconds it waits in mode 1, 1-15. The card stores mode 3 as 1 and 0 seconds as 3. Reads return the value with bit 6 set and bit 7 clear (firmware without the boot menu reads FFh: the ROM then shows no menu). Default 0Dh: mode 1, 3 s. |
+| 8Ch | `CMD_BDTUNE` | byte, `DATA_PORT_HIGH` | Start-up tune the ROM plays on the PC speaker: 0 none, 1-3. Other values are not stored. Reads return the value with bit 6 set and bit 7 clear. Default 1. |
+
+All of them live in the persisted settings (`Settings.BootDisk`, settings
+version 8, which makes the settings two flash pages long) and are saved by
+`CMD_SAVE` (`pgusinit /save`, or S in the boot menu: a write of any value to
+`DATA_PORT_HIGH` with `CMD_SAVE` selected, after which the card is busy
+writing its flash for a moment). `CMD_DEFAULTS` clears them; the floppy image
 is ejected at once, an open hard disk image stays until the next boot.
 `pgusinit` commands: `/fdimage <path|->`, `/hdimage <path|->`,
-`/bdopts <0-15>`, and a status block after the PGDFS one.
+`/bdopts <0-15>`, `/bdmenu <0-2>`, `/bdwait <1-15>`, `/bdtune <0-3>`, and a
+status block after the PGDFS one.
 
 ## Card behaviour
 
@@ -201,7 +254,9 @@ is ejected at once, an open hard disk image stays until the next boot.
   byte-pair loops on 8086/8088). At POST it only detects the card and hooks
   INT 19h; everything else happens in its INT 19h handler (late init) so the
   USB drive has time to enumerate: reserve 1 KB at the top of conventional
-  memory for state, wait for the drive (Esc skips), BDINFO with OPEN for both
+  memory for state, play the start-up tune (`CMD_BDTUNE`), wait for the
+  drive (Esc skips), offer or open the boot menu (`CMD_BDMENU`; BDLIST, the
+  image name registers, `CMD_SAVE`), BDINFO with OPEN for both
   units, hook INT 13h, adjust the BIOS data area (hard disk count 40:75h,
   equipment word 40:10h), print what it presents, and boot the floppy image
   (or the hard disk image, per option bit 3) from sector 0 at 0000:7C00.

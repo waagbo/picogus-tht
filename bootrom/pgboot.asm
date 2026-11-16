@@ -65,7 +65,10 @@ post_init:
         ; A 28C256 programmed with this image in each of its four 8 KB
         ; quarters (PGBT256.BIN) shows it once behind an 8 KB window and four
         ; times behind a 32 KB one: the BIOS then calls every copy. The first
-        ; has hooked INT 19h; the others have nothing to add.
+        ; has hooked INT 19h; the others have nothing to add. (A copy that
+        ; PGBOOT.COM loaded is there because the user asked for it.)
+        test    byte [cs:HDR_FLAGS], HDRF_RAMCOPY
+        jnz     .first
         xor     ax, ax
         mov     ds, ax
         les     bx, [19h*4]

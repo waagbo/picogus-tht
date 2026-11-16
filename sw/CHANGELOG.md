@@ -60,14 +60,6 @@ Overhauled firmware flashing to be more resilient.
 - Firmware for the RP2040 and the RP2350 is not interchangeable, so flashing is guarded: the firmware checks the UF2 data it is sent and refuses a file for the other chip (or one that isn't laid out as a PicoGUS firmware file) before erasing anything, and `pgusinit /flash` checks the file against the card's chip before sending it. pgusinit shows the chip on its hardware line when it is not an RP2040.
 - Releases contain the firmware for every platform. `sw/scripts/build_release.sh` builds the same set of files locally, and with `--experimental` a second set with the experimental feature branches merged in (see `sw/experimental/README.md`).
 
-### PGBOOT: boot floppy and hard disk images from the USB drive (experimental)
-
-- An option ROM (`PGBOOT.ROM`, in an EEPROM on a ROM card, or loaded by `PGBOOT.COM`) can present a disk image file on the PicoGUS USB drive to the BIOS as floppy drive A: and/or hard disk C:, so the machine boots from it. The card serves the sectors over the PGDFS transport with three new requests (`BDINFO`, `BDREAD`, `BDWRITE`, see `sw/bootdisk/PROTOCOL.md`), in every firmware mode that carries PGDFS.
-- Raw images and fixed VHD files are supported. Floppy geometry comes from the image size (160K to 2.88M, DMF 1.68M/1.72M) or its DOS boot sector; hard disk geometry from the VHD footer, the partition table, the boot sector, or 16 heads / 63 sectors. Images are kept open with a FatFs fast seek map (a hard disk image too fragmented for it is refused with a message to copy it to a freshly formatted stick), and written sectors reach the USB drive before the write is acknowledged.
-- Safety: after the card boots (mode switch, firmware update) it opens no image until the ROM asks at the next boot, and every sector request carries a token that identifies the card boot and the image file, so a running system is never handed a different disk: a swapped floppy is reported as a media change, a hard disk that changed as not ready. Replugging the same USB stick carries on where it was.
-- `pgusinit /fdimage <path|->` selects the floppy image (swapped in at once, reported to DOS as a media change), `/hdimage <path|->` the hard disk image (used from the next boot), `/bdopts <0-15>` the options (read-only floppy / hard disk, ROM disabled, boot the hard disk image). They are saved with `/save` (settings version 7) and shown in pgusinit's status output.
-- While an image is in use, PGDFS refuses to delete, rename or write that file (access denied).
-
 # v4.1.1
 
 ## Fixes/improvements

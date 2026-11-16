@@ -51,6 +51,7 @@ This is an experimental extension of the PicoGUS 2.0 SMD design, made possible u
 ### Experimental Firmware
 We have added experimental features that adds upon community ideas on top of the original firmware and software components. The features are submitted as Pull Requests to the original PicoGUS repository as well but there is no guarantee that they will ever be included in the official software releases:
 * DFS drive support inspired by PicoMEM so the USB drive can be accessed from MS-DOS.
+* PGBOOT, a boot ROM for a separate ROM card (such as the Monotech DoubleROM) that boots floppy and hard disk images from the USB drive, with a boot menu to pick the image. See [bootrom/README.md](bootrom/README.md).
 * CD images in a `CDROM` folder on the USB drive.
 * A web page on boards with a Pico W or Pico 2 W: status, volumes, settings, mode switching, mt32-pi control and firmware updates from a browser.
 

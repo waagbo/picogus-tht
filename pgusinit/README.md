@@ -193,8 +193,15 @@ firmware with PGBOOT support; with older firmware pgusinit says so and changes n
 * `/bdopts n` - option bits, add them up: 1 floppy image read-only, 2 hard
   disk image read-only, 4 disable the ROM (it installs nothing), 8 boot the
   hard disk image even when a floppy image is configured. Default: 0.
+* `/bdmenu n` - the ROM's boot menu, which lists the disk images on the USB
+  drive at boot: 0 off, 1 offered at boot (the ROM waits a few seconds for
+  M), 2 opens at every boot. Default: 1.
+* `/bdwait n` - the seconds the ROM waits for M when the menu is offered,
+  1 to 15. Default: 3.
+* `/bdtune n` - start-up tune the ROM plays on the PC speaker when it has
+  found the card: 0 off, 1 to 3. Default: 1.
 
-All three are stored with the other settings: use `/save` to keep them
+All of them are stored with the other settings: use `/save` to keep them
 across power cycles. pgusinit shows the configured images and options in its
 status output (`PGBOOT floppy image: ...`) when the firmware supports PGBOOT.
 The images live on the USB drive that PGDFS serves, and the ROM reaches them

@@ -171,15 +171,6 @@ r_count         resw 1          ; scratch
 r_shown         resb 1          ; wait message on screen
 r_probe         resb 1          ; unit to ask whether the drive is mounted
 r_busy          resb 1          ; INT 13h request in progress (reentry guard)
-r_menu          resb 1          ; CMD_BDMENU value (0: no boot menu, or firmware without it)
-r_cfg           resb 1          ; not 0: an image name is configured
-r_bootsel       resb 1          ; picked in the menu to boot from: BD_KIND_FLOPPY / BD_KIND_HARDDISK, 0 = usual order
-m_cnt           resb 1          ; boot menu: entries in the page that is loaded
-m_top           resw 1          ; index of its first entry
-m_sel           resw 1          ; index of the selected entry
-m_total         resw 1          ; entries in the folder
-m_plen          resw 1          ; length of m_path
-m_seg           resw 1          ; segment the page is loaded to (below this block)
                 alignb 16
 u_fd            resb U_SIZE     ; unit structures, see U_*
 u_hd            resb U_SIZE
@@ -210,6 +201,16 @@ io_op           resb 1          ; IO_READ / IO_WRITE / IO_VERIFY / IO_FILL
 io_n            resb 1          ; sectors in the current chunk
                 alignb 16
 x_ans           resb 128        ; BDINFO answer
+; boot menu and late init (added in 0.2, after everything 0.1 had)
+r_menu          resb 1          ; CMD_BDMENU value (0: no boot menu, or firmware without it)
+r_cfg           resb 1          ; not 0: an image name is configured
+r_bootsel       resb 1          ; picked in the menu to boot from: BD_KIND_FLOPPY / BD_KIND_HARDDISK, 0 = usual order
+m_cnt           resb 1          ; boot menu: entries in the page that is loaded
+m_top           resw 1          ; index of its first entry
+m_sel           resw 1          ; index of the selected entry
+m_total         resw 1          ; entries in the folder
+m_plen          resw 1          ; length of m_path
+m_seg           resw 1          ; segment the page is loaded to (below this block)
 m_path          resb MENU_PATH_MAX + 2  ; folder shown in the boot menu, "" = the root
 ram_vars_end:
 endstruc

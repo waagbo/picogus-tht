@@ -67,7 +67,7 @@ fast seek), copied next to `ff.h` in the build directory as that Makefile does.
 ## Run
 
 ```
-tools/emu/run-tests.sh                 # T0 S1 T1 ... T11 (about 1.5 minutes)
+tools/emu/run-tests.sh                 # T0 S1 T1 ... T18 (about 4 minutes)
 tools/emu/run-tests.sh T0 T3 T4        # a selection
 KEEP=1 SIM_LOG=3 tools/emu/run-tests.sh T1
 SIM_EXTRA='--busy-polls 300' tools/emu/run-tests.sh    # a slow card: long BUSY phases
@@ -89,7 +89,7 @@ output; the evidence stays in `$EMU_CACHE/work/<test>/`:
 
 | Test | What runs | What it proves |
 |---|---|---|
-| S1 | `buscheck.py` against the sim, no QEMU | Card PGBOOT server over the exact bus sequence: `CMD_BDOPTS` signature, image names, nothing open before BDINFO OPEN (state 0, BDREAD -> 80h), BDINFO (state, CHS, total, floppy type, image token), BDREAD (content equals the image, max-size frames, end of image -> 04h), BDWRITE + read back, wrong token -> 06h floppy / 80h hard disk, new token after OPEN and after a floppy name commit, unknown unit -> 01h. Also shows BUSY -> READY. |
+| S1 | `buscheck.py` against the sim, no QEMU | Card PGBOOT server over the exact bus sequence: `CMD_BDOPTS`, `CMD_BDMENU` and `CMD_BDTUNE` signatures, BDLIST of the root, image names, nothing open before BDINFO OPEN (state 0, BDREAD -> 80h), BDINFO (state, CHS, total, floppy type, image token), BDREAD (content equals the image, max-size frames, end of image -> 04h), BDWRITE + read back, wrong token -> 06h floppy / 80h hard disk, new token after OPEN and after a floppy name commit, unknown unit -> 01h. Also shows BUSY -> READY. |
 | T0 | Native QEMU floppy boot (FreeDOS), `DFSDIAG /INFO /ECHO /DIR /LDIR /MKDIR` | Bridge + transport + real DFS server, without the ROM: detection registers, 16-bit reads at odd ports, word-wide data window both ways, 64..4096-byte frames, FatFs on the stick image, a write (MKDIR) visible with mtools. |
 | T1 | `PGBOOT.ROM`, no native disks, stick with `FD.IMG`, sim `--fd FD.IMG` | The ROM boots FreeDOS from the floppy image: POST detection, INT 19h late init, BDINFO OPEN, INT 13h reads (boot sector, FAT, kernel, COMMAND.COM). Also reports whether a DOS write to A: reached `FD.IMG`. |
 | T2 | as T1 with `PGBOOT88.ROM` | the 8088 transfer path (`in ax,dx`/`out dx,ax` loops instead of `rep insw`/`outsw`; the ROM's banner says `(8088 forced)`, on the bus both paths are the same byte-cycle pairs) |
@@ -102,11 +102,24 @@ output; the evidence stays in `$EMU_CACHE/work/<test>/`:
 | T9 | ROM, FreeDOS on FD.IMG runs `PGUSINIT /fdimage FD2.IMG` | Floppy swap under a running DOS: the card reopens unit 0 and flags a media change, the ROM reports it through INT 13h, DOS re-reads FAT and directory (new label, a file only FD2.IMG has). FreeCOM re-reads AUTOEXEC.BAT by name and offset, so the checks after the swap only exist on FD2.IMG. |
 | T10 | ROM boot, then `PGDFS D:` | PGDFS and PGBOOT together: the stick as D:, a D: -> A: copy, and DEL/REN of the open `FD.IMG` refused by the card (DELETE/RENAME answer AX=05h in the trace, the file is still on the stick). |
 | T11 | ROM, card `--dfsport 0x2a0`, bridge `dataport=0x2a0` | The ROM takes the data window from `CMD_DFSPORT` instead of assuming 1D4h. |
+| T12 | ROM, `--menu 2`, nothing configured; keys End, Up, PgUp, Enter, Enter, Enter, Down, Enter | The boot menu: the root listing (folder first, `FD.IMG` as A:, `HD.IMG` as C:, `README.TXT` left out), moving through it, opening the folder "Boot Disks", `..` back up, and booting "DOS Boot Disk.img" in the folder: the card gets `\BOOTDI~1\DOSBOO~1.IMG`. |
+| T13 | ROM, `--menu 2`; keys Down, Space, S, Down, Enter | Space puts `FD.IMG` in A: without booting, S saves (`CMD_SAVE` in the trace with the floppy name), Enter on `HD.IMG` boots C: with A: present. |
+| T14 | ROM, `--fd FD.IMG`, 8 s prompt, native floppy; keys M, A, Esc | M at the prompt opens the menu with `FD.IMG` in A:, A ejects it, Esc leaves: nothing configured, the BIOS boots the native floppy. |
+| T15 | ROM, default settings, nothing configured, native floppy, QEMU `-trace pcspk_io_write` | The start-up tune: four writes to port 61h with the timer gate and speaker bit on, a last one with both off. The prompt runs out, "no disk image configured", BIOS boot. |
+| T16 | ROM, `--fd FD.IMG`, native floppy; key Esc | Esc at the prompt: "skipped", the BIOS boots the native floppy. |
+| T17 | four copies of the ROM as four option ROMs | What a 28C256 with `PGBT256.BIN` shows behind a 32 KB window: one banner, one hook, a normal floppy image boot. |
+| T18 | ROM boot, then `PGUSINIT /bdmenu 2 /bdwait 7 /bdtune 3`, `/bdmenu 1`, `/bdtune 0` | pgusinit's switches write `CMD_BDMENU` / `CMD_BDTUNE` (values in the trace) and its status output shows them. |
 | P4 | native QEMU floppy + IDE disk, no ROM, no card | Helper: the reference hard disk for T4/T8 when T3 did not run (FDISK /MBR + SYS C: through SeaBIOS INT 13h). |
 
 The markers the tests wait for are written by `AUTOEXEC.BAT` with
 `ECHO PGBOOT-... > COM1`; there is no power-off, the harness kills QEMU after
 the marker and a final screen dump. Timeout per test: `TIMEOUT` (90 s).
+
+The menu tests type on the guest's keyboard through the QEMU monitor
+(`send_keys` in `lib.sh`: HMP `sendkey`) and wait for what they expect on the
+text screen (`wait_screen`: a screen dump every 0.3 s until a line matches).
+The early screen dump of the other tests waits the same way for the ROM's
+last line (`PGBOOT: booting A:`, `continuing with the BIOS boot`, ...).
 
 ## Test images
 
@@ -124,7 +137,7 @@ the marker and a final screen dump. Timeout per test: `TIMEOUT` (90 s).
 ## pgcard-sim
 
 ```
-pgcard-sim --stick IMAGE [--fd NAME] [--hd NAME] [--opts N] [--mount-delay-ms N]
+pgcard-sim --stick IMAGE [--fd NAME] [--hd NAME] [--opts N] [--menu N] [--tune N] [--mount-delay-ms N]
            [--dfsport N] [--busy-polls N] [--socket PATH] [--persist] [--log[=N]] [--logfile F]
 ```
 
@@ -137,7 +150,8 @@ pgcard-sim --stick IMAGE [--fd NAME] [--hd NAME] [--opts N] [--mount-delay-ms N]
   pending request, and when the status is polled: a request stays BUSY for
   `--busy-polls` status reads (default 1), so the ROM sees `02 03`, not just
   `03`.
-* `--fd/--hd/--opts` are the persisted settings (`Settings.BootDisk`);
+* `--fd/--hd/--opts/--menu/--tune` are the persisted settings (`Settings.BootDisk`;
+  the menu and tune default to the firmware's: offered for 3 s, tune 1);
   `CMD_SAVE` only logs them. `CMD_FLASH`/`CMD_REBOOT` are not simulated.
 * The data window is decoded at the card's current `CMD_DFSPORT` value; the
   bridge only forwards the window it was created with (`dataport=`), so a

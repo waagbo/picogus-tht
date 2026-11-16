@@ -208,7 +208,7 @@ collect_docs() {
 
 # Documents of experimental features that go with the files, where a source
 # tree has them: path in the tree and the name it gets
-declare -A FEATURE_DOCS=([sw/web/README.md]=WEBSERVER.md [bootrom/README.md]=PGBOOT.md)
+declare -A FEATURE_DOCS=([sw/web/README.md]=WEBSERVER.md [bootrom/README.md]=PGBOOT.md [bootrom/menu.png]=menu.png)
 
 # build_set <source tree> <output dir> <build dir>
 # The firmware images are build_variants.sh's default set: all modes and
