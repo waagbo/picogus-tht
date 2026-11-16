@@ -23,6 +23,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "../bootdisk/bootdisk.h"   // BD_NAME_BUF
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
 #define SETTINGS_VERSION 7
@@ -111,6 +112,11 @@ typedef struct Settings {
     struct {
         uint16_t basePort;  // PGDFS data port window (2 ports at an even base); 0 = PGDFS disabled
     } DFS;
+    struct {
+        char fdImage[BD_NAME_BUF];  // PGBOOT floppy image path on the USB drive, "" = none
+        char hdImage[BD_NAME_BUF];  // PGBOOT hard disk image path, "" = none
+        uint8_t options;            // BD_OPT_* (CMD_BDOPTS)
+    } BootDisk;
 } Settings;
 
 

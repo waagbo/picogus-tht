@@ -228,7 +228,8 @@ function(config_target TARGET_NAME MULTIFW)
             if(NOT DFS_MAX_PAYLOAD)
                 set(DFS_MAX_PAYLOAD 4096)
             endif()
-            target_link_libraries(${TARGET_NAME} dfs)
+            # pico_rand: PGBOOT's per-boot nonce (bd_set_boot_nonce)
+            target_link_libraries(${TARGET_NAME} dfs pico_rand)
             target_compile_definitions(${TARGET_NAME} PRIVATE
                 PGDFS=1
                 DFS_MAX_PAYLOAD=${DFS_MAX_PAYLOAD}

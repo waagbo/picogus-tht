@@ -288,6 +288,80 @@ jobs:
           name: picogus-${{ matrix.flavor }}${{ needs.plan.outputs.bundle_suffix }}
           path: ${{env.STAGING_DIR}}
 
+    build-pgboot:
+      runs-on: ubuntu-22.04
+      env:
+        NASM_VER: "3.02"
+        OUTPUT_DIR: ${{github.workspace}}/binaries
+      steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # The ROM Makefile uses NASM 3 warning options; Ubuntu ships 2.15.
+      - name: Cache NASM
+        id: cache-nasm
+        uses: actions/cache@v4
+        with:
+          path: ${{github.workspace}}/nasm
+          key: nasm-${{ env.NASM_VER }}
+      - name: Build NASM
+        if: steps.cache-nasm.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VER/nasm-$NASM_VER.tar.xz | tar xJ
+          cd nasm-$NASM_VER
+          ./configure --prefix=$GITHUB_WORKSPACE/nasm
+          make -j$(nproc) nasm
+          mkdir -p $GITHUB_WORKSPACE/nasm/bin
+          cp nasm $GITHUB_WORKSPACE/nasm/bin/
+
+      - name: Build PGBOOT ROM and tools
+        working-directory: ${{github.workspace}}/bootrom
+        run: |
+          mkdir -p $OUTPUT_DIR
+          make NASM=$GITHUB_WORKSPACE/nasm/bin/nasm all check
+          cp PGBOOT.ROM PGBOOT88.ROM PGBOOT.COM PGFLASH.COM test/INT13TST.COM $OUTPUT_DIR
+
+      - name: Upload pgboot
+        uses: actions/upload-artifact@v4
+        with:
+          name: pgboot
+          path: ${{env.OUTPUT_DIR}}
+
+    # One download with everything a tester needs: the firmware .uf2 files, the
+    # DOS tools and their README. Built for every push and pull request.
+    bundle:
+      runs-on: ubuntu-22.04
+      needs: [build-firmware, build-pgusinit, build-pgusdfs, build-pgboot]
+      env:
+        STAGING_DIR: ${{github.workspace}}/bundle
+      steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Name the bundle
+        id: name
+        shell: bash
+        run: |
+          REF="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          echo "name=picogus-${REF//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{env.STAGING_DIR}}
+          merge-multiple: true
+      - name: Add documentation
+        shell: bash
+        run: |
+          cp pgusinit/README.md $STAGING_DIR/PGUSINIT-README.md
+          cp pgusdfs/README.md $STAGING_DIR/PGUSDFS-README.md
+          cp sw/CHANGELOG.md $STAGING_DIR/CHANGELOG.md
+          cp bootrom/README.md $STAGING_DIR/PGBOOT-README.md
+          ls -la $STAGING_DIR
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.name }}
+          path: ${{env.STAGING_DIR}}
+
     create-release:
       if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
       runs-on: ubuntu-22.04

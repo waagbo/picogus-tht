@@ -174,6 +174,33 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
   AdLib, ...); pgusinit warns when it overlaps one. Use `/save` to keep the
   setting across reboots.
 
+### PGBOOT options (experimental)
+
+These configure the PGBOOT option ROM, which boots floppy and hard disk
+images stored on the USB drive (see `sw/bootdisk/PROTOCOL.md`). They need
+firmware with PGBOOT support; with older firmware pgusinit says so and changes nothing.
+
+* `/fdimage x` - floppy image presented as drive A:, a path on the USB drive
+  (`\DISKS\DOS622.IMG`; use backslashes, a leading `/` reads as the next
+  option). `-` removes it. The card switches to the new image at once, so a
+  running system sees a media change, as if the disk had been swapped. Raw
+  images of the standard sizes (160K to 2.88M, DMF) or with a DOS boot
+  sector, and fixed VHD files, are accepted.
+* `/hdimage x` - hard disk image presented as drive C: (the physical hard
+  disks move up by one), `-` removes it. A raw image or a fixed VHD. The
+  change takes effect at the next boot: a running system keeps the disk it
+  booted with.
+* `/bdopts n` - option bits, add them up: 1 floppy image read-only, 2 hard
+  disk image read-only, 4 disable the ROM (it installs nothing), 8 boot the
+  hard disk image even when a floppy image is configured. Default: 0.
+
+All three are stored with the other settings: use `/save` to keep them
+across power cycles. pgusinit shows the configured images and options in its
+status output (`PGBOOT floppy image: ...`) when the firmware supports PGBOOT.
+The images live on the USB drive that PGDFS serves, and the ROM reaches them
+through PGDFS, so PGDFS must be enabled (`/dfsport`, not 0). While an image
+is in use, PGDFS refuses to delete, rename or write that file.
+
 ## PGDFS (USB drive as a DOS drive letter)
 
 Firmware with PGDFS support serves the FAT-formatted USB drive plugged into

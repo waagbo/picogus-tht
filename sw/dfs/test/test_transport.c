@@ -54,6 +54,7 @@ bool dfs_server_drive_present(void) { return stub_drive_present; }
 void dfs_server_set_dos_time(uint16_t dos_time, uint16_t dos_date) { stub_time_calls++; stub_dos_time = dos_time; stub_dos_date = dos_date; }
 const char *dfs_server_info_string(void) { return stub_info; }
 uint32_t dfs_platform_millis(void) { return stub_millis; }
+void bd_tasks(void) { }     /* PGBOOT hook in dfs_tasks(), tested in sw/bootdisk/test */
 
 /* ---- tiny check framework -------------------------------------------------- */
 

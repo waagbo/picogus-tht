@@ -50,6 +50,7 @@
 #include <string.h>
 #include "dfs.h"
 #include "dfs_server.h"
+#include "../bootdisk/bootdisk.h"   /* bd_tasks() */
 
 #ifdef DFS_HOST_TEST
 /* Host build for sw/dfs/test: no Pico SDK. */
@@ -228,6 +229,7 @@ void dfs_ctl_time_write(uint8_t v) {
 /* ---- core 1: serving ------------------------------------------------------- */
 
 void dfs_tasks(void) {
+    bd_tasks();                             /* PGBOOT: apply a committed floppy image name */
     if (dfs_time_pending) {
         DFS_DMB();
         dfs_server_set_dos_time(dfs_time_val, dfs_date_val);

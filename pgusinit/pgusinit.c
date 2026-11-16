@@ -97,6 +97,13 @@ static void usage(card_mode_t mode, bool print_all)
     //         "...............................................................................\n"
     pageprintf("PGDFS (USB drive as a DOS drive letter) settings:\n");
     pageprintf("   /dfsport x    - set the PGDFS data port (even). Default: 1D4, 0 to disable\n");
+    //         "...............................................................................\n"
+    pageprintf("PGBOOT (boot disk images on the USB drive, needs the PGBOOT ROM) EXPERIMENTAL:\n");
+    pageprintf("   /fdimage x    - floppy image for A:, path on the USB drive. - to remove.\n");
+    pageprintf("                   A running system sees the new disk as a media change\n");
+    pageprintf("   /hdimage x    - hard disk image for C:, - to remove. Used from the next boot\n");
+    pageprintf("   /bdopts n     - options, add up: 1 floppy read-only, 2 hard disk read-only,\n");
+    pageprintf("                   4 ROM disabled, 8 boot the hard disk image. Default: 0\n");
     if (mode == GUS_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("GUS settings:\n");
@@ -1112,6 +1119,74 @@ static bool cmdWifiNoPass(const char* arg, const int cmd, const int cmd2, const 
     return true;
 }
 
+// PGBOOT: firmware with it reads CMD_BDOPTS as the options with bit 7 set and
+// bit 6 clear; older firmware answers FFh (and drops the control port session,
+// hence the knock afterwards).
+static bool bd_supported(uint8_t *opts)
+{
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, CMD_BDOPTS);
+    uint8_t v = inp(DATA_PORT_HIGH);
+    outp(CONTROL_PORT, 0xCC); // Knock again in case the register was unknown
+    if (opts) {
+        *opts = v & 0x0F;
+    }
+    return (v & 0xC0) == 0x80;
+}
+
+static void bd_read_name(uint8_t cmd, char *buf, int cap)
+{
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, cmd);  // selecting rewinds the name
+    int i = 0;
+    char c;
+    while ((c = inp(DATA_PORT_HIGH)) != 0 && i < cap - 1) {
+        buf[i++] = c;
+    }
+    buf[i] = 0;
+}
+
+static bool cmdBDImage(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{
+    char readback[128];
+    bool remove = !strcmp(arg, "-");
+    const char *what = (cmd == CMD_BDFDNAME) ? "Floppy" : "Hard disk";
+
+    if (!bd_supported(NULL)) {
+        fprintf(stderr, "Error: this firmware has no PGBOOT support (update the firmware).\n");
+        return false;
+    }
+    if (strlen(arg) > 127) {
+        fprintf(stderr, "Error: the image path is longer than 127 characters.\n");
+        return false;
+    }
+    send_string(cmd, remove ? "" : arg, 127);
+    bd_read_name(cmd, readback, sizeof(readback));
+    if (strcmp(readback, remove ? "" : arg)) {
+        fprintf(stderr, "Error: the PicoGUS did not store the image name (it reads back \"%s\").\n", readback);
+        return false;
+    }
+    if (remove) {
+        printf("%s image removed", what);
+    } else {
+        printf("%s image set to %s", what, arg);
+    }
+    if (cmd == CMD_BDHDNAME) {
+        printf("; takes effect at the next boot");
+    }
+    printf(". Use /save to keep it.\n");
+    return true;
+}
+
+static bool cmdBDOpts(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{
+    if (!bd_supported(NULL)) {
+        fprintf(stderr, "Error: this firmware has no PGBOOT support (update the firmware).\n");
+        return false;
+    }
+    return ctrlSendUint8(arg, cmd, 0, 15);
+}
+
 static bool cmdCDLoadName(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     send_string(cmd, arg, 127);
@@ -1215,6 +1290,9 @@ ParseCommand parseCommands[] = {
     {"/cdauto", cmdSendBool, CMD_CDAUTOADV, ARG_REQUIRE, "true"},
     {"/cdloadname", cmdCDLoadName, CMD_CDNAME, ARG_REQUIRE},
     {"/dfsport", cmdSendDFSPort, CMD_DFSPORT, ARG_REQUIRE, "1D4"},
+    {"/fdimage", cmdBDImage, CMD_BDFDNAME, ARG_REQUIRE, "-"},
+    {"/hdimage", cmdBDImage, CMD_BDHDNAME, ARG_REQUIRE, "-"},
+    {"/bdopts", cmdBDOpts, CMD_BDOPTS, ARG_REQUIRE, "0"},
     {"/mainvol", cmdSetVol, CMD_MAINVOL, ARG_REQUIRE, "100"},
     {"/oplvol", cmdSetVol, CMD_OPLVOL, ARG_REQUIRE, "100"},
     {"/sbvol", cmdSetVol, CMD_SBVOL, ARG_REQUIRE, "100"},
@@ -1475,6 +1553,28 @@ static void printPGDFSStatus()
     printf("USB drive: %s, %s, %s MB\n", label[0] ? label : "(no label)", fs, mb);
 }
 
+static void printBootDiskStatus()
+{
+    uint8_t opts;
+    char name[128];
+
+    if (!bd_supported(&opts)) {
+        return;     // firmware without PGBOOT
+    }
+    bd_read_name(CMD_BDFDNAME, name, sizeof(name));
+    printf("PGBOOT floppy image: %s%s\n", name[0] ? name : "(none)",
+           name[0] && (opts & 1) ? " (read-only)" : "");
+    bd_read_name(CMD_BDHDNAME, name, sizeof(name));
+    printf("PGBOOT hard disk image: %s%s\n", name[0] ? name : "(none)",
+           name[0] && (opts & 2) ? " (read-only)" : "");
+    printf("PGBOOT options: %u (ROM %s%s)\n", opts, (opts & 4) ? "disabled" : "enabled",
+           (opts & 8) ? ", boots the hard disk image" : "");
+    outp(CONTROL_PORT, CMD_DFSPORT);
+    if (inpw(DATA_PORT_LOW) == 0) {
+        printf("PGBOOT needs PGDFS, which is disabled (pgusinit /dfsport 1D4 to enable)\n");
+    }
+}
+
 static void printVolume()
 {
     printf("Volume: ");
@@ -1623,6 +1723,7 @@ int main(int argc, char* argv[]) {
     }
     printMultiMode();
     printPGDFSStatus();
+    printBootDiskStatus();
     printf("PicoGUS initialized!\n");
 
     if (permanent) {

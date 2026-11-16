@@ -28,6 +28,7 @@
 #include "ff.h"
 #include "dfs_fs.h"
 #include "dfs_server.h"     /* dfs_platform_millis() */
+#include "../bootdisk/bootdisk.h"   /* bd_path_is_open_image(): PGBOOT images are off limits */
 
 #if FF_FS_READONLY || FF_FS_MINIMIZE || !FF_USE_CHMOD || !FF_USE_LABEL || FF_FS_RPATH || !FF_USE_LFN
 #error "PGDFS needs FatFs with FF_FS_READONLY 0, FF_FS_MINIMIZE 0, FF_USE_CHMOD 1, FF_USE_LABEL 1, FF_FS_RPATH 0, FF_USE_LFN 1"
@@ -414,6 +415,9 @@ uint16_t dfs_fs_open(const char *path, uint8_t fa_mode, uint8_t set_attr, uint16
     }
     if (slot == DFS_MAX_FILES) return DFS_ERR_HANDLES;
     if (strlen(path) >= DFS_PATH_MAX) return DFS_ERR_PATH;
+    /* a disk image the boot ROM is using: reading is fine, changing it is not */
+    if ((fa_mode & (FA_WRITE | FA_CREATE_ALWAYS | FA_CREATE_NEW | FA_OPEN_ALWAYS)) &&
+        bd_path_is_open_image(path)) return DFS_ERR_ACCESS;
     bit = (uint8_t)(1u << slot);
 
     fr = note(DFS_CALL_OPEN, f_open(&files[slot], path, fa_mode));
@@ -467,6 +471,7 @@ uint16_t dfs_fs_write(uint16_t id, uint32_t offset, const uint8_t *src, uint16_t
     *done = 0;
     if (!fp) return DFS_ERR_HANDLE;
     if (!(fp->flag & FA_WRITE)) return DFS_ERR_ACCESS;
+    if (bd_path_is_open_image(file_path[id - 1])) return DFS_ERR_ACCESS;   /* opened before PGBOOT took it */
     fr = note(DFS_CALL_LSEEK, f_lseek(fp, offset));     /* extends the file when offset > size */
     if (fr == FR_OK) {
         if (len == 0) {
@@ -492,6 +497,7 @@ uint16_t dfs_fs_utime(uint16_t id, uint16_t dos_time, uint16_t dos_date) {
     FIL *fp = get_file(id);
     FRESULT fr;
     if (!fp) return DFS_ERR_HANDLE;
+    if (bd_path_is_open_image(file_path[id - 1])) return DFS_ERR_ACCESS;
     /* flush first: a later f_close() only rewrites the entry when data is pending */
     fr = note(DFS_CALL_SYNC, f_sync(fp));
     if (fr != FR_OK) return fr2dos_io(fr, DFS_ERR_WRFAULT);
@@ -562,6 +568,7 @@ uint16_t dfs_fs_longname(const char *dir, const char *fcbmask, const char **name
 uint16_t dfs_fs_chmod(const char *path, uint8_t attr) {
     const uint8_t mask = DFS_ATTR_RDO | DFS_ATTR_HID | DFS_ATTR_SYS | DFS_ATTR_ARC;
     if (dfs_path_is_root(path)) return DFS_ERR_ACCESS;
+    if (bd_path_is_open_image(path)) return DFS_ERR_ACCESS;
     return dfs_fr2dos(note(DFS_CALL_CHMOD, f_chmod(path, attr & mask, mask)));
 }
 
@@ -591,6 +598,7 @@ uint16_t dfs_fs_chdir(const char *path) {
 
 uint16_t dfs_fs_rename(const char *from, const char *to) {
     if (dfs_path_is_root(from) || dfs_path_is_root(to)) return DFS_ERR_ACCESS;
+    if (bd_path_holds_open_image(from)) return DFS_ERR_ACCESS;     /* the image or a directory above it */
     cache.valid = false;
     lname.valid = false;
     return dfs_fr2dos(note(DFS_CALL_RENAME, f_rename(from, to)));   /* FR_EXIST -> access denied */
@@ -599,6 +607,7 @@ uint16_t dfs_fs_rename(const char *from, const char *to) {
 uint16_t dfs_fs_unlink(const char *path) {
     FRESULT fr;
     if (dfs_path_is_root(path)) return DFS_ERR_ACCESS;
+    if (bd_path_is_open_image(path)) return DFS_ERR_ACCESS;
     fr = note(DFS_CALL_STAT, f_stat(path, &fno));
     if (fr != FR_OK) return dfs_fr2dos(fr);
     if (fno.fattrib & AM_DIR) return DFS_ERR_ACCESS;
@@ -627,6 +636,10 @@ uint16_t dfs_fs_delete_wild(const char *dir, const char *fcbmask) {
         memcpy(scan_path, dir, dlen);
         scan_path[dlen] = '\\';
         strcpy(scan_path + dlen + 1, name);
+        if (bd_path_is_open_image(scan_path)) {         /* skip a disk image in use */
+            if (err == DFS_ERR_OK) err = DFS_ERR_ACCESS;
+            continue;
+        }
         fr = note(DFS_CALL_UNLINK, f_unlink(scan_path));
         DFS_LOG("f_unlink('%s') = %d\n", scan_path, fr);
         if (fr == FR_OK) {

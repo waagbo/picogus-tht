@@ -144,6 +144,14 @@ typedef enum {
 #define DFS_HDR_LEN        4
 #define DFS_DEFAULT_MAX_PAYLOAD 4096
 
+// PGBOOT (experimental): an option ROM boots floppy / hard disk images stored on
+// the USB drive; the sectors travel over the PGDFS transport (subfunctions F3h-F5h).
+// These registers hold its configuration (saved in settings). See sw/bootdisk/PROTOCOL.md.
+#define CMD_BDFDNAME   0x88 // string (DATA_PORT_HIGH): floppy image path; select rewinds, 0 commits (swaps the disk at once)
+#define CMD_BDHDNAME   0x89 // string (DATA_PORT_HIGH): hard disk image path; select rewinds, 0 commits (used from the next boot)
+#define CMD_BDOPTS     0x8A // byte (DATA_PORT_HIGH): bit 0 floppy read-only, 1 hard disk read-only, 2 ROM off, 3 boot the
+                            // hard disk first; reads return the value | 80h (firmware without PGBOOT reads FFh)
+
 #define CMD_DEFAULTS   0xE0 // Select reset to defaults register
 #define CMD_SAVE       0xE1 // Select save settings register
 #define CMD_REBOOT     0xE2 // Select reboot register

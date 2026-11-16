@@ -39,6 +39,8 @@
 
 #ifdef PGDFS
 #include "dfs/dfs.h"
+#include "bootdisk/bootdisk.h"  // PGBOOT: disk image configuration registers
+#include "pico/rand.h"          // PGBOOT: per-boot nonce for the image tokens
 // PGDFS data port window: two consecutive ports at an even base, decoded as
 // (port & ~1) == dfs_port_test. 0xFFFF matches nothing: PGDFS disabled, and
 // the value until processSettings() has run (the card must never answer a
@@ -313,6 +315,14 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_DFSEXEC:
     case CMD_DFSMAXLEN:
         break;
+    case CMD_BDFDNAME: // PGBOOT floppy image name: rewind
+        bd_ctl_name_select(BD_UNIT_FD);
+        break;
+    case CMD_BDHDNAME: // PGBOOT hard disk image name: rewind
+        bd_ctl_name_select(BD_UNIT_HD);
+        break;
+    case CMD_BDOPTS:
+        break;
 #endif // PGDFS
     default:
         control_active = false;
@@ -565,6 +575,12 @@ __force_inline void write_picogus_high(uint8_t value) {
     case CMD_DEFAULTS:
         getDefaultSettings(&settings);
         processSettings();
+#ifdef PGDFS
+        // The default floppy image name is empty: commit it so core 1 ejects
+        // the image in use (a hard disk image stays until the next boot)
+        bd_ctl_name_select(BD_UNIT_FD);
+        bd_ctl_name_write(BD_UNIT_FD, 0);
+#endif
         break;
     case CMD_FLASH: // Firmware write
         pico_firmware_write(value);
@@ -587,6 +603,15 @@ __force_inline void write_picogus_high(uint8_t value) {
         }
         break;
     }
+    case CMD_BDFDNAME: // PGBOOT floppy image name: append, 0 commits
+        bd_ctl_name_write(BD_UNIT_FD, value);
+        break;
+    case CMD_BDHDNAME: // PGBOOT hard disk image name: append, 0 commits
+        bd_ctl_name_write(BD_UNIT_HD, value);
+        break;
+    case CMD_BDOPTS: // PGBOOT options
+        bd_ctl_opts_write(value);
+        break;
 #endif // PGDFS
     }
 }
@@ -758,6 +783,12 @@ __force_inline uint8_t read_picogus_high(void) {
         return settings.DFS.basePort ? (dfs_ctl_max_payload() >> 8) : 0;
     case CMD_DFSPORT: // data port window base, high byte (0 when disabled)
         return settings.DFS.basePort >> 8;
+    case CMD_BDFDNAME: // PGBOOT floppy image name, 0 terminated
+        return bd_ctl_name_read(BD_UNIT_FD);
+    case CMD_BDHDNAME: // PGBOOT hard disk image name, 0 terminated
+        return bd_ctl_name_read(BD_UNIT_HD);
+    case CMD_BDOPTS: // PGBOOT options | 80h signature
+        return bd_ctl_opts_read();
 #endif // PGDFS
     case CMD_HWTYPE: // Hardware version
         return BOARD_TYPE;
@@ -1486,6 +1517,12 @@ int main()
 #ifdef PGDFS
     // PGDFS transport + file server state: must exist before core 1 starts
     dfs_init();
+    // PGBOOT: bind the image names and options in the settings (core 1 opens
+    // the images when the USB drive mounts)
+    bd_init(settings.BootDisk.fdImage, settings.BootDisk.hdImage, &settings.BootDisk.options);
+    // a different value on every card boot: image tokens from before a card
+    // reboot (mode switch, firmware update) never match the images after it
+    bd_set_boot_nonce(get_rand_32());
 #endif // PGDFS
 
 #ifdef SOUND_SB

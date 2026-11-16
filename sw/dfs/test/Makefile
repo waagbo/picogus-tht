@@ -1,4 +1,6 @@
 # Host test harness for the PGDFS file server (../dfs_server.c, ../dfs_fs.c).
+# The server dispatches the PGBOOT requests to ../../bootdisk, which is linked
+# in unconfigured (sw/bootdisk/test has its own tests).
 #
 #   make test            build with cc and run the server tests, then the
 #                        transport tests (Makefile.transport)
@@ -17,6 +19,7 @@ CC      ?= cc
 B       := build
 DFS     := ..
 SW      := ../..
+BD      := $(SW)/bootdisk
 FATFS   := $(SW)/fatfs/source
 CFLAGS  ?= -O1 -g
 WARN    := -Wall -Wextra -Wno-unused-parameter
@@ -27,8 +30,10 @@ endif
 
 LINKS := $(B)/ffconf.h $(B)/ff.c $(B)/ff.h $(B)/diskio.h $(B)/ffunicode.c
 OBJS  := $(B)/dfs_server.o $(B)/dfs_fs.o $(B)/ff.o $(B)/ffunicode.o \
+         $(B)/bootdisk.o $(B)/bd_geometry.o \
          $(B)/ramdisk_diskio.o $(B)/test_server.o
-HDRS  := $(DFS)/dfs_fs.h $(DFS)/dfs_server.h $(SW)/../common/picogus.h $(SW)/usb_msc/msc_app.h ramdisk_diskio.h
+HDRS  := $(DFS)/dfs_fs.h $(DFS)/dfs_server.h $(SW)/../common/picogus.h $(SW)/usb_msc/msc_app.h ramdisk_diskio.h \
+         $(BD)/bootdisk.h $(BD)/bd_geometry.h
 
 .PHONY: all test clean arm-size
 
@@ -56,6 +61,9 @@ $(B)/ffunicode.o: $(B)/ffunicode.c $(LINKS)
 $(B)/%.o: $(DFS)/%.c $(LINKS) $(HDRS)
 	$(CC) $(CFLAGS) $(WARN) $(INC) -c $< -o $@
 
+$(B)/%.o: $(BD)/%.c $(LINKS) $(HDRS)
+	$(CC) $(CFLAGS) $(WARN) $(INC) -c $< -o $@
+
 $(B)/%.o: %.c $(LINKS) $(HDRS)
 	$(CC) $(CFLAGS) $(WARN) $(INC) -c $< -o $@
 
@@ -67,7 +75,7 @@ ARMCC    ?= arm-none-eabi-gcc
 ARMSIZE  ?= arm-none-eabi-size
 ARMFLAGS := -DPGDFS=1 -mcpu=cortex-m0plus -mthumb -Os -Wall
 ARMINC   := -I$(FATFS) -I$(DFS) -I$(SW) -I$(SW)/../common
-ARMOBJS  := $(B)/arm/dfs_server.o $(B)/arm/dfs_fs.o $(B)/arm/ff.o
+ARMOBJS  := $(B)/arm/dfs_server.o $(B)/arm/dfs_fs.o $(B)/arm/bootdisk.o $(B)/arm/bd_geometry.o $(B)/arm/ff.o
 
 arm-size: $(ARMOBJS)
 	$(ARMSIZE) $(ARMOBJS)
@@ -76,6 +84,9 @@ $(B)/arm:
 	mkdir -p $@
 
 $(B)/arm/%.o: $(DFS)/%.c $(HDRS) | $(B)/arm
+	$(ARMCC) $(ARMFLAGS) -Wextra -Wno-unused-parameter $(ARMINC) -c $< -o $@
+
+$(B)/arm/%.o: $(BD)/%.c $(HDRS) | $(B)/arm
 	$(ARMCC) $(ARMFLAGS) -Wextra -Wno-unused-parameter $(ARMINC) -c $< -o $@
 
 $(B)/arm/ff.o: $(FATFS)/ff.c $(FATFS)/ffconf.h | $(B)/arm
