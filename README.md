@@ -41,6 +41,11 @@ Assembly should be *EASY to MEDIUM* with the appropriate quality tools and consu
 * Digital Microscope of decent quality from AliExpress is very useful for visual inspection of SMD chips.
 * Multimeter with good continuity tester.
 
+#### User Build Gallery
+|<img src="docs/v1.3.2-waagbo.jpg" width="320"><br>waagbo|<img src="docs/placeholder.png" width="320"><br>|<img src="docs/placeholder.png" width="320"><br>|<img src="docs/placeholder.png" width="320"><br>|
+|-|-|-|-|
+| | | | |
+
 ### Version 2.1
 
 <img src="hw-tht-v2.1/docs/renders/PicoGUS-THT-v2.1.0-purple-front.jpg" alt="PicoGUS THT v2.1.0 Render" width="350" align="right" />
