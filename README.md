@@ -2,7 +2,7 @@
 
 <img src="picogus-logo.svg" width="500" alt="PicoGUS" />
 
-PicoGUS is a Raspberry Pi Pico based ISA sound card for DOS and Win9x retro computers.
+PicoGUS is a Raspberry Pi Pico based ISA sound card for DOS and Win9x retro computers
 It is a highly versatile clone card that provides near perfect emulation of the Gravis Ultrasound, Sound Blaster-series, AdLib, Tandy 3-voice and CMS/Game Blaster.
 
 Additional features like CD-ROM (Panasonic MKE), MPU-401 and USB game controllers build further on the cards versatility and the wavetable header will further extend the capacity with a card like [X2GS from Serdaco](https://serdashop.com/products/x2gs-te) to get the original Roland magic or even a [WavetablePi](https://github.com/scrapcomputing/WavetablePiHoriz) for the ultimate all-in-one experience for MS-DOS games. 
@@ -23,15 +23,14 @@ The designs still have some TSSOP SMD chips as they do not have THT equivalents,
 This version is an extension of the PicoGUS 1.2 design while implementing the *wavetable header* with manual volume control from the *hw-hand386* branch. Together with the addition of a full size USB-A connector accessible from the computers backside this card is now a real competitor to the v2.0 SMD design.
 
 In addition, the THT boards have also been slightly resized to optimize for component placement and JCLPCB-pricing.
-The v1.3.2 is currently under quality assurance. The following features have been tested and verified.
-* [x] Card Assembly ➔ Minor adjustments to DigiKey BOM.
+The v1.3.2 has been successfully built by hand and the following features have been tested and verified.
+The following features have been tested and verified.
+* [x] Card Assembly ➔ OK, with minor adjustments to DigiKey BOM.
 * [x] Flash, boot and detect card ➔ OK (v4.2.0-beta2).
 * [x] Audio Playback ➔ OK (v4.2.0-beta2, SB Mode).
-* [x] Wavetable MIDI Playback  ➔ OK (WavetablePi)
-* [ ] External MIDI Playback
-* [x] USB-A Connector (Both CD-ROM and experimental PGDFS filesystem)
-
-The release version v1.3.2 is still pending build/test.
+* [x] MIDI Playback (Wavetable Connector) ➔ OK (WavetablePi)
+* [ ] MIDI Playback (External 3.5mm Jack)
+* [x] USB-A Connector (Both CD-ROM and experimental PGDFS filesystem) ➔ OK
 
 Assembly should be *EASY to MEDIUM* with the appropriate quality tools and consumables and a good project for beginners that want a little more challenge. Here is a list of recommended supplies with some personal recommendations:
 * [Low Temperature Solder Paste](https://www.digikey.com/en/products/detail/chip-quik-inc/NC191LTA10/13531404) for easy soldering of SMD components.
