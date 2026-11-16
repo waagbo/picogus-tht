@@ -35,9 +35,18 @@
 #ifdef USB_STACK
 #include "tusb.h"
 #endif
+#ifdef PGDFS
+#include "dfs/dfs.h"
+#endif
+#ifdef USB_MSC
+#include "usb_msc/msc_app.h"
+#endif // USB_MSC
 
 #ifdef PSRAM
-#include "psram_spi.h"
+#include "system/psram.h"
+#if PSRAM_QMI
+#include "pico/multicore.h"
+#endif
 extern psram_spi_inst_t psram_spi;
 #endif
 
@@ -110,6 +119,11 @@ static void update_gus_timing(uint8_t channels) {
 void play_gus() {
     DBG_PUTS("starting core 1");
     // flash_safe_execute_core_init();
+#if PSRAM_QMI
+    // Let core 0 hold this core while it writes the flash (settings save): the QMI PSRAM
+    // this core plays from is unusable meanwhile
+    multicore_lockout_victim_init();
+#endif
     uint32_t start, end;
 
     // Init PIC on this core so it handles timers
@@ -178,6 +192,12 @@ void play_gus() {
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();
+#endif
+#ifdef USB_MSC
+        msc_app_task();   // mount/unmount the USB drive outside of FatFs calls
+#endif // USB_MSC
+#ifdef PGDFS
+        dfs_tasks();
 #endif
 #ifdef SOUND_MPU
         send_midi_bytes(8);

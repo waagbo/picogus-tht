@@ -6,7 +6,7 @@
 #define CONTROL_PORT 0x1D0
 #define DATA_PORT_LOW  0x1D1
 #define DATA_PORT_HIGH 0x1D2
-#define PICOGUS_PROTOCOL_VER 4
+#define PICOGUS_PROTOCOL_VER 5
 
 typedef enum {
     PICO_FIRMWARE_IDLE = 0,
@@ -25,6 +25,14 @@ typedef enum {
 
 typedef enum { PICO_BASED = 0, PICOGUS_2 = 1 } board_type_t;
 
+// Microcontroller the firmware runs on, as reported by CMD_CHIPTYPE: each value has firmware files of its own.
+// Firmware from before RP2350 support doesn't know the register and returns 0xFF: that is always an RP2040.
+typedef enum {
+    CHIP_RP2040 = 0,        // Pico, Pico W, PicoGUS 2.0
+    CHIP_RP2350 = 1,        // Pico 2, Pico 2 W
+    CHIP_RP2350B_V21 = 2    // PicoGUS v2.1 THT (Core2350B module)
+} chip_type_t;
+
 typedef enum {
     INVALID_MODE = 0,
     GUS_MODE     = 1,
@@ -36,6 +44,7 @@ typedef enum {
     NE2000_MODE  = 7
 } card_mode_t;
 
+#ifndef PICOGUS_NO_MODENAMES // resident DOS code (pgdfs) has no use for this table
 static const char *modenames[8] = {
     "INVALID",
     "GUS",
@@ -46,6 +55,7 @@ static const char *modenames[8] = {
     "USB",
     "NE2000"
 };
+#endif
 
 #define CMD_MAGIC      0x00 // Magic string
 #define CMD_PROTOCOL   0x01 // Protocol version
@@ -100,8 +110,43 @@ static const char *modenames[8] = {
 #define CMD_GUSVOL     0x74 // GUS Volume
 #define CMD_PSGVOL     0x75 // PSG Volume
 
+// PGDFS: DOS file system redirector (network redirector TSR) serving the USB drive.
+// Bulk data moves through the data window (two ports at an even base, default
+// DFS_DEFAULT_DATA_PORT, set with CMD_DFSPORT); the registers below on
+// CONTROL_PORT/DATA_PORT drive the transaction. See sw/dfs/PROTOCOL.md.
+// The data port is a 2-byte window at an even base (default 1D4h, settable with
+// CMD_DFSPORT and saved in settings): both bytes of a 16-bit access carry the next
+// stream bytes, low byte first, so the driver moves data with rep insw / rep outsw
+// (the motherboard splits the word access into two 8-bit cycles for this 8-bit card).
+#define DFS_DEFAULT_DATA_PORT 0x1D4
+#define CMD_DFSSTAT    0x80 // read: dfs_status_t; any write aborts the transaction
+#define CMD_DFSREQ     0x81 // select: open request buffer for writes on the data window
+#define CMD_DFSEXEC    0x82 // write DATA_PORT_HIGH: execute the request in the buffer
+#define CMD_DFSRESP    0x83 // select: rewind answer buffer for reads on the data window
+#define CMD_DFSINFO    0x84 // read string (DATA_PORT_HIGH): mounted drive info, empty if none
+#define CMD_DFSMAXLEN  0x85 // read 16-bit (DATA_PORT_LOW/HIGH): max frame payload bytes
+#define CMD_DFSTIME    0x86 // write 4 bytes (DATA_PORT_HIGH): DOS time lo,hi then date lo,hi
+#define CMD_DFSPORT    0x87 // read/write 16-bit (DATA_PORT_LOW/HIGH): data port window base, even; 0 disables PGDFS
+
+typedef enum {
+    DFS_STATUS_IDLE      = 0,    // no transaction in progress
+    DFS_STATUS_RECEIVING = 1,    // request buffer open, DOS is streaming the frame
+    DFS_STATUS_BUSY      = 2,    // core 1 is serving the request
+    DFS_STATUS_READY     = 3,    // answer frame is available on the data window
+    DFS_STATUS_ABORTED   = 0xFE, // request rejected (bad length/overflow) or aborted
+    DFS_STATUS_NODRIVE   = 0xFF  // no USB drive mounted (also what firmware without PGDFS returns)
+} dfs_status_t;
+
+// Frame header, little-endian, shared by request and answer (the answer overwrites the request):
+//   request: [0..1] total length incl. header  [2] drive index (low 5 bits) | flags  [3] AL subfunction
+//   answer : [0..1] total length incl. header  [2..3] AX result (0 = success, else DOS error code;
+//            DISKSPACE returns sectors per cluster in AX instead, see sw/dfs/PROTOCOL.md)
+#define DFS_HDR_LEN        4
+#define DFS_DEFAULT_MAX_PAYLOAD 4096
+
 #define CMD_DEFAULTS   0xE0 // Select reset to defaults register
 #define CMD_SAVE       0xE1 // Select save settings register
 #define CMD_REBOOT     0xE2 // Select reboot register
 #define CMD_HWTYPE     0xF0 // Hardware type 
+#define CMD_CHIPTYPE   0xF1 // Microcontroller type (chip_type_t)
 #define CMD_FLASH      0xFF // Firmware write mode

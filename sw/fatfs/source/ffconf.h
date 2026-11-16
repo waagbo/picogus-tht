@@ -8,14 +8,25 @@
 / Function Configurations
 /---------------------------------------------------------------------------*/
 
+/* PicoGUS: read/write and the full API where the PGDFS file service is built
+/  in. Firmware without it only reads the drive (CD-ROM images) and keeps the
+/  read-only, minimized configuration, which takes several KB less RAM. */
+#ifdef PGDFS
+#define FF_FS_READONLY	0
+#else
 #define FF_FS_READONLY	1
+#endif
 /* This option switches read-only configuration. (0:Read/Write or 1:Read-only)
 /  Read-only configuration removes writing API functions, f_write(), f_sync(),
 /  f_unlink(), f_mkdir(), f_chmod(), f_rename(), f_truncate(), f_getfree()
 /  and optional writing functions as well. */
 
 
+#ifdef PGDFS
+#define FF_FS_MINIMIZE	0
+#else
 #define FF_FS_MINIMIZE	1
+#endif
 /* This option defines minimization level to remove some basic API functions.
 /
 /   0: Basic functions are fully enabled.
@@ -42,7 +53,11 @@
 /* This option switches f_expand(). (0:Disable or 1:Enable) */
 
 
+#ifdef PGDFS
+#define FF_USE_CHMOD	1
+#else
 #define FF_USE_CHMOD	0
+#endif
 /* This option switches attribute control API functions, f_chmod() and f_utime().
 /  (0:Disable or 1:Enable) Also FF_FS_READONLY needs to be 0 to enable this option. */
 
@@ -84,7 +99,9 @@
 / Locale and Namespace Configurations
 /---------------------------------------------------------------------------*/
 
+#ifndef FF_CODE_PAGE
 #define FF_CODE_PAGE	437
+#endif
 /* This option specifies the OEM code page to be used on the target system.
 /  Incorrect code page setting can cause a file open failure.
 /
@@ -251,7 +268,13 @@
 /  These options have no effect in read-only configuration (FF_FS_READONLY = 1). */
 
 
-#define FF_FS_NOFSINFO	0
+#define FF_FS_NOFSINFO	1
+/* PGDFS: bit 0 set. USB sticks written by other operating systems can carry a
+/  stale FSINFO free count (Windows and Linux update it lazily or not at all);
+/  a count of 0 makes FatFs refuse every allocation with FR_DENIED, which DOS
+/  shows as "Access denied" on MD or COPY. The first f_getfree() after a mount
+/  (the first DISKSPACE request) scans the FAT instead; the next-free hint
+/  (bit 1) is still taken from FSINFO. */
 /* If you need to know correct free space on the FAT32 volume, set bit 0 of this
 /  option, and f_getfree() at the first time after volume mount will force
 /  a full FAT scan. Bit 1 controls the use of last allocated cluster number.

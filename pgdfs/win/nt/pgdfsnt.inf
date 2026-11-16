@@ -1,0 +1,52 @@
+; pgdfs.sys: the USB drive of a PicoGUS as a drive letter on Windows 2000/XP
+; (and Windows NT 4.0, where pgdfsnt.reg is the simpler way, see the README)
+;
+; Install: copy this file and pgdfs.sys into one folder, right-click this
+; file and choose Install, then restart Windows. DriveLetter picks the
+; letter (P: by default).
+; Uninstall: rundll32 setupapi,InstallHinfSection PGDFS.Remove 132 pgdfsnt.inf
+
+[Version]
+Signature="$Windows NT$"
+Provider=%PicoGUS%
+
+[DefaultInstall]
+CopyFiles=PGDFS.Files
+
+[DefaultInstall.Services]
+AddService=pgdfs,,PGDFS.Service
+
+[PGDFS.Remove]
+DelFiles=PGDFS.Files
+
+[PGDFS.Remove.Services]
+DelService=pgdfs
+
+[DestinationDirs]
+PGDFS.Files=12
+
+[SourceDisksNames]
+1=%DiskName%,,,
+
+[SourceDisksFiles]
+pgdfs.sys=1
+
+[PGDFS.Files]
+pgdfs.sys
+
+[PGDFS.Service]
+DisplayName=%ServiceName%
+ServiceType=2               ; file system driver
+StartType=1                 ; system start
+ErrorControl=1
+ServiceBinary=%12%\pgdfs.sys
+LoadOrderGroup="File system"
+AddReg=PGDFS.Params
+
+[PGDFS.Params]
+HKR,Parameters,DriveLetter,0x00000000,"P"
+
+[Strings]
+PicoGUS="PicoGUS"
+DiskName="PicoGUS PGDFS driver"
+ServiceName="PicoGUS PGDFS (USB drive as a drive letter)"

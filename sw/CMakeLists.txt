@@ -3,8 +3,29 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards)
+# Chip selection: build for RP2350 (Raspberry Pi Pico 2 / Pico 2 W) with
+# -DPICO_PLATFORM=rp2350, or pick an RP2350 board directly with -DPICO_BOARD
+# (-DPICO_BOARD=picogus21 for the RP2350B PicoGUS v2.1 THT board).
+# The default is RP2040. PICO_PLATFORM may also come from the environment,
+# as it does for the Pico SDK itself.
+if(NOT PICO_PLATFORM AND DEFINED ENV{PICO_PLATFORM})
+    set(PICO_PLATFORM $ENV{PICO_PLATFORM})
+endif()
+if(PICO_PLATFORM MATCHES "riscv")
+    message(FATAL_ERROR "PicoGUS runs on the RP2350 Arm cores only (it contains Arm assembly): use PICO_PLATFORM=rp2350")
+endif()
 if(NOT PICO_BOARD)
-    set(PICO_BOARD "picogus2")
+    if(PICO_PLATFORM MATCHES "^rp2350")
+        if(PROJECT_TYPE STREQUAL "NE2K")
+            set(PICO_BOARD "pico2w_fast")
+        else()
+            set(PICO_BOARD "pico2_fast")
+        endif()
+    elseif(PROJECT_TYPE STREQUAL "NE2K")
+        set(PICO_BOARD "picow_fast")
+    else()
+        set(PICO_BOARD "picogus2")
+    endif()
     message("PICO_BOARD not set, defaulting to ${PICO_BOARD}")
 endif()
 set(PICO_COPY_TO_RAM 1)
@@ -27,6 +48,19 @@ project(picogus
 # CMake's project(VERSION) only allows numeric components, so the suffix lives here.
 set(PICOGUS_VERSION "${CMAKE_PROJECT_VERSION}-beta.2")
 
+# Experimental features describe themselves in experimental/<feature>.md (see
+# experimental/README.md). Name the ones this source tree carries in the
+# version, e.g. 4.2.0+pgdfs, so such firmware can be told from the mainline.
+file(GLOB PICOGUS_EXPERIMENTAL_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/experimental/*.md)
+list(SORT PICOGUS_EXPERIMENTAL_FILES)
+foreach(FEATURE_FILE ${PICOGUS_EXPERIMENTAL_FILES})
+    get_filename_component(FEATURE ${FEATURE_FILE} NAME_WE)
+    if(NOT FEATURE STREQUAL "README")
+        string(APPEND PICOGUS_VERSION "+${FEATURE}")
+    endif()
+endforeach()
+message("PicoGUS firmware version: ${PICOGUS_VERSION}")
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -47,10 +81,28 @@ set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# Chip-specific settings (PICO_PLATFORM is final once the board has been processed)
+if(PICO_PLATFORM MATCHES "^rp2350")
+    set(PICOGUS_CHIP "rp2350")
+    set(PICOGUS_UF2_FAMILY_ID "0xe48bff59") # RP2350, Arm Secure
+    # fw_memmap_c2ram.ld, included by the generated multifw scripts, is chip-specific
+    set(PICOGUS_MULTIFW_LD_DIR ${CMAKE_SOURCE_DIR}/multifw/rp2350)
+    # The RP2350 has no boot2 in front of the image. Embed the SDK's XIP setup
+    # function instead, so the flash clock divider from the board header
+    # (PICO_FLASH_SPI_CLKDIV) is applied at startup and after every flash write,
+    # as boot2 does on the RP2040.
+    add_compile_definitions(PICO_EMBED_XIP_SETUP=1)
+else()
+    set(PICOGUS_CHIP "rp2040")
+    set(PICOGUS_UF2_FAMILY_ID "0xe48bff56")
+    set(PICOGUS_MULTIFW_LD_DIR ${CMAKE_SOURCE_DIR}/multifw)
+endif()
+message("Building PicoGUS firmware for ${PICOGUS_CHIP} on board ${PICO_BOARD}")
+
 ################################################################################
 # Helper function for setting linker script
 function(set_linker_script TARGET script)
-    target_link_directories(${TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/multifw)
+    target_link_directories(${TARGET} PRIVATE ${PICOGUS_MULTIFW_LD_DIR})
     pico_set_linker_script(${TARGET} ${script})
 
     # Add dependencies on the 'included' linker scripts so that the target gets
@@ -60,6 +112,11 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
+option(PGDFS "Build the PGDFS USB-drive file service into USB-capable firmwares" ON)
+set(FATFS_CODE_PAGE 437 CACHE STRING "FatFs OEM code page for file names (437 US, 850 Western Europe, 865 Nordic, ...)")
+if(NOT FATFS_CODE_PAGE MATCHES "^(437|720|737|771|775|850|852|855|857|860|861|862|863|864|865|866|869|932|936|949|950)$")
+    message(FATAL_ERROR "FATFS_CODE_PAGE must be one FatFs OEM code page (437, 850, 865, ...); 0 (runtime f_setcp) is not supported")
+endif()
 # Use the first Python on PATH rather than the newest version CMake knows about
 # (older CMakes won't look for newer Pythons)
 set(Python3_FIND_STRATEGY LOCATION)
@@ -76,6 +133,10 @@ add_compile_definitions(
     PICO_DEFAULT_UART_RX_PIN=-1
     PICO_DEFAULT_UART_BAUD_RATE=230400
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=250
+    # Core 1 runs FatFs and the USB host stack (CD-ROM images, PGDFS); the SDK's
+    # default 2 KB core 1 stack leaves little margin under a CUE load or a
+    # PGDFS request. Nothing else uses SCRATCH_X, so give it the whole 4 KB bank.
+    PICO_CORE1_STACK_SIZE=0x1000
 )
 
 ################################################################################
@@ -120,6 +181,11 @@ function(config_target TARGET_NAME MULTIFW)
         target_link_libraries(${TARGET_NAME} tinyusb_host)
         target_compile_definitions(${TARGET_NAME} PRIVATE USB_STACK=1)
         target_sources(${TARGET_NAME} PRIVATE usb_hid/hid_app.c)
+        # Mount the USB drive only when something uses it (CD-ROM images or
+        # PGDFS), so -DPGDFS=OFF builds the same firmware set as before.
+        if(CDROM OR PGDFS)
+            set(USB_MSC TRUE)
+        endif()
     endif()
     if(USB_JOYSTICK)
         # Joystick stuff
@@ -137,21 +203,42 @@ function(config_target TARGET_NAME MULTIFW)
             mouse/sermouse.cpp
         )
     endif()
-    if(CDROM)
-        target_link_libraries(${TARGET_NAME} cdrom)
-        target_sources(${TARGET_NAME} PRIVATE
-            mke/mke.c
-            cdrom/msc_app.c
+    if(USB_MSC)
+        # USB mass storage glue + FatFs, shared by the CD-ROM emulation and PGDFS.
+        # FF_CODE_PAGE is #ifndef-guarded in fatfs/source/ffconf.h, so the OEM code
+        # page FatFs uses to convert long file names for DOS follows FATFS_CODE_PAGE.
+        target_compile_definitions(${TARGET_NAME} PRIVATE
+            USB_MSC=1
+            FF_CODE_PAGE=${FATFS_CODE_PAGE}
         )
-        target_compile_definitions(${TARGET_NAME} PRIVATE CDROM=1)
         target_sources(${TARGET_NAME} PRIVATE
+            usb_msc/msc_app.c
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ff.c
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ffsystem.c
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/ffunicode.c
         )
         target_include_directories(${TARGET_NAME} PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/
+            ${CMAKE_CURRENT_LIST_DIR}/usb_msc/
         )
+        if(PGDFS)
+            # PGDFS: DOS file system redirector service for the USB drive.
+            # DFS_MAX_PAYLOAD (bytes per frame, excluding the 4-byte header) can be
+            # overridden per firmware in the build_* functions.
+            if(NOT DFS_MAX_PAYLOAD)
+                set(DFS_MAX_PAYLOAD 4096)
+            endif()
+            target_link_libraries(${TARGET_NAME} dfs)
+            target_compile_definitions(${TARGET_NAME} PRIVATE
+                PGDFS=1
+                DFS_MAX_PAYLOAD=${DFS_MAX_PAYLOAD}
+            )
+        endif()
+    endif()
+    if(CDROM)
+        target_link_libraries(${TARGET_NAME} cdrom)
+        target_sources(${TARGET_NAME} PRIVATE mke/mke.c)
+        target_compile_definitions(${TARGET_NAME} PRIVATE CDROM=1)
     endif()
 
     target_sources(${TARGET_NAME} PRIVATE
@@ -274,6 +361,7 @@ add_subdirectory(rp2040-psram)
 add_subdirectory(opl)
 add_subdirectory(ne2000)
 add_subdirectory(cdrom)
+add_subdirectory(dfs)
 add_subdirectory(resampler)
 
 ################################################################################
@@ -281,6 +369,7 @@ add_subdirectory(resampler)
 function(build_gus TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-gus")
     target_sources(${TARGET_NAME} PRIVATE
@@ -309,6 +398,12 @@ function(build_gus TARGET_NAME MULTIFW)
         SCALE_22K_TO_44K=1
         # FORCE_28CH_27CH=1
     )
+    if(PICO_BOARD STREQUAL "picogus21")
+        # PicoGUS v2.1 THT: GUS sample RAM in the Core2350B2's PSRAM on the RP2350B's
+        # QMI (CS1 = GPIO47) instead of an APS6404L on PIO SPI (GPIO0-3)
+        target_compile_definitions(${TARGET_NAME} PRIVATE PSRAM_QMI=1)
+        target_sources(${TARGET_NAME} PRIVATE system/psram_qmi.c)
+    endif()
     pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/isa/isa_dma.pio)
     target_link_libraries(${TARGET_NAME} rp2040-psram hardware_interp)
 endfunction()
@@ -316,11 +411,12 @@ endfunction()
 option(SOUND_WSS "Build SB firmware with WSS (AD1848) support instead of SB16 DSP" OFF)
 ################################################################################
 # Build SB firmware
-function(build_sb_8950 TARGET_NAME MULTIFW)
+function(build_sb_emu8950 TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb")
     target_sources(${TARGET_NAME} PRIVATE
@@ -355,6 +451,7 @@ function(build_sb_ymf262 TARGET_NAME MULTIFW)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb-ymf262")
     target_sources(${TARGET_NAME} PRIVATE
@@ -384,6 +481,7 @@ function(build_sb_dbopl3 TARGET_NAME MULTIFW)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb-dbopl3")
     target_sources(${TARGET_NAME} PRIVATE
@@ -415,6 +513,7 @@ function(build_adlib TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib")
     target_sources(${TARGET_NAME} PRIVATE
@@ -433,6 +532,7 @@ function(build_adlib_ymf262 TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib-ymf262")
     target_sources(${TARGET_NAME} PRIVATE
@@ -446,11 +546,12 @@ endfunction()
 ################################################################################
 # Build AdLib firmware — DOSBox OPL3 core
 function(build_adlib_dbopl3 TARGET_NAME MULTIFW)
-    set(USE_DBOPL3_OPL TRUE)
+    set(USE_DBOPL_OPL TRUE)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib-dbopl3")
     target_sources(${TARGET_NAME} PRIVATE
@@ -469,6 +570,7 @@ function(build_adlib_ym3812 TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-adlib-ym3812")
     target_sources(${TARGET_NAME} PRIVATE
@@ -487,6 +589,7 @@ function(build_sb_ym3812 TARGET_NAME MULTIFW)
     set(SOUND_MPU TRUE)
     set(SOUND_OPL TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-sb-ym3812")
     target_sources(${TARGET_NAME} PRIVATE
@@ -513,6 +616,7 @@ endfunction()
 function(build_mpu TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(SOUND_MPU TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-mpu401")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -530,6 +634,7 @@ function(build_psg TARGET_NAME MULTIFW)
     set(USB_JOYSTICK TRUE)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-psg")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -551,6 +656,7 @@ function(build_usb TARGET_NAME MULTIFW)
     set(USB_MOUSE TRUE)
     set(SOUND_MPU TRUE)
     set(CDROM TRUE)
+    set(DFS_MAX_PAYLOAD 4096)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-usb")
     target_compile_definitions(${TARGET_NAME} PRIVATE
@@ -569,11 +675,18 @@ endfunction()
 function(build_ne2k TARGET_NAME MULTIFW)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-ne2k")
+    # The CYW43 PIO SPI takes 2 PIO cycles per bit. On RP2350 keep the clock
+    # within the CYW43439's 50MHz gSPI limit: 370MHz / 4 / 2 = 46.25MHz.
+    if(PICOGUS_CHIP STREQUAL "rp2350")
+        set(CYW43_CLKDIV 4)
+    else()
+        set(CYW43_CLKDIV 3)
+    endif()
     target_compile_definitions(${TARGET_NAME} PRIVATE
        NE2000=1
        PICOW=1
        CYW43_CONFIG_FILE="cyw43_firmware.h"
-       CYW43_PIO_CLOCK_DIV_INT=3
+       CYW43_PIO_CLOCK_DIV_INT=${CYW43_CLKDIV}
     )
     target_sources(${TARGET_NAME} PRIVATE
         ne2000play.cpp
@@ -786,5 +899,5 @@ endif()
 add_custom_target(
     program
     DEPENDS ${FW_TARGET}
-    COMMAND openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
+    COMMAND openocd -f interface/cmsis-dap.cfg -f target/${PICOGUS_CHIP}.cfg -c "adapter speed 5000\; program ${FW_TARGET}.bin verify reset exit 0x10000000"
 )

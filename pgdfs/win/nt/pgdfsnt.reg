@@ -1,0 +1,15 @@
+REGEDIT4
+
+; pgdfs.sys service for Windows NT 4.0 (also 2000/XP). Copy pgdfs.sys to
+; %SystemRoot%\System32\drivers, import this file, restart.
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\pgdfs]
+"Type"=dword:00000002
+"Start"=dword:00000001
+"ErrorControl"=dword:00000001
+"Group"="File system"
+"ImagePath"="System32\\drivers\\pgdfs.sys"
+"DisplayName"="PicoGUS PGDFS (USB drive as a drive letter)"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\pgdfs\Parameters]
+"DriveLetter"="P"

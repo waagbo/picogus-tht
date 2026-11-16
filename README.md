@@ -51,6 +51,13 @@ This is an experimental extension of the PicoGUS 2.0 SMD design, made possible u
 ### Experimental Firmware
 We have added experimental features that adds upon community ideas on top of the original firmware and software components. The features are submitted as Pull Requests to the original PicoGUS repository as well but there is no guarantee that they will ever be included in the official software releases:
 * DFS drive support inspired by PicoMEM so the USB drive can be accessed from MS-DOS.
+* CD images in a `CDROM` folder on the USB drive.
+* A web page on boards with a Pico W or Pico 2 W: status, volumes, settings, mode switching, mt32-pi control and firmware updates from a browser.
+
+The experimental features live on their own branches and are built into a separate *experimental* set of firmware and DOS tools next to the regular one, see [sw/experimental](sw/experimental/README.md).
+
+### RP2350 Firmware
+The firmware builds for the RP2350 as well as the RP2040, from the same source: for the v1.x boards with a Raspberry Pi Pico 2 (W) instead of a Pico (W), and for the v2.1 board's Core2350B module. Releases contain the firmware for both microcontrollers. See [RP2350 support](sw/docs/rp2350.md) for the firmware files, how to build them and what is left to test on hardware.
 
 <br/>
 
@@ -74,6 +81,7 @@ ISA sound card and CD-ROM drive emulation on the Raspberry Pi Pico's RP2040 micr
 * [CMS/Game Blaster](http://nerdlypleasures.blogspot.com/2012/10/all-you-ever-wanted-to-know-about.html)
 * [Game port joystick](https://en.wikipedia.org/wiki/Game_port)
 * [Panasonic/MKE CD-ROM](https://en.wikipedia.org/wiki/Panasonic_CD_interface)
+* USB drive access from DOS and Windows: the drive plugged into the PicoGUS mapped to a drive letter with `PGDFS.EXE` under DOS (see [pgdfs/README.md](pgdfs/README.md)), `PGDFS.VXD` under Windows 9x and `pgdfs.sys` under Windows NT 4.0/2000/XP, with `pgtray.exe` in the Windows notification area for CD images, card mode and WiFi (see [pgdfs/win/README.md](pgdfs/win/README.md))
 
 Current status: perpetual beta! See the [main wiki page](https://github.com/polpo/picogus/wiki) for current status and the [compatibility list](https://github.com/polpo/picogus/wiki/Compatibility-list) for support status of various DOS programs and other system compatibility notes. This project has a heavy demoscene focus due to the GUS's history so that's what I've concentrated on, but GUS support in games is very good to excellent.
 

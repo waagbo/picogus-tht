@@ -16,6 +16,15 @@ Firmware files that comes with release:
   modes, use the `/mode x` option in pgusinit.
 * `pg-ne2k.uf2` - Special firmware for NE2000/WiFi. Only works on PicoGUS
   Femto and PicoGUS v1.x boards with a Pico W installed.
+* `pgus2350.uf2` and `ne2k2350.uf2` - the same two firmwares for PicoGUS Femto
+  and PicoGUS v1.x boards with an RP2350-based Raspberry Pi Pico 2 (Pico 2 W
+  for NE2000) installed instead of a Pico (Pico W).
+* `core2350.uf2` - the all-modes firmware for the PicoGUS v2.1 THT board
+  (RP2350B on a Core2350B module).
+
+Firmware for the RP2040 (Pico) and for the RP2350 (Pico 2) is not
+interchangeable. pgusinit shows which one a card has on its `Hardware:` line
+and `/flash` refuses a file made for the other one.
 
 pgusinit must be run with firmware it is compatible with. If run with an
 incompatible firmware, pgusinit will complain about a protocol mismatch. One
@@ -151,6 +160,30 @@ that do not require an IRQ: AdLib, CMS, Tandy, and USB.
 * `/cdloadname x` - load CD image by name. Names with spaces can be quoted
 * `/cdauto 1|0` - auto-advance loaded image when same USB drive is reinserted
 * `/cdvol x` - sets the volume of the CD audio output to x percent.
+
+### PGDFS options
+
+* `/dfsport x` - set the PGDFS data port (hex). Default: 1D4, 0 to disable
+  PGDFS. The port must be even (the data window is two consecutive ports,
+  1D4-1D5 by default), between 100 and 3FE, and clear of the PicoGUS control
+  ports 1D0-1D3; the card keeps its old value otherwise. The PGDFS driver
+  reads this setting from the card once, at install, so after changing the
+  port (or `/defaults`) unload and reload the driver: `PGDFS /U`, then
+  `PGDFS E:`. Keep the window clear of the ports of the emulated devices
+  active in your mode (220h Sound Blaster, 250h CD-ROM, 330h MPU-401, 388h
+  AdLib, ...); pgusinit warns when it overlaps one. Use `/save` to keep the
+  setting across reboots.
+
+## PGDFS (USB drive as a DOS drive letter)
+
+Firmware with PGDFS support serves the FAT-formatted USB drive plugged into
+the PicoGUS to DOS as a network drive letter. pgusinit shows the state of
+PGDFS on a `PGDFS data port 1D4, USB drive: ...` line in its normal status
+output (data port, then the drive's label, file system and size, or `none
+inserted`), or `PGDFS disabled (pgusinit /dfsport 1D4 to enable)` when the
+data port has been set to 0, when the firmware supports it. The DOS driver
+itself is a separate TSR, `PGDFS.EXE`, which comes with its own test tool
+`DFSDIAG.EXE`; see `pgdfs/README.md` for usage and requirements.
 
 ## Compiling
 
