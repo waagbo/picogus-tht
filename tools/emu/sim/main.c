@@ -6,7 +6,7 @@
  * answers them like the card does:
  *
  *   core 0  register logic of sw/picogus.cpp reimplemented here for the
- *           registers the ROM, pgusinit and PGUSDFS use (knock/select on
+ *           registers the ROM, pgusinit and PGDFS use (knock/select on
  *           1D0h, DATA_PORT_LOW/HIGH, the PGDFS data window), delegating to
  *           the real dfs_ctl_* / dfs_data_* (sw/dfs/dfs_transport.c) and
  *           bd_ctl_* (sw/bootdisk) functions.

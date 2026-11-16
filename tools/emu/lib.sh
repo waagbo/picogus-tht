@@ -4,7 +4,7 @@
 #   qemu/bin/qemu-system-i386   build-qemu.sh
 #   sim-build/pgcard-sim        make -C tools/emu/sim
 #   freedos/                    FreeDOS 1.3 system files (fetch_freedos)
-#   dos/                        DFSDIAG.EXE, PGUSDFS.EXE, PGUSINIT.EXE (build_dos_tools)
+#   dos/                        DFSDIAG.EXE, PGDFS.EXE, PGUSINIT.EXE (build_dos_tools)
 #   work/<test>/                per-test images, serial output, sim trace, screen dumps
 
 EMU_CACHE=${EMU_CACHE:-$HOME/pico/emu-cache}
@@ -46,8 +46,8 @@ fetch_freedos() {
 }
 
 # The DOS tools, built with OpenWatcom out of tree (objects and executables in
-# $EMU_CACHE/dos, nothing is written into pgusdfs/ or pgusinit/), with the
-# flags of their Makefiles: DFSDIAG.EXE (T0), PGUSDFS.EXE (T10),
+# $EMU_CACHE/dos, nothing is written into pgdfs/ or pgusinit/), with the
+# flags of their Makefiles: DFSDIAG.EXE (T0), PGDFS.EXE (T10),
 # PGUSINIT.EXE (T9). Rebuilt when a source is newer than the executable.
 DOS=$EMU_CACHE/dos
 build_dos_tools() {
@@ -55,19 +55,24 @@ build_dos_tools() {
     WATCOM=${WATCOM:-$HOME/pico/watcom}
     [ -d "$WATCOM" ] || die "OpenWatcom not found in $WATCOM (needed for the DOS tools)"
     mkdir -p "$DOS/obj"
-    newest=$(ls -t "$ROOT"/pgusdfs/*.c "$ROOT"/pgusdfs/*.h "$ROOT"/pgusdfs/*.asm \
+    newest=$(ls -t "$ROOT"/pgdfs/*.c "$ROOT"/pgdfs/*.h "$ROOT"/pgdfs/*.asm \
                    "$ROOT"/pgusinit/*.c "$ROOT"/pgusinit/*.h "$ROOT"/common/picogus.h | head -1)
-    for f in DFSDIAG.EXE PGUSDFS.EXE PGUSINIT.EXE; do
+    for f in DFSDIAG.EXE PGDFS.EXE PGUSINIT.EXE; do
         [ -f "$DOS/$f" ] && [ "$DOS/$f" -nt "$newest" ] || { rm -f "$DOS"/*.EXE; break; }
     done
     [ -f "$DOS/PGUSINIT.EXE" ] && return 0
-    echo "== building DFSDIAG.EXE, PGUSDFS.EXE, PGUSINIT.EXE (OpenWatcom, out of tree)"
-    ( export WATCOM PATH="$WATCOM/armo64:$WATCOM/binl64:$WATCOM/binl:$PATH" INCLUDE="$WATCOM/h"
+    echo "== building DFSDIAG.EXE, PGDFS.EXE, PGUSINIT.EXE (OpenWatcom, out of tree)"
+    # the snapshot carries the tools for every host: macOS ARM first only there
+    case $(uname -s) in
+        Darwin) W_="$WATCOM/armo64:$WATCOM/bino64" ;;
+        *)      W_="$WATCOM/binl64:$WATCOM/binl" ;;
+    esac
+    ( export WATCOM PATH="$W_:$PATH" INCLUDE="$WATCOM/h"
       cd "$DOS/obj" &&
       flags="-q -bcl=dos -0 -s -d0 -ms -os -wx -we -dPICOGUS_NO_MODENAMES" &&
-      wcl $flags -za99 "$ROOT/pgusdfs/dfsdiag.c" "$ROOT/pgusdfs/xport.c" -fe="$DOS/DFSDIAG.EXE" &&
-      wasm -q -0 "$ROOT/pgusdfs/chint086.asm" -fo=chint.obj -ms &&
-      wcl $flags -k1024 chint.obj "$ROOT/pgusdfs/pgusdfs.c" -fe="$DOS/PGUSDFS.EXE" &&
+      wcl $flags -za99 "$ROOT/pgdfs/dfsdiag.c" "$ROOT/pgdfs/xport.c" -fe="$DOS/DFSDIAG.EXE" &&
+      wasm -q -0 "$ROOT/pgdfs/chint086.asm" -fo=chint.obj -ms &&
+      wcl $flags -k1024 chint.obj "$ROOT/pgdfs/pgdfs.c" -fe="$DOS/PGDFS.EXE" &&
       wcl -q -bcl=dos -za99 -os "$ROOT/pgusinit/pgusinit.c" -fe="$DOS/PGUSINIT.EXE" ) >"$DOS/build.log" 2>&1 ||
         { cat "$DOS/build.log"; die "DOS tool build failed"; }
 }

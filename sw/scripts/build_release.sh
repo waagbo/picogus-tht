@@ -108,6 +108,31 @@ build_dos_tools() {
     done
 }
 
+# The PGBOOT option ROM, where the tree has it (bootrom/): assembled with NASM
+# (the NASM environment variable names another one than the nasm on PATH).
+# Skipped with a notice without NASM, unless the DOS tools are required.
+BOOT_ROM_FILES=(PGBOOT.ROM PGBOOT88.ROM PGBT256.BIN PGBOOT.COM PGFLASH.COM)
+
+build_boot_rom() {
+    local tree="$1" out="$2" nasm="${NASM:-nasm}" file
+    [[ -f "${tree}/bootrom/Makefile" ]] || return 0
+    if ! command -v "${nasm}" >/dev/null; then
+        if [[ ${REQUIRE_DOS_TOOLS} -eq 1 ]]; then
+            echo "NASM was not found (nasm on PATH, or NASM set)" >&2
+            return 1
+        fi
+        echo "==== Boot ROM skipped: NASM was not found (nasm on PATH, or NASM set)"
+        return 0
+    fi
+    echo "==== Boot ROM: bootrom"
+    make -C "${tree}/bootrom" NASM="${nasm}" all check > "${BUILD_ROOT}/bootrom.log" 2>&1 \
+        || { echo "build failed, see ${BUILD_ROOT}/bootrom.log" >&2; tail -30 "${BUILD_ROOT}/bootrom.log" >&2; return 1; }
+    for file in "${BOOT_ROM_FILES[@]}"; do
+        cp "${tree}/bootrom/${file}" "${out}/"
+        echo "  ${file}"
+    done
+}
+
 # The PGDFS drivers for Windows, where the tree has them: win9x/ (PGDFS.VXD and
 # its INF) and winnt/ (pgdfs.sys, its INF and a .reg file for Windows NT 4.0),
 # and in both PGTRAY, the one program for either Windows
@@ -183,7 +208,7 @@ collect_docs() {
 
 # Documents of experimental features that go with the files, where a source
 # tree has them: path in the tree and the name it gets
-declare -A FEATURE_DOCS=([sw/web/README.md]=WEBSERVER.md)
+declare -A FEATURE_DOCS=([sw/web/README.md]=WEBSERVER.md [bootrom/README.md]=PGBOOT.md)
 
 # build_set <source tree> <output dir> <build dir>
 # The firmware images are build_variants.sh's default set: all modes and
@@ -197,6 +222,7 @@ build_set() {
     fi
     if [[ ${DOS_TOOLS} -eq 1 ]]; then
         build_dos_tools "${tree}" "${out}"
+        build_boot_rom "${tree}" "${out}"
         build_windows_drivers "${tree}" "${out}"
         collect_docs "${tree}" "${out}"
     fi

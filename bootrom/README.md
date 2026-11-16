@@ -259,7 +259,7 @@ the timer therefore cannot shorten the timeout. With interrupts off, twice
 that many reads end the wait. On a timeout the ROM aborts the transaction
 and returns 80h. An ABORTED status makes it send the request once more, and
 NODRIVE returns 80h. Before it starts a request, the ROM reads
-`CMD_DFSSTAT`. If another client's request is BUSY (PGUSDFS interrupted by
+`CMD_DFSSTAT`. If another client's request is BUSY (PGDFS interrupted by
 an INT 13h call), the ROM waits for it to finish, within the same timeout.
 
 ### RAM block (1 KB at segment `[40:13h]*64` after the late init)
@@ -337,12 +337,12 @@ LBA of 80h. The last line is `INT13TST DONE, n failures`.
 * Windows 9x runs these drives in MS-DOS compatibility mode (real-mode
   INT 13h, no 32-bit disk access), which is slow but works. Windows 3.x
   32-bit disk access (WDCTRL) does not apply: keep 32BitDiskAccess off.
-* The ROM and PGUSDFS (the PGDFS redirector) share the card's single
+* The ROM and PGDFS (the PGDFS redirector) share the card's single
   transport. Both knock and select for every transaction, so they coexist as
   long as neither is called from an interrupt handler while the other is in
   the middle of a transaction. A disk cache that flushes from the timer
   interrupt could do exactly that.
-* An image that is in use must not be changed through PGUSDFS. The card
+* An image that is in use must not be changed through PGDFS. The card
   refuses to modify, rename or delete an open image file (access denied),
   but other files on the stick are fine.
 * The hard disk image must fit the CHS view for old DOS: at most 1024

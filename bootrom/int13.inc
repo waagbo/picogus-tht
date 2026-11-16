@@ -495,24 +495,23 @@ fn_eparams:
         stosw                                   ; +0 size
         mov     ax, 0002h                       ; +2 flags: CHS information valid
         stosw
-        xor     dx, dx
         mov     ax, [si+U_CYL]
-        stosw                                   ; +4 cylinders
-        xchg    ax, dx
+        stosw                                   ; +4 cylinders (dwords: high words 0)
+        xor     ax, ax
         stosw
         mov     ax, [si+U_HEADS]
         stosw                                   ; +8 heads
-        xchg    ax, dx
+        xor     ax, ax
         stosw
         mov     ax, [si+U_SPT]
         stosw                                   ; +12 sectors per track
-        xchg    ax, dx
+        xor     ax, ax
         stosw
         mov     ax, [si+U_TOTAL]
         stosw                                   ; +16 total sectors (qword)
         mov     ax, [si+U_TOTAL+2]
         stosw
-        xchg    ax, dx
+        xor     ax, ax
         stosw
         stosw
         mov     ax, 512

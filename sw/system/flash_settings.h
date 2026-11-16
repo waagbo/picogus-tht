@@ -26,7 +26,7 @@ extern "C" {
 #include "../bootdisk/bootdisk.h"   // BD_NAME_BUF
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 7
+#define SETTINGS_VERSION 8
 
 // When adding new fields to Settings struct:
 // 1. Increment SETTINGS_VERSION

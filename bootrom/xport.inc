@@ -1,6 +1,6 @@
 ; ---------------------------------------------------------------------------
 ; PGBOOT transport: PicoGUS control port + PGDFS data window
-; (sw/dfs/PROTOCOL.md, register sequences as in pgusdfs/xport.c)
+; (sw/dfs/PROTOCOL.md, register sequences as in pgdfs/xport.c)
 ; ---------------------------------------------------------------------------
 
 ; select: knock and select register AL. Clobbers DX.
@@ -21,7 +21,7 @@ rd8:
         ret
 
 ; rd16: AX = 16-bit register AL (word read at DATA_PORT_LOW, as pgusinit and
-; PGUSDFS do: the bus splits it into 1D1h (low) and 1D2h (high)). Clobbers DX.
+; PGDFS do: the bus splits it into 1D1h (low) and 1D2h (high)). Clobbers DX.
 rd16:
         call    select
         mov     dx, DATA_PORT_LOW
@@ -231,7 +231,7 @@ xact:
         push    es
         mov     byte [x_try], 2
 .send:
-        ; another client's request in flight (PGUSDFS interrupted by us):
+        ; another client's request in flight (PGDFS interrupted by us):
         ; let it finish first, the card ignores a new request while BUSY
         mov     al, CMD_DFSSTAT
         call    rd8

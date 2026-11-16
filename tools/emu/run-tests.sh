@@ -221,10 +221,10 @@ t_T3() {
 verify_hd() {
     local img miss off f
     img=$1; miss=
-    [ "$(dd if="$img" bs=1 skip=510 count=2 2>/dev/null | xxd -p)" = 55aa ] || miss="$miss MBR-signature"
+    [ "$(dd if="$img" bs=1 skip=510 count=2 2>/dev/null | od -An -tx1 | tr -d " \n")" = 55aa ] || miss="$miss MBR-signature"
     [ "$(dd if="$img" bs=1 count=64 2>/dev/null | tr -d '\000' | wc -c | tr -d ' ')" -gt 0 ] || miss="$miss MBR-code"
     off=$((HD_S * 512))
-    [ "$(dd if="$img" bs=1 skip=$((off + 510)) count=2 2>/dev/null | xxd -p)" = 55aa ] || miss="$miss boot-signature"
+    [ "$(dd if="$img" bs=1 skip=$((off + 510)) count=2 2>/dev/null | od -An -tx1 | tr -d " \n")" = 55aa ] || miss="$miss boot-signature"
     dd if="$img" bs=1 skip=$((off + 3)) count=8 2>/dev/null | grep -q "FRDOS\|FreeDOS" || miss="$miss FreeDOS-boot-sector"
     for f in KERNEL.SYS COMMAND.COM AUTOEXEC.BAT FDCONFIG.SYS; do
         hd_mtools "$img" mdir "c:/$f" >/dev/null 2>&1 || miss="$miss $f"
@@ -383,10 +383,10 @@ t_T9() {
     fi
 }
 
-# ---- T10: PGUSDFS next to PGBOOT: the stick as D:, the open image protected -
+# ---- T10: PGDFS next to PGBOOT: the stick as D:, the open image protected -
 T10_AUTO='@ECHO OFF
 ECHO PGBOOT-T10-START > COM1
-PGUSDFS D: > COM1
+PGDFS D: > COM1
 DIR D:\ > COM1
 TYPE D:\HELLO.TXT > COM1
 COPY D:\HELLO.TXT A:\HELLO2.TXT > COM1
@@ -399,7 +399,7 @@ t_T10() {
     newwork T10
     need_rom T10 "$ROM" || return
     build_dos_tools
-    mk_floppy "$W/fd.img" "$T10_AUTO" "$DOS/PGUSDFS.EXE"
+    mk_floppy "$W/fd.img" "$T10_AUTO" "$DOS/PGDFS.EXE"
     echo hello-from-the-stick > "$W/hello.txt"
     mk_stick "$W/stick.img" "$W/fd.img" FD.IMG "$W/hello.txt" HELLO.TXT
     boot_rom_test T10 "$ROM" PGBOOT-T10-DONE --fd FD.IMG; ok=$?
@@ -409,7 +409,7 @@ t_T10() {
     if [ $ok = 0 ] && [ "$del" = 0005 ] && [ "$ren" = 0005 ] &&
        mtype -i "$W/fd-after.img" ::/HELLO2.TXT 2>/dev/null | grep -q hello-from-the-stick &&
        ! mdir -i "$W/stick.img" ::/GONE.IMG >/dev/null 2>&1; then
-        report T10 PASS "PGUSDFS D: after a ROM boot; D:->A: copy; DEL/REN of the open FD.IMG refused (AX=05h)"
+        report T10 PASS "PGDFS D: after a ROM boot; D:->A: copy; DEL/REN of the open FD.IMG refused (AX=05h)"
         excerpt "$W" 16
     else
         report T10 FAIL "DELETE AX=${del:-none} RENAME AX=${ren:-none}; see $W"

@@ -158,7 +158,7 @@ static const VersionFields versionFieldsTable[] = {
         FIELD(DFS),
     }, 1},
 
-    // version 7 - added PGBOOT settings (disk image names and options)
+    // version 8 - added PGBOOT settings (disk image names, options, boot menu and tune)
     {(const FieldInfo[]){
         FIELD(BootDisk),
     }, 1},
@@ -219,7 +219,7 @@ void loadSettings(Settings* settings, bool migrate)
 }
 
 
-// Settings are programmed as whole flash pages; since version 7 (PGBOOT image
+// Settings are programmed as whole flash pages; since version 8 (PGBOOT image
 // names) they take two. Older firmware reads only the first page's worth.
 #define SETTINGS_FLASH_BYTES (((sizeof(Settings) + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE) * FLASH_PAGE_SIZE)
 static_assert(SETTINGS_FLASH_BYTES <= FLASH_SECTOR_SIZE, "Settings struct doesn't fit inside the settings flash sector");

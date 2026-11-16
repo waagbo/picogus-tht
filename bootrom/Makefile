@@ -10,8 +10,9 @@
 NASM    ?= nasm
 PYTHON  ?= python3
 # all warnings as errors, minus the relocation notes NASM 3 prints for every
-# absolute address in a flat binary
-NASMFLAGS = -f bin -w+all -w-reloc-abs-word -w-reloc-abs-byte -w-reloc-abs-dword \
+# absolute address in a flat binary (NASM 2 does not know them: unknown
+# warning names are let through, so 2.16 builds the same bytes as 3.x)
+NASMFLAGS = -f bin -w+all -w-unknown-warning -w-reloc-abs-word -w-reloc-abs-byte -w-reloc-abs-dword \
             -w-reloc-rel-word -w-reloc-rel-dword -Werror
 
 ROM_SRCS = pgboot.asm defs.inc xport.inc int13.inc print.inc
