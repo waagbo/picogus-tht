@@ -4,7 +4,7 @@
 Speaks the pgbridge wire protocol to a running pgcard-sim and drives the card
 exactly like the ROM would: knock/select on 1D0h, registers on 1D1h/1D2h,
 frames through the data window as word accesses split into two byte cycles
-(base, base+1). Checks the PGBOOT registers and the BDINFO/BDREAD/BDWRITE
+(base, base+1). Checks the PGBOOT registers and the BDINFO/BDREAD/BDWRITE/BDLIST
 frames against the image files it is given.
 
   buscheck.py SOCKET FD_IMAGE HD_IMAGE
@@ -21,6 +21,7 @@ CMD_MAGIC, CMD_PROTOCOL = 0x00, 0x01
 CMD_DFSSTAT, CMD_DFSREQ, CMD_DFSEXEC, CMD_DFSRESP = 0x80, 0x81, 0x82, 0x83
 CMD_DFSMAXLEN, CMD_DFSPORT = 0x85, 0x87
 CMD_BDFDNAME, CMD_BDHDNAME, CMD_BDOPTS = 0x88, 0x89, 0x8A
+CMD_BDMENU, CMD_BDTUNE = 0x8B, 0x8C
 
 
 class Bus:
@@ -250,6 +251,46 @@ def main():
         ax, rec = refresh(0)
         name = rec[32:32 + rec[18]].decode('latin-1')
         check(ax == 0 and rec[1] == 1 and name.upper().endswith('FD.IMG'), 'swapped back to FD.IMG (state %d, "%s")' % (rec[1], name))
+
+    # boot menu and tune registers: the value with bit 6 set and bit 7 clear
+    menu, tune = card.reg8(CMD_BDMENU), card.reg8(CMD_BDTUNE)
+    check(menu & 0xC0 == 0x40 and tune & 0xC0 == 0x40, 'CMD_BDMENU / CMD_BDTUNE signature (%02Xh, %02Xh)' % (menu, tune))
+    card.b.select(CMD_BDMENU)
+    card.b.out(DHIGH, (5 << 2) | 2)
+    card.b.select(CMD_BDTUNE)
+    card.b.out(DHIGH, 2)
+    check(card.reg8(CMD_BDMENU) == 0x40 | (5 << 2) | 2 and card.reg8(CMD_BDTUNE) == 0x42,
+          'CMD_BDMENU mode 2 / 5 s and CMD_BDTUNE 2 read back')
+    card.b.select(CMD_BDMENU)
+    card.b.out(DHIGH, menu & 0x3F)
+    card.b.select(CMD_BDTUNE)
+    card.b.out(DHIGH, tune & 0x3F)
+
+    # BDLIST: the root of the stick holds FD.IMG and HD.IMG
+    def blist(path, start, count):
+        ax, pl, seq = card.transact(0xF6, struct.pack('<HBB', start, count, 0) + path.encode('latin-1'))
+        if ax != 0 or len(pl) < 4:
+            return ax, 0, []
+        total, n = struct.unpack_from('<HB', pl, 0)
+        ents = []
+        for i in range(n):
+            e = pl[4 + 48 * i:4 + 48 * (i + 1)]
+            ents.append((e[0], struct.unpack_from('<I', e, 2)[0], e[8:21].split(b'\0')[0].decode('latin-1'),
+                         e[21:21 + e[6]].decode('latin-1')))
+        return ax, total, ents
+    ax, total, ents = blist('', 0, 16)
+    names = dict((e[2], e) for e in ents)
+    check(ax == 0 and total == len(ents) and 'FD.IMG' in names and 'HD.IMG' in names,
+          'BDLIST of the root: %d entries %s' % (total, sorted(names)))
+    if 'FD.IMG' in names and 'HD.IMG' in names:
+        check(names['FD.IMG'][0] == 1 and names['FD.IMG'][1] == len(fd) // 512,
+              'FD.IMG is listed as a floppy image of %d sectors' % names['FD.IMG'][1])
+        check(names['HD.IMG'][0] == 2 and names['HD.IMG'][1] == len(hd) // 512,
+              'HD.IMG is listed as a hard disk image of %d sectors' % names['HD.IMG'][1])
+    ax, total2, ents = blist('\\', 1, 1)
+    check(ax == 0 and total2 == total and len(ents) == 1, 'BDLIST start 1, one entry: %s' % [e[2] for e in ents])
+    ax, _, _ = blist('\\NOSUCH', 0, 16)
+    check(ax == 0x02, 'BDLIST of a missing folder answers 02h (AX=%04X)' % ax)
 
     # an old/unknown unit
     ax, _, _ = card.transact(0xF3, bytes((5, 0)))

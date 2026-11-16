@@ -212,6 +212,36 @@ PY
 }
 
 # wait_marker WORKDIR MARKER TIMEOUT_S: 0 when MARKER shows up on COM1
+# wait_screen WORKDIR NAME REGEX SECONDS: dump the screen to NAME.txt until a
+# line matches REGEX (grep -E); the last dump stays. Returns 1 on a timeout.
+wait_screen() {
+    local w n re end
+    w=$1; n=$2; re=$3
+    end=$(( $(date +%s) + $4 ))
+    while :; do
+        screen_dump "$w" "$n"
+        grep -Eq "$re" "$w/$n.txt" 2>/dev/null && return 0
+        [ "$(date +%s)" -lt "$end" ] || return 1
+        kill -0 "$QEMU_PID" 2>/dev/null || return 1
+        sleep 0.3
+    done
+}
+
+# send_keys KEY...: type on the guest's keyboard (HMP sendkey names: m, a,
+# ret, esc, spc, up, down, pgup, pgdn, home, end, ...), one after the other.
+send_keys() {
+    [ -S "$MON" ] || return 1
+    python3 - "$MON" "$@" <<'PY'
+import socket, sys, time
+s = socket.socket(socket.AF_UNIX); s.settimeout(2); s.connect(sys.argv[1])
+time.sleep(0.2)
+for k in sys.argv[2:]:
+    s.sendall(('sendkey %s\n' % k).encode())
+    time.sleep(0.35)            # held 100 ms by QEMU; the menu redraws in between
+s.close()
+PY
+}
+
 wait_marker() {
     local w m t end
     w=$1; m=$2; t=$3

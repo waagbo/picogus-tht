@@ -30,6 +30,11 @@ uint8_t bd_ctl_name_read(uint8_t unit) {
 }
 uint8_t bd_ctl_opts_read(void) { return (uint8_t)((*opts_p & BD_OPT_MASK) | BD_OPTS_SIGNATURE); }
 void bd_ctl_opts_write(uint8_t v) { *opts_p = v & BD_OPT_MASK; }
+void bd_init_ui(uint8_t *menu, uint8_t *tune) { (void)menu; (void)tune; }
+uint8_t bd_ctl_menu_read(void) { return 0xFF; }     /* as firmware without the boot menu */
+void bd_ctl_menu_write(uint8_t v) { (void)v; }
+uint8_t bd_ctl_tune_read(void) { return 0xFF; }
+void bd_ctl_tune_write(uint8_t v) { (void)v; }
 void bd_set_boot_nonce(uint32_t nonce) { (void)nonce; }
 void bd_tasks(void) {}
 void bd_on_drive_mounted(void) {}

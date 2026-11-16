@@ -102,7 +102,9 @@ static const Settings defaultSettings = {
     .BootDisk = {
         .fdImage = {0},
         .hdImage = {0},
-        .options = 0
+        .options = 0,
+        .menu = BD_MENU_DEFAULT,
+        .tune = BD_TUNE_DEFAULT
     }
 };
 

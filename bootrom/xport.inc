@@ -20,6 +20,18 @@ rd8:
         in      al, dx
         ret
 
+; rd_ui: AL = the value of boot menu / tune register AL, or 0 when the
+; firmware does not have the register (no 40h signature). Clobbers AH, DX.
+rd_ui:
+        call    rd8
+        mov     ah, al
+        and     ax, (BD_UI_SIG_MASK << 8) | BD_UI_VALUE
+        cmp     ah, BD_UI_SIG
+        je      .ok
+        xor     al, al
+.ok:
+        ret
+
 ; rd16: AX = 16-bit register AL (word read at DATA_PORT_LOW, as pgusinit and
 ; PGDFS do: the bus splits it into 1D1h (low) and 1D2h (high)). Clobbers DX.
 rd16:
@@ -359,6 +371,40 @@ bdinfo:
         clc
         ret
 .bad:
+        stc
+.ret:
+        ret
+
+; bdlist: BDLIST for the folder [m_path]: at most CX entries from index AX
+; into the page buffer at [m_seg]:0 (TT TT CC 00, then the entries).
+; out: CF=0 and the page valid; CF=1 otherwise (AH = status: 80h no USB
+; drive, 02h no such folder, ...). Clobbers AX, CX, DX.
+bdlist:
+        mov     [x_hdr+4], ax           ; SS SS
+        mov     [x_hdr+6], cx           ; NN FF
+        mov     word [x_hdr+2], (BD_AL_LIST << 8) | 0
+        mov     word [x_hlen], 4 + BD_LIST_REQ_LEN
+        mov     ax, [m_plen]
+        mov     [x_dlen], ax
+        mov     word [x_dptr], m_path
+        mov     [x_dptr+2], ds
+        mov     byte [x_fill], 0
+        mov     word [x_alen], MENU_PAGE_BYTES
+        mov     word [x_aptr], 0
+        mov     ax, [m_seg]
+        mov     [x_aptr+2], ax
+        mov     ax, TMO_READ
+        call    set_tmo
+        call    xact
+        jc      .ret
+        or      ax, ax
+        jnz     .bad
+        cmp     cx, BD_LIST_HDR_LEN
+        jb      .bad
+        clc
+        ret
+.bad:
+        mov     ah, al
         stc
 .ret:
         ret

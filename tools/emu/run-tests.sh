@@ -16,12 +16,16 @@ set -u
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
 WORK=$EMU_CACHE/work
-TESTS=${*:-T0 S1 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11}
+TESTS=${*:-T0 S1 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18}
 TIMEOUT=${TIMEOUT:-90}
 ROM=$ROMDIR/PGBOOT.ROM
 ROM88=$ROMDIR/PGBOOT88.ROM
 # The ROM's message when no card answers (T6); a regex for grep -E.
 ROM_NOTFOUND_RE=${ROM_NOTFOUND_RE:-PicoGUS.*not found|not found|no PicoGUS}
+
+# The ROM's last line before it hands over: to the boot sector of an image,
+# or to the BIOS boot (the early screen dump waits for it).
+ROM_DONE_RE='PGBOOT: (booting [AC]:|continuing with the BIOS boot|no |skipped)'
 
 [ -x "$QEMU" ] || die "no QEMU at $QEMU: run tools/emu/build-qemu.sh"
 build_sim
@@ -108,7 +112,7 @@ boot_rom_test() {
     t=$1; rom=$2; marker=$3; shift 3
     start_sim "$W" --stick "$W/stick.img" "$@" || return 1
     start_qemu "$W" -option-rom "$rom" -boot menu=off $(bridge_args)
-    sleep 3; screen_dump "$W" screen-early
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
     if wait_marker "$W" "$marker" "$TIMEOUT"; then st=0; else st=1; fi
     sleep 1; screen_dump "$W" screen
     finish
@@ -270,7 +274,9 @@ t_T4() {
     mcopy -n -i "$W/stick.img" ::/HD.IMG "$W/hd-after.img" 2>/dev/null &&
         hd_mtools "$W/hd-after.img" mtype c:/HDWRITE.TXT 2>/dev/null | grep -q hd-write-ok &&
         wr="; C:\\HDWRITE.TXT verified in HD.IMG"
-    if [ $ok = 0 ]; then
+    if [ $ok = 0 ] && grep -q "too large" "$W/screen.txt"; then
+        report T4 FAIL "booted C:, but FreeDOS takes the 32 MB image for a drive over 8 GB (INT 13h AH=48h); see $W"
+    elif [ $ok = 0 ]; then
         report T4 PASS "booted C: from $what$wr"
         excerpt "$W" 8
     else
@@ -312,7 +318,7 @@ t_T7() {
     mk_stick "$W/stick.img" "$W/x.txt" OTHER.TXT
     start_sim "$W" --stick "$W/stick.img" --fd MISSING.IMG || { report T7 FAIL "sim did not start"; return; }
     start_qemu "$W" -option-rom "$ROM" -drive "file=$W/fd.img,format=raw,if=floppy" -boot menu=off $(bridge_args)
-    sleep 3; screen_dump "$W" screen-early
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
     wait_marker "$W" PGBOOT-NATIVE-OK "$TIMEOUT"; ok=$?
     sleep 1; screen_dump "$W" screen
     finish
@@ -434,9 +440,251 @@ t_T11() {
     fi
 }
 
+# ---- T12-T17: the boot menu, the start-up tune, a ROM seen four times --------
+SUB_AUTO='@ECHO OFF
+ECHO PGBOOT-SUB-OK > COM1'
+
+# menu_stick: the stick the menu tests browse. In the root: README.TXT (no
+# image), FD.IMG (bootable floppy), HD.IMG (the bootable hard disk of T3/P4)
+# and the folder "Boot Disks" with a second bootable floppy under a long name.
+# The menu lists folders first: Boot Disks, FD.IMG, HD.IMG.
+menu_stick() {
+    local src
+    if [ -f "$WORK/hd-from-T3.img" ]; then src=$WORK/hd-from-T3.img
+    else prep_hd_native || return 1; src=$WORK/hd-native.img; fi
+    cp "$src" "$W/hd.img"
+    mk_floppy "$W/fd.img" "$FD_AUTO"
+    mk_floppy "$W/sub.img" "$SUB_AUTO"
+    echo x > "$W/x.txt"
+    mk_stick "$W/stick.img" "$W/x.txt" README.TXT "$W/fd.img" FD.IMG "$W/hd.img" HD.IMG
+    mmd -i "$W/stick.img" "::/Boot Disks"
+    mcopy -i "$W/stick.img" "$W/sub.img" "::/Boot Disks/DOS Boot Disk.img"
+}
+
+# on_screen NAME REGEX...: every REGEX matches a line of the dump NAME.txt;
+# prints the ones that do not
+on_screen() {
+    local n re miss
+    n=$1; shift; miss=
+    for re in "$@"; do
+        grep -Eq -- "$re" "$W/$n.txt" 2>/dev/null || miss="$miss [$re]"
+    done
+    [ -z "$miss" ] && return 0
+    echo "$miss"
+    return 1
+}
+
+menu_fail() {  # menu_fail TEST MESSAGE: report, show the last screens
+    report "$1" FAIL "$2; see $W"
+    for f in "$W"/menu*.txt "$W/screen.txt"; do
+        [ -f "$f" ] && { echo "      # --- $(basename "$f")"; sed 's/^/      # /' "$f"; }
+    done
+    finish
+}
+
+# T12: the menu at every boot, nothing configured: browse into a folder and
+# boot the floppy image there (its 8.3 path goes to the card)
+t_T12() {
+    local m
+    need_rom T12 "$ROM" || return
+    newwork T12
+    menu_stick || { report T12 FAIL "no hard disk image"; return; }
+    start_sim "$W" --stick "$W/stick.img" --menu 2 || { report T12 FAIL "sim did not start"; return; }
+    start_qemu "$W" -option-rom "$ROM" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 'HD\.IMG' 30 || { menu_fail T12 "the menu did not come up"; return; }
+    m=$(on_screen menu1 'PGBOOT 0\.[0-9]+ - PicoGUS boot menu' '^ A: -$' '^ C: -$' 'Folder: \\ +1/3' \
+        '<DIR> +Boot Disks$' 'A: +1440K +FD\.IMG$' 'C: +31M +HD\.IMG$' 'Enter boot/open') ||
+        { menu_fail T12 "root listing: missing$m"; return; }
+    grep -q 'README' "$W/menu1.txt" && { menu_fail T12 "README.TXT is listed"; return; }
+    send_keys end
+    wait_screen "$W" menu2 ' 3/3' 10 || { menu_fail T12 "End did not reach entry 3"; return; }
+    send_keys up pgup ret           # 2/3, 1/3 (the folder), open it
+    wait_screen "$W" menu3 'DOS Boot Disk\.img' 10 || { menu_fail T12 "the folder did not open"; return; }
+    m=$(on_screen menu3 'Folder: \\BOOTDI~1 +1/2' '<DIR> +\.\.$' 'A: +1440K +DOS Boot Disk\.img$') ||
+        { menu_fail T12 "folder listing: missing$m"; return; }
+    grep -q 'HD\.IMG' "$W/menu3.txt" && { menu_fail T12 "the root's rows were not cleared"; return; }
+    send_keys ret                   # "..": back up
+    wait_screen "$W" menu4 'Folder: \\ +1/3' 10 || { menu_fail T12 "'..' did not lead back to the root"; return; }
+    send_keys ret down ret          # into the folder again, the image, boot it
+    if wait_marker "$W" PGBOOT-SUB-OK "$TIMEOUT"; then
+        sleep 1; screen_dump "$W" screen
+        finish
+        if grep -q 'BDFDNAME commit "\\BOOTDI~1\\DOSBOO~1.IMG"' "$W/sim.log"; then
+            report T12 PASS "boot menu: browsed into \"Boot Disks\", booted \"DOS Boot Disk.img\" as A:"
+            sed 's/^/      # /' "$W/menu3.txt"
+        else
+            report T12 FAIL "booted, but the card was not given \\BOOTDI~1\\DOSBOO~1.IMG; see $W"
+        fi
+    else
+        menu_fail T12 "the image picked in the menu did not boot"
+    fi
+}
+
+# T13: insert the floppy image without booting it, save, boot the hard disk
+t_T13() {
+    local m
+    need_rom T13 "$ROM" || return
+    newwork T13
+    menu_stick || { report T13 FAIL "no hard disk image"; return; }
+    start_sim "$W" --stick "$W/stick.img" --menu 2 || { report T13 FAIL "sim did not start"; return; }
+    start_qemu "$W" -option-rom "$ROM" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 'HD\.IMG' 30 || { menu_fail T13 "the menu did not come up"; return; }
+    send_keys down spc              # FD.IMG into A:
+    wait_screen "$W" menu2 '^ A: \\FD\.IMG$' 10 || { menu_fail T13 "Space did not insert FD.IMG"; return; }
+    send_keys s
+    wait_screen "$W" menu3 'Saved' 10 || { menu_fail T13 "S did not save"; return; }
+    send_keys down ret              # HD.IMG: boot it
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
+    if wait_marker "$W" PGBOOT-HD-OK "$TIMEOUT"; then
+        sleep 1; screen_dump "$W" screen
+        finish
+        m=$(on_screen screen-early 'PGBOOT: A: \\FD\.IMG, 1440K' 'PGBOOT: C: \\HD\.IMG, 31M' 'PGBOOT: booting C:') ||
+            { report T13 FAIL "boot messages: missing$m; see $W"; return; }
+        if grep -q 'CMD_SAVE: settings saved (fd="\\FD.IMG" hd=""' "$W/sim.log" &&
+           grep -q 'BDHDNAME commit "\\HD.IMG"' "$W/sim.log"; then
+            report T13 PASS "boot menu: FD.IMG inserted into A: and saved, HD.IMG booted as C:"
+            grep -h "PGBOOT" "$W/screen-early.txt" | sed 's/^/      # /'
+        else
+            report T13 FAIL "booted, but the card trace lacks the save or the hard disk name; see $W"
+        fi
+    else
+        menu_fail T13 "the hard disk image picked in the menu did not boot"
+    fi
+}
+
+# T14: a configured floppy image, M at the prompt, eject it, Esc: nothing is
+# left to boot, so the BIOS boots the native floppy
+t_T14() {
+    need_rom T14 "$ROM" || return
+    newwork T14
+    menu_stick || { report T14 FAIL "no hard disk image"; return; }
+    mk_floppy "$W/native.img" "$NATIVE_AUTO"
+    start_sim "$W" --stick "$W/stick.img" --fd FD.IMG --menu $((8 * 4 + 1)) || { report T14 FAIL "sim did not start"; return; }
+    start_qemu "$W" -option-rom "$ROM" -drive "file=$W/native.img,format=raw,if=floppy" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 'press M for the boot menu' 30 || { menu_fail T14 "no prompt"; return; }
+    send_keys m
+    wait_screen "$W" menu2 '^ A: FD\.IMG$' 10 || { menu_fail T14 "M did not open the menu with FD.IMG in A:"; return; }
+    send_keys a
+    wait_screen "$W" menu3 '^ A: -$' 10 || { menu_fail T14 "A did not eject the floppy image"; return; }
+    send_keys esc
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
+    if wait_marker "$W" PGBOOT-NATIVE-OK "$TIMEOUT" && grep -q 'PGBOOT: no disk image configured' "$W/screen-early.txt"; then
+        finish
+        report T14 PASS "M at the prompt opened the menu; A ejected FD.IMG; Esc: nothing configured, BIOS boot"
+    else
+        menu_fail T14 "no BIOS boot after the image was ejected in the menu"
+    fi
+}
+
+# T15: nothing configured, default settings: the tune plays, the prompt runs
+# out, the BIOS boots. The speaker gate (port 61h) is traced by QEMU.
+t_T15() {
+    local on off ok
+    need_rom T15 "$ROM" || return
+    newwork T15
+    mk_floppy "$W/native.img" "$NATIVE_AUTO"
+    echo x > "$W/x.txt"
+    mk_stick "$W/stick.img" "$W/x.txt" README.TXT
+    start_sim "$W" --stick "$W/stick.img" || { report T15 FAIL "sim did not start"; return; }
+    QEMU_EXTRA="-trace pcspk_io_write -D $W/trace.log" \
+        start_qemu "$W" -option-rom "$ROM" -drive "file=$W/native.img,format=raw,if=floppy" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 'press M for the boot menu' 30
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
+    wait_marker "$W" PGBOOT-NATIVE-OK "$TIMEOUT"; ok=$?
+    finish
+    # tune 1 is four notes: four writes with timer gate and speaker data on
+    # (bits 0 and 1), then one that takes both away
+    on=$(grep -c 'pcspk_io_write.*<- 0x[0-9a-f]*[37bf]$' "$W/trace.log" 2>/dev/null)
+    off=$(tail -1 "$W/trace.log" 2>/dev/null | grep -c '<- 0x[0-9a-f]*[048c]$')
+    if [ $ok = 0 ] && grep -q 'press M for the boot menu' "$W/menu1.txt" &&
+       grep -q 'PGBOOT: no disk image configured' "$W/screen-early.txt" && [ "${on:-0}" = 4 ] && [ "${off:-0}" = 1 ]; then
+        report T15 PASS "defaults, nothing configured: tune played ($on notes, speaker off after), prompt ran out, BIOS boot"
+    else
+        report T15 FAIL "marker $ok, speaker on $on times, off at the end $off; see $W"
+        sed 's/^/      # /' "$W/screen-early.txt" 2>/dev/null
+    fi
+}
+
+# T16: Esc at the prompt skips PGBOOT although an image is configured
+t_T16() {
+    need_rom T16 "$ROM" || return
+    newwork T16
+    mk_floppy "$W/fd.img" "$FD_AUTO"
+    mk_floppy "$W/native.img" "$NATIVE_AUTO"
+    mk_stick "$W/stick.img" "$W/fd.img" FD.IMG
+    start_sim "$W" --stick "$W/stick.img" --fd FD.IMG --menu $((8 * 4 + 1)) --tune 0 || { report T16 FAIL "sim did not start"; return; }
+    start_qemu "$W" -option-rom "$ROM" -drive "file=$W/native.img,format=raw,if=floppy" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 'press M for the boot menu' 30 || { menu_fail T16 "no prompt"; return; }
+    send_keys esc
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
+    if wait_marker "$W" PGBOOT-NATIVE-OK "$TIMEOUT" && grep -q 'PGBOOT: skipped' "$W/screen-early.txt"; then
+        finish
+        report T16 PASS "Esc at the prompt: PGBOOT skipped, the BIOS booted the native floppy"
+    else
+        menu_fail T16 "Esc at the prompt did not skip PGBOOT"
+    fi
+}
+
+# T17: the BIOS finds the ROM four times (a 28C256 with the image in every
+# quarter behind a 32 KB window): one banner, one hook, a normal boot
+t_T17() {
+    local n ok
+    need_rom T17 "$ROM" || return
+    newwork T17
+    mk_floppy "$W/fd.img" "$FD_AUTO"
+    mk_stick "$W/stick.img" "$W/fd.img" FD.IMG
+    start_sim "$W" --stick "$W/stick.img" --fd FD.IMG --menu 0 --tune 0 || { report T17 FAIL "sim did not start"; return; }
+    for n in 1 2 3 4; do cp "$ROM" "$W/COPY$n.ROM"; done    # QEMU wants a name per ROM
+    start_qemu "$W" -option-rom "$W/COPY1.ROM" -option-rom "$W/COPY2.ROM" -option-rom "$W/COPY3.ROM" \
+        -option-rom "$W/COPY4.ROM" -boot menu=off $(bridge_args)
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
+    wait_marker "$W" PGBOOT-FD-OK "$TIMEOUT"; ok=$?
+    finish
+    n=$(grep -c 'PGBOOT 0.*PicoGUS found' "$W/screen-early.txt" 2>/dev/null)
+    if [ $ok = 0 ] && [ "${n:-0}" = 1 ]; then
+        report T17 PASS "four copies of the ROM: one banner, FreeDOS booted from FD.IMG"
+    else
+        report T17 FAIL "marker $ok, $n banners; see $W"
+        sed 's/^/      # /' "$W/screen-early.txt" 2>/dev/null
+    fi
+}
+
+# T18: pgusinit sets the boot menu and the tune, and shows them
+T18_AUTO='@ECHO OFF
+ECHO PGBOOT-T18-START > COM1
+PGUSINIT /bdmenu 2 /bdwait 7 /bdtune 3 > COM1
+PGUSINIT > COM1
+PGUSINIT /bdmenu 1 > COM1
+PGUSINIT /bdtune 0 > COM1
+PGUSINIT > COM1
+ECHO PGBOOT-T18-DONE > COM1'
+t_T18() {
+    local ok m
+    newwork T18
+    need_rom T18 "$ROM" || return
+    build_dos_tools
+    mk_floppy "$W/fd.img" "$T18_AUTO" "$DOS/PGUSINIT.EXE"
+    mk_stick "$W/stick.img" "$W/fd.img" FD.IMG
+    boot_rom_test T18 "$ROM" PGBOOT-T18-DONE --fd FD.IMG --menu 0 --tune 0; ok=$?
+    sed -e 's/\r$//' "$W/serial.txt" > "$W/serial.lf"
+    m=
+    grep -q 'PGBOOT boot menu: opens at every boot; start-up tune: 3' "$W/serial.lf" || m="$m [status after /bdmenu 2 /bdtune 3]"
+    grep -q 'PGBOOT boot menu: offered at boot (press M), for 7 s; start-up tune: off' "$W/serial.lf" || m="$m [status after /bdmenu 1 /bdtune 0]"
+    grep -q 'BDMENU <- 0e' "$W/sim.log" && grep -q 'BDMENU <- 1e' "$W/sim.log" && grep -q 'BDMENU <- 1d' "$W/sim.log" ||
+        m="$m [CMD_BDMENU writes 0e, 1e, 1d]"
+    grep -q 'BDTUNE <- 03' "$W/sim.log" && grep -q 'BDTUNE <- 00' "$W/sim.log" || m="$m [CMD_BDTUNE writes]"
+    if [ $ok = 0 ] && [ -z "$m" ]; then
+        report T18 PASS "pgusinit /bdmenu /bdwait /bdtune set the card's registers and the status shows them"
+        grep 'PGBOOT boot menu' "$W/serial.lf" | sed 's/^/      | /'
+    else
+        report T18 FAIL "missing:$m; see $W"
+        excerpt "$W" 40
+    fi
+}
+
 for t in $TESTS; do
     case $t in
-        S1|T0|T1|T2|T3|T4|T5|T6|T7|T8|T9|T10|T11) "t_$t" ;;
+        S1|T0|T1|T2|T3|T4|T5|T6|T7|T8|T9|T10|T11|T12|T13|T14|T15|T16|T17|T18) "t_$t" ;;
         P4) rm -f "$WORK/hd-native.img"
             if prep_hd_native; then report P4 PASS "native FDISK /MBR + SYS C: reference image ($WORK/hd-native.img)"
             else report P4 FAIL "see $WORK/P4"; fi ;;

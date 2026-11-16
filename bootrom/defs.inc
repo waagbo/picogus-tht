@@ -3,7 +3,7 @@
 ; See sw/bootdisk/PROTOCOL.md, sw/dfs/PROTOCOL.md, common/picogus.h.
 ; ---------------------------------------------------------------------------
 
-%define PGBOOT_VERSION  "0.1"
+%define PGBOOT_VERSION  "0.2"
 
 ROM_SIZE        equ 8192
 ROM_BLOCKS      equ ROM_SIZE / 512
@@ -27,6 +27,9 @@ CMD_DFSPORT     equ 87h
 CMD_BDFDNAME    equ 88h
 CMD_BDHDNAME    equ 89h
 CMD_BDOPTS      equ 8Ah
+CMD_BDMENU      equ 8Bh             ; boot menu mode and wait | 40h
+CMD_BDTUNE      equ 8Ch             ; start-up tune | 40h
+CMD_SAVE        equ 0E1h            ; any write stores the card's settings
 
 DFS_READY       equ 03h
 DFS_ABORTED     equ 0FEh
@@ -36,12 +39,36 @@ DFS_NODRIVE     equ 0FFh
 BD_AL_INFO      equ 0F3h
 BD_AL_READ      equ 0F4h
 BD_AL_WRITE     equ 0F5h
+BD_AL_LIST      equ 0F6h
 BD_INFO_OPEN    equ 01h
 
 BD_OPT_FD_RO    equ 01h
 BD_OPT_HD_RO    equ 02h
 BD_OPT_ROM_OFF  equ 04h
 BD_OPT_BOOT_HD  equ 08h
+
+; CMD_BDMENU and CMD_BDTUNE read as value | 40h with bit 7 clear; firmware
+; without them reads FFh
+BD_UI_SIG_MASK  equ 0C0h
+BD_UI_SIG       equ 40h
+BD_UI_VALUE     equ 3Fh
+BD_MENU_MODE    equ 03h             ; CMD_BDMENU bits 0-1: 0 off, 1 on a key, 2 always
+BD_MENU_ALWAYS  equ 2               ; bits 2-5: seconds the menu is offered
+
+; BDLIST: request SS SS NN FF + folder path; answer TT TT CC 00 + CC entries
+BD_LIST_REQ_LEN     equ 4
+BD_LIST_HDR_LEN     equ 4
+BD_LIST_ENTRY_LEN   equ 48
+BD_LIST_OFF_KIND    equ 0           ; BD_KIND_*
+BD_LIST_OFF_SECTORS equ 2           ; dd size in sectors
+BD_LIST_OFF_DISPLEN equ 6           ; db length of the display name
+BD_LIST_OFF_SFN     equ 8           ; 13 bytes: 8.3 name, zero terminated
+BD_LIST_OFF_DISP    equ 21          ; 27 bytes: name to show
+BD_LIST_SFN_LEN     equ 13
+BD_LIST_DISP_LEN    equ 27
+BD_KIND_DIR         equ 0
+BD_KIND_FLOPPY      equ 1
+BD_KIND_HARDDISK    equ 2
 
 ; BDINFO record offsets
 BI_VERSION      equ 0
@@ -78,6 +105,7 @@ TMO_READ        equ 182         ; ~10 s: reads, verify, BDINFO
 TMO_WRITE       equ 546         ; ~30 s: writes
 TMO_OPEN        equ 546         ; ~30 s: BDINFO with OPEN (fast-seek map build)
 WAIT_SECONDS    equ 15          ; USB drive wait at late init
+WAIT_SECONDS_NOIMG equ 3        ; the same when no image is configured (the menu may pick one)
 TICKS_PER_SEC   equ 18
 
 ; interrupt vector that holds the pre-PGBOOT INT 19h between POST and late
@@ -98,6 +126,10 @@ HDR_IRET        equ 16h         ; db 0CFh: an IRET the loader may point vectors 
 HDR_CATCH       equ 1Ch         ; dw: offset of the boot catcher (loader)
 HDRF_RAMCOPY    equ 01h
 HDRF_CATCH      equ 02h         ; set by the catcher: late init runs inside the BIOS INT 13h call
+
+; longest folder path the boot menu follows: a backslash and an 8.3 name
+; added to it still fit in an image name (127 characters)
+MENU_PATH_MAX   equ 127 - 13
 
 ; unit structure (U_SIZE bytes)
 U_SIZE          equ 24
@@ -139,6 +171,15 @@ r_count         resw 1          ; scratch
 r_shown         resb 1          ; wait message on screen
 r_probe         resb 1          ; unit to ask whether the drive is mounted
 r_busy          resb 1          ; INT 13h request in progress (reentry guard)
+r_menu          resb 1          ; CMD_BDMENU value (0: no boot menu, or firmware without it)
+r_cfg           resb 1          ; not 0: an image name is configured
+r_bootsel       resb 1          ; picked in the menu to boot from: BD_KIND_FLOPPY / BD_KIND_HARDDISK, 0 = usual order
+m_cnt           resb 1          ; boot menu: entries in the page that is loaded
+m_top           resw 1          ; index of its first entry
+m_sel           resw 1          ; index of the selected entry
+m_total         resw 1          ; entries in the folder
+m_plen          resw 1          ; length of m_path
+m_seg           resw 1          ; segment the page is loaded to (below this block)
                 alignb 16
 u_fd            resb U_SIZE     ; unit structures, see U_*
 u_hd            resb U_SIZE
@@ -169,10 +210,16 @@ io_op           resb 1          ; IO_READ / IO_WRITE / IO_VERIFY / IO_FILL
 io_n            resb 1          ; sectors in the current chunk
                 alignb 16
 x_ans           resb 128        ; BDINFO answer
+m_path          resb MENU_PATH_MAX + 2  ; folder shown in the boot menu, "" = the root
 ram_vars_end:
 endstruc
 
 RAM_STACK_TOP   equ 400h        ; late init runs on a stack at the top of the 1 KB
+
+; The boot menu loads a page of the folder listing into the kilobyte below
+; the RAM block: free memory until the boot sector has been loaded.
+MENU_PAGE_BYTES equ 1024
+MENU_PAGE_PARAS equ MENU_PAGE_BYTES / 16
 
 IO_READ         equ 0
 IO_WRITE        equ 1

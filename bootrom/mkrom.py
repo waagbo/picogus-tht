@@ -3,6 +3,8 @@
 
 usage: mkrom.py <in.bin> <out.rom>     set the checksum byte, verify
        mkrom.py --check <file.rom>     verify only
+       mkrom.py --x4 <in.rom> <out.bin>   the verified image four times: 32 KB
+                                       for a 28C256 (see README.md)
 
 Checks: exactly 8192 bytes, 55 AA, size byte 10h (16 * 512), a near or short
 jump at offset 3, the 'PGBT' loader signature at offset 6, and an 8-bit sum
@@ -42,6 +44,13 @@ def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--check":
         img = open(sys.argv[2], "rb").read()
         sys.exit(0 if check(img, sys.argv[2]) else 1)
+    if len(sys.argv) == 4 and sys.argv[1] == "--x4":
+        img = open(sys.argv[2], "rb").read()
+        if not check(img, sys.argv[2]):
+            sys.exit(1)
+        open(sys.argv[3], "wb").write(img * 4)
+        print("%s: OK, %d bytes (%s x 4)" % (sys.argv[3], 4 * len(img), sys.argv[2]))
+        sys.exit(0)
     if len(sys.argv) != 3:
         print(__doc__, file=sys.stderr)
         sys.exit(2)

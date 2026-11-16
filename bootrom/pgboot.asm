@@ -8,8 +8,10 @@
 ;
 ;   POST (far call to offset 3): detect the card, hook INT 19h, retf.
 ;   INT 19h (late init): reserve 1 KB at the top of conventional memory,
-;     wait for the USB drive, open the images, hook INT 13h through a RAM
-;     trampoline, boot sector 0 of the floppy (or hard disk) image.
+;     play the start-up tune, wait for the USB drive, offer the boot menu
+;     (menu.inc: pick the images from the files on the drive), open the
+;     images, hook INT 13h through a RAM trampoline, boot sector 0 of the
+;     floppy (or hard disk) image.
 ;   INT 13h: serve 00h / 80h, shift physical hard disks up by one.
 ;
 ; 8086 code throughout, except out186/in186 (rep outsw/insw), which only run
@@ -60,6 +62,25 @@ post_init:
         push    ds
         push    es
         cld
+        ; A 28C256 programmed with this image in each of its four 8 KB
+        ; quarters (PGBT256.BIN) shows it once behind an 8 KB window and four
+        ; times behind a 32 KB one: the BIOS then calls every copy. The first
+        ; has hooked INT 19h; the others have nothing to add.
+        xor     ax, ax
+        mov     ds, ax
+        les     bx, [19h*4]
+        cmp     bx, int19_entry
+        jne     .first
+        cmp     word [es:HDR_SIG], 'PG'
+        jne     .first
+        cmp     word [es:HDR_SIG+2], 'BT'
+        jne     .first
+        mov     ax, cs
+        mov     bx, es
+        cmp     ax, bx
+        je      .first
+        jmp     .done
+.first:
         mov     si, msg_banner
         call    print
         call    detect_card
@@ -280,19 +301,30 @@ int19_entry:
         mov     sp, RAM_STACK_TOP
         sti
 
+        ; ---- boot menu setting, start-up tune ------------------------------
+        mov     ax, ds
+        sub     ax, MENU_PAGE_PARAS
+        mov     [m_seg], ax
+        xor     ax, ax
+        mov     [m_plen], ax
+        mov     [r_bootsel], al
+        mov     al, CMD_BDMENU
+        call    rd_ui                           ; 0 from firmware without the menu
+        cmp     byte [r_maxrd], 2               ; a page of the menu takes a
+        jae     .menuok                         ; frame of 1 KB
+        xor     al, al
+.menuok:
+        mov     [r_menu], al
+        call    tune_play
+
         ; ---- anything configured? ------------------------------------------
-        mov     al, CMD_BDFDNAME
-        call    rd8
-        mov     ah, al
-        mov     al, CMD_BDHDNAME
-        call    rd8
-        mov     byte [r_probe], 1               ; unit that tells us about the drive:
-        or      ah, ah                          ; the floppy if configured,
-        jz      .p1                             ; else the hard disk
-        mov     byte [r_probe], 0
-.p1:
-        or      al, ah
+        call    cfg_check
+        mov     word [r_count], WAIT_SECONDS
         jnz     .configured
+        mov     word [r_count], WAIT_SECONDS_NOIMG
+        test    byte [r_menu], BD_MENU_MODE
+        jnz     .configured                     ; the boot menu can still pick one
+.noimg:
         mov     si, msg_noimg
         jmp     chain19_msg
 .configured:
@@ -300,7 +332,6 @@ int19_entry:
         ; not mounted: CMD_DFSSTAT reads NODRIVE, or (a transaction left
         ; READY) BDINFO answers state 4. Checked once per tick, Esc skips.
         mov     byte [r_shown], 0
-        mov     word [r_count], WAIT_SECONDS
         xor     ax, ax
         mov     es, ax
         mov     si, [es:046Ch]
@@ -354,6 +385,24 @@ int19_entry:
         je      .mounted
         call    crlf
 .mounted:
+        ; ---- boot menu -----------------------------------------------------
+        mov     al, [r_menu]
+        and     al, BD_MENU_MODE
+        jz      .nomenu
+        cmp     al, BD_MENU_ALWAYS
+        je      .menu
+        call    menu_prompt                     ; 0 go on, 1 the menu, 2 Esc
+        cmp     al, 1
+        jb      .nomenu
+        je      .menu
+        mov     si, msg_skipped
+        jmp     chain19_msg
+.menu:
+        call    boot_menu
+        call    cfg_check                       ; what the menu left configured
+.nomenu:
+        cmp     byte [r_cfg], 0
+        je      .noimg
         ; ---- open and present the images -------------------------------------
         mov     byte [r_units], 0
         mov     di, u_fd
@@ -411,6 +460,11 @@ int19_entry:
         jz      .hdfirst
         test    byte [r_units], 2
         jz      .order
+        mov     al, [r_bootsel]                 ; picked in the boot menu?
+        cmp     al, BD_KIND_FLOPPY
+        je      .order
+        cmp     al, BD_KIND_HARDDISK
+        je      .hdfirst
         test    byte [r_opts], BD_OPT_BOOT_HD
         jz      .order
 .hdfirst:
@@ -527,14 +581,44 @@ catch_chain:
         pop     ax
         jmp     far [cs:HDR_OLD19]
 
+; cfg_check: reads whether image names are configured. [r_cfg] = 0 and ZF=1:
+; none. [r_probe] = the unit that tells us about the drive: the floppy if
+; configured, else the hard disk. Clobbers AX, DX.
+cfg_check:
+        mov     al, CMD_BDFDNAME
+        call    rd8
+        mov     ah, al
+        mov     al, CMD_BDHDNAME
+        call    rd8
+        mov     byte [r_probe], 1
+        or      ah, ah
+        jz      .p1
+        mov     byte [r_probe], 0
+.p1:
+        or      al, ah
+        mov     [r_cfg], al
+        ret
+
 ; is_mounted: CF=0 when the USB drive is mounted: CMD_DFSSTAT is not
 ; NODRIVE and BDINFO (no OPEN) for unit [r_probe] does not answer state 4.
+; With no image configured BDINFO has nothing to say (state 0); an empty
+; BDLIST of the root answers 80h without a drive instead.
 ; Clobbers AX, CX, DX (not SI, DI, ES).
 is_mounted:
         mov     al, CMD_DFSSTAT
         call    rd8
         cmp     al, DFS_NODRIVE
         je      .no
+        cmp     byte [r_cfg], 0
+        jne     .info
+        xor     ax, ax
+        xor     cx, cx
+        push    word [m_plen]
+        mov     [m_plen], ax                    ; the root
+        call    bdlist
+        pop     word [m_plen]
+        ret
+.info:
         mov     al, [r_probe]
         xor     ah, ah
         call    bdinfo
@@ -769,6 +853,8 @@ dpt_template:
 %include "xport.inc"
 %include "int13.inc"
 %include "print.inc"
+%include "menu.inc"
+%include "tune.inc"
 
 ; ---- messages -----------------------------------------------------------------
 msg_banner      db "PGBOOT ", PGBOOT_VERSION, ": ", 0
@@ -803,6 +889,14 @@ msg_xerr        db ": card error ", 0
 msg_rderr       db ": boot sector read error ", 0
 msg_nosig       db ": not bootable (no 55AAh signature)", 0
 msg_booting     db "booting ", 0
+msg_mprompt     db "press M for the boot menu (Esc skips)... ", 0
+msg_mtitle      db " PGBOOT ", PGBOOT_VERSION, " - PicoGUS boot menu", 0
+msg_mhelp       db " Enter boot/open   Space insert   A,C eject   S save as default   Esc done", 0
+msg_mfolder     db " Folder: ", 0
+msg_mdir        db "<DIR>", 0
+msg_mempty      db " No disk images or folders here", 0
+msg_mlisterr    db " Cannot read the USB drive", 0
+msg_msaved      db " Saved: these images are used from now on", 0
 
 code_end:
 

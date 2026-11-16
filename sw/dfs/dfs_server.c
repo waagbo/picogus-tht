@@ -342,7 +342,7 @@ uint16_t dfs_process(uint8_t *buf, uint16_t req_len, uint16_t buf_size) {
         alen = do_diag(pl, maxpl);
         goto out;
     }
-    if (al == BD_AL_INFO || al == BD_AL_READ || al == BD_AL_WRITE) {
+    if (al == BD_AL_INFO || al == BD_AL_READ || al == BD_AL_WRITE || al == BD_AL_LIST) {
         /* PGBOOT (sw/bootdisk/PROTOCOL.md): answers with INT 13h status codes
          * and reports "no drive" itself, so it bypasses the drive checks */
         alen = bd_process(al, pl, plen, pl, maxpl, &ax);

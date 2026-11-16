@@ -47,6 +47,12 @@
 #ifndef CMD_BDOPTS
 #define CMD_BDOPTS 0x8A
 #endif
+#ifndef CMD_BDMENU
+#define CMD_BDMENU 0x8B
+#endif
+#ifndef CMD_BDTUNE
+#define CMD_BDTUNE 0x8C
+#endif
 
 #define SIM_FWSTRING "pgcard-sim v1.0 (PicoGUS card simulator)"
 
@@ -91,6 +97,8 @@ static bool opt_persist;
 static char bd_fd_name[BD_NAME_BUF];
 static char bd_hd_name[BD_NAME_BUF];
 static uint8_t bd_opts;
+static uint8_t bd_menu = BD_MENU_DEFAULT;
+static uint8_t bd_tune = BD_TUNE_DEFAULT;
 
 /* ---- core 0 state (mirrors sw/picogus.cpp) ---------------------------------- */
 
@@ -134,7 +142,7 @@ static bool is_known_reg(uint8_t r) {
     case CMD_SAVE: case CMD_REBOOT: case CMD_DEFAULTS: case CMD_HWTYPE: case CMD_FLASH:
     case CMD_DFSSTAT: case CMD_DFSREQ: case CMD_DFSEXEC: case CMD_DFSRESP:
     case CMD_DFSINFO: case CMD_DFSMAXLEN: case CMD_DFSTIME: case CMD_DFSPORT:
-    case CMD_BDFDNAME: case CMD_BDHDNAME: case CMD_BDOPTS:
+    case CMD_BDFDNAME: case CMD_BDHDNAME: case CMD_BDOPTS: case CMD_BDMENU: case CMD_BDTUNE:
         return true;
     }
     return false;
@@ -161,6 +169,8 @@ static const char *reg_name(uint8_t r) {
     case CMD_BDFDNAME: return "BDFDNAME";
     case CMD_BDHDNAME: return "BDHDNAME";
     case CMD_BDOPTS: return "BDOPTS";
+    case CMD_BDMENU: return "BDMENU";
+    case CMD_BDTUNE: return "BDTUNE";
     }
     return is_known_reg(r) ? "other" : "UNKNOWN";
 }
@@ -176,6 +186,7 @@ static const char *al_name(uint8_t al) {
     case 0x24: return "SETTIME"; case 0x2E: return "SPOPNFIL";
     case 0xF0: return "ECHO"; case 0xF1: return "LONGNAME"; case 0xF2: return "DIAG";
     case 0xF3: return "BDINFO"; case 0xF4: return "BDREAD"; case 0xF5: return "BDWRITE";
+    case 0xF6: return "BDLIST";
     }
     return "?";
 }
@@ -212,6 +223,11 @@ static void log_request(void) {
         uint32_t tok = (uint32_t)(pl[6] | (pl[7] << 8) | (pl[8] << 16) | ((uint32_t)pl[9] << 24));
         logmsg("REQ #%u %-9s len=%u unit=%u count=%u lba=%u token=%08x (%u bytes streamed)",
                frame_no, al_name(al), len, pl[0], pl[1], lba, tok, req_bytes);
+    } else if (al == 0xF6) {
+        uint32_t n = req_bytes > 8 ? req_bytes - 8 : 0;
+        logmsg("REQ #%u %-9s len=%u start=%u max=%u dir=\"%.*s\" (%u bytes streamed)",
+               frame_no, al_name(al), len, pl[0] | (pl[1] << 8), pl[2],
+               (int)(n > CAP - 8 ? CAP - 8 : n), (const char *)pl + 4, req_bytes);
     } else if (al == 0xF3) {
         logmsg("REQ #%u %-9s len=%u unit=%u flags=%02x (%u bytes streamed)",
                frame_no, al_name(al), len, pl[0], pl[1], req_bytes);
@@ -313,14 +329,16 @@ static void write_high(uint8_t v) {
     }
     switch (sel_reg) {
     case CMD_BOOTMODE: startup_mode = v; break;
-    case CMD_SAVE: logmsg("CMD_SAVE: settings saved (fd=\"%s\" hd=\"%s\" opts=%02x dfsport=%03x)",
-                          bd_fd_name, bd_hd_name, bd_opts, dfs_base); break;
+    case CMD_SAVE: logmsg("CMD_SAVE: settings saved (fd=\"%s\" hd=\"%s\" opts=%02x menu=%02x tune=%u dfsport=%03x)",
+                          bd_fd_name, bd_hd_name, bd_opts, bd_menu, bd_tune, dfs_base); break;
     case CMD_REBOOT: logmsg("CMD_REBOOT: card reboot is not simulated"); break;
     case CMD_DEFAULTS:              /* getDefaultSettings() + the floppy eject of picogus.cpp */
         logmsg("CMD_DEFAULTS: settings reset");
         memset(bd_fd_name, 0, sizeof(bd_fd_name));
         memset(bd_hd_name, 0, sizeof(bd_hd_name));
         bd_opts = 0;
+        bd_menu = BD_MENU_DEFAULT;
+        bd_tune = BD_TUNE_DEFAULT;
         dfs_base = DFS_DEFAULT_DATA_PORT;
         bd_ctl_name_select(BD_UNIT_FD);
         bd_ctl_name_write(BD_UNIT_FD, 0);
@@ -340,9 +358,11 @@ static void write_high(uint8_t v) {
         if (base == 0 || dfs_port_valid(base)) dfs_base = base;
         break;
     }
-    case CMD_BDFDNAME: bd_ctl_name_write(BD_UNIT_FD, v); if (!v && sim_log_level >= 1) logmsg("BDFDNAME commit"); break;
-    case CMD_BDHDNAME: bd_ctl_name_write(BD_UNIT_HD, v); if (!v && sim_log_level >= 1) logmsg("BDHDNAME commit"); break;
+    case CMD_BDFDNAME: bd_ctl_name_write(BD_UNIT_FD, v); if (!v && sim_log_level >= 1) logmsg("BDFDNAME commit \"%s\"", bd_fd_name); break;
+    case CMD_BDHDNAME: bd_ctl_name_write(BD_UNIT_HD, v); if (!v && sim_log_level >= 1) logmsg("BDHDNAME commit \"%s\"", bd_hd_name); break;
     case CMD_BDOPTS: bd_ctl_opts_write(v); break;
+    case CMD_BDMENU: bd_ctl_menu_write(v); break;
+    case CMD_BDTUNE: bd_ctl_tune_write(v); break;
     default: plain_regs[sel_reg] = v; break;
     }
 }
@@ -392,6 +412,8 @@ static uint8_t read_high(void) {
     case CMD_BDFDNAME: return bd_ctl_name_read(BD_UNIT_FD);
     case CMD_BDHDNAME: return bd_ctl_name_read(BD_UNIT_HD);
     case CMD_BDOPTS: return bd_ctl_opts_read();
+    case CMD_BDMENU: return bd_ctl_menu_read();
+    case CMD_BDTUNE: return bd_ctl_tune_read();
     case CMD_DFSREQ: case CMD_DFSEXEC: case CMD_DFSRESP: case CMD_DFSTIME:
         return 0xFF;
     }
@@ -510,6 +532,8 @@ static void usage(void) {
         "  --fd NAME            floppy image path on the stick (Settings.BootDisk fd name)\n"
         "  --hd NAME            hard disk image path on the stick\n"
         "  --opts N             CMD_BDOPTS value (bit0 fd ro, bit1 hd ro, bit2 rom off, bit3 boot hd)\n"
+        "  --menu N             CMD_BDMENU value: mode (0 off, 1 on a key, 2 always) + 4 * seconds (default 13)\n"
+        "  --tune N             CMD_BDTUNE value: start-up tune 0-3 (default 1)\n"
         "  --mount-delay-ms N   report NODRIVE for N ms after the bridge connects\n"
         "  --dfsport N          PGDFS data window base (default 0x1d4, 0 = disabled)\n"
         "  --busy-polls N       status polls that see BUSY before a request is served (default 1)\n"
@@ -525,6 +549,8 @@ int main(int argc, char **argv) {
         { "fd", required_argument, 0, 'f' },
         { "hd", required_argument, 0, 'h' },
         { "opts", required_argument, 0, 'o' },
+        { "menu", required_argument, 0, 'm' },
+        { "tune", required_argument, 0, 't' },
         { "mount-delay-ms", required_argument, 0, 'd' },
         { "dfsport", required_argument, 0, 'p' },
         { "busy-polls", required_argument, 0, 'b' },
@@ -543,6 +569,8 @@ int main(int argc, char **argv) {
         case 'f': snprintf(bd_fd_name, sizeof(bd_fd_name), "%s", optarg); break;
         case 'h': snprintf(bd_hd_name, sizeof(bd_hd_name), "%s", optarg); break;
         case 'o': bd_opts = (uint8_t)strtoul(optarg, NULL, 0); break;
+        case 'm': bd_menu = (uint8_t)strtoul(optarg, NULL, 0); break;
+        case 't': bd_tune = (uint8_t)strtoul(optarg, NULL, 0); break;
         case 'd': opt_mount_delay_ms = strtol(optarg, NULL, 0); break;
         case 'p': dfs_base = (uint16_t)strtoul(optarg, NULL, 0); break;
         case 'b': opt_busy_polls = atoi(optarg); break;
@@ -569,6 +597,7 @@ int main(int argc, char **argv) {
 
     /* card boot, core 0: settings, then the servers (before core 1 starts) */
     bd_init(bd_fd_name, bd_hd_name, &bd_opts);
+    bd_init_ui(&bd_menu, &bd_tune);
     /* per-boot nonce for the image tokens: a new sim process is a new card boot */
     bd_set_boot_nonce((uint32_t)time(NULL) ^ ((uint32_t)getpid() << 16) ^ (uint32_t)now_ms());
     dfs_init();

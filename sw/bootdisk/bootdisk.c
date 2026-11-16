@@ -86,6 +86,8 @@
 
 static char    *cfg_name[BD_UNITS];         /* settings storage, BD_NAME_BUF each */
 static uint8_t *cfg_opts;
+static uint8_t *cfg_menu;                   /* CMD_BDMENU, CMD_BDTUNE storage */
+static uint8_t *cfg_tune;
 static uint8_t  wr_pos[BD_UNITS];           /* core 0 only */
 static uint8_t  rd_pos[BD_UNITS];           /* core 0 only */
 static volatile uint32_t commit_seq[BD_UNITS];  /* written by core 0 only */
@@ -119,9 +121,12 @@ static uint32_t  boot_nonce;
 #if FF_USE_FASTSEEK
 static DWORD     clmt_pool[BD_CLMT_POOL];
 #endif
-static FILINFO   fno;               /* 8.3 alias lookup */
+static FILINFO   fno;               /* 8.3 alias lookup, BDLIST */
+static DIR       list_dir;          /* BDLIST */
+static char      list_path[BD_PATH_BUF];
 static bd_sec0_t sec0;              /* identification scratch */
 static uint8_t   scratch[128];
+_Static_assert(sizeof(scratch) >= BD_NAME_BUF, "scratch holds a path for BDLIST");
 
 static uint16_t get16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 static uint32_t get32(const uint8_t *p) { return (uint32_t)get16(p) | ((uint32_t)get16(p + 2) << 16); }
@@ -171,6 +176,33 @@ uint8_t bd_ctl_opts_read(void) {
 
 void bd_ctl_opts_write(uint8_t v) {
     if (cfg_opts) *cfg_opts = (uint8_t)(v & BD_OPT_MASK);
+}
+
+/* Unusable values never get stored, so the ROM need not check them. */
+static uint8_t menu_clean(uint8_t v) {
+    uint8_t mode = v & BD_MENU_MODE_MASK;
+    uint8_t wait = (uint8_t)((v >> BD_MENU_WAIT_SHIFT) & BD_MENU_WAIT_MAX);
+    if (mode > BD_MENU_ALWAYS) mode = BD_MENU_KEY;
+    if (wait == 0) wait = BD_MENU_WAIT_DEFAULT;
+    return (uint8_t)((wait << BD_MENU_WAIT_SHIFT) | mode);
+}
+
+uint8_t bd_ctl_menu_read(void) {
+    return (uint8_t)(menu_clean(cfg_menu ? *cfg_menu : BD_MENU_DEFAULT) | BD_UI_SIGNATURE);
+}
+
+void bd_ctl_menu_write(uint8_t v) {
+    if (cfg_menu) *cfg_menu = menu_clean(v);
+}
+
+uint8_t bd_ctl_tune_read(void) {
+    uint8_t t = cfg_tune ? *cfg_tune : BD_TUNE_DEFAULT;
+    if (t > BD_TUNE_MAX) t = 0;
+    return (uint8_t)(t | BD_UI_SIGNATURE);
+}
+
+void bd_ctl_tune_write(uint8_t v) {
+    if (cfg_tune && v <= BD_TUNE_MAX) *cfg_tune = v;
 }
 
 /* ================= core 1 ==================================================== */
@@ -487,6 +519,13 @@ void bd_init(char *fd_name, char *hd_name, uint8_t *opts) {
     mounted = false;
 }
 
+void bd_init_ui(uint8_t *menu, uint8_t *tune) {
+    cfg_menu = menu;
+    cfg_tune = tune;
+    if (menu) *menu = menu_clean(*menu);            /* erased flash included */
+    if (tune && *tune > BD_TUNE_MAX) *tune = 0;
+}
+
 void bd_set_boot_nonce(uint32_t nonce) {
     boot_nonce = nonce;
 }
@@ -695,6 +734,134 @@ static uint16_t do_write(const uint8_t *req, uint16_t req_len, uint16_t *ax) {
     return 0;
 }
 
+/* ---- BDLIST: what the boot menu shows ----------------------------------------- */
+
+/* File name extensions offered as disk images, upper case */
+static const char list_ext[][4] = { "IMG", "IMA", "VFD", "FLP", "DSK", "VHD", "HDD" };
+#define LIST_EXT_HD     5       /* from here on: always a hard disk */
+
+/* What the entry in fno is for the menu: BD_KIND_*, or -1 for "not listed"
+ * (hidden and system entries, the volume label, other file types). */
+static int list_kind(void) {
+    const char *dot = NULL, *p;
+    char ext[4];
+    size_t i;
+
+    if (fno.fattrib & (AM_HID | AM_SYS)) return -1;
+    if (fno.fattrib & AM_DIR) return BD_KIND_DIR;
+    for (p = fno.fname; *p; p++) {
+        if (*p == '.') dot = p;
+    }
+    if (dot == NULL || strlen(dot + 1) != 3) return -1;
+    for (i = 0; i < 3; i++) ext[i] = upper(dot[1 + i]);
+    ext[3] = 0;
+    for (i = 0; i < sizeof(list_ext) / sizeof(list_ext[0]); i++) {
+        if (memcmp(ext, list_ext[i], 4) != 0) continue;
+        if (i >= LIST_EXT_HD) return BD_KIND_HARDDISK;
+        return (fno.fsize <= BD_FLOPPY_MAX_BYTES) ? BD_KIND_FLOPPY : BD_KIND_HARDDISK;
+    }
+    return -1;
+}
+
+/* One 48-byte entry: the 8.3 name the ROM builds paths from, and the long
+ * name it shows (cut with "..." when it does not fit). */
+static void list_put(uint8_t *e, int kind, uint8_t attr, uint32_t sectors, const char *sfn, const char *disp) {
+    size_t n = strlen(disp), k = strlen(sfn);
+    if (k > BD_LIST_SFN_LEN - 1) k = BD_LIST_SFN_LEN - 1;
+    memset(e, 0, BD_LIST_ENTRY_LEN);
+    e[BD_LIST_OFF_KIND] = (uint8_t)kind;
+    e[BD_LIST_OFF_FLAGS] = (attr & AM_RDO) ? BD_FLAG_RO : 0;
+    put32(e + BD_LIST_OFF_SECTORS, sectors);
+    memcpy(e + BD_LIST_OFF_SFN, sfn, k);
+    if (n > BD_LIST_DISP_LEN) {
+        memcpy(e + BD_LIST_OFF_DISP, disp, BD_LIST_DISP_LEN - 3);
+        memcpy(e + BD_LIST_OFF_DISP + BD_LIST_DISP_LEN - 3, "...", 3);
+        n = BD_LIST_DISP_LEN;
+    } else {
+        memcpy(e + BD_LIST_OFF_DISP, disp, n);
+    }
+    e[BD_LIST_OFF_DISPLEN] = (uint8_t)n;
+}
+
+/* The directories of a directory (".." first, below the root), then its
+ * disk images, each group in directory order. The ROM asks for a screenful
+ * at a time by index, so every request walks the directory twice; nothing
+ * is kept between requests and the listing follows what is on the drive. */
+static uint16_t do_list(const uint8_t *req, uint16_t req_len, uint8_t *answ, uint16_t maxpl, uint16_t *ax) {
+    char *raw = (char *)scratch;    /* not on core 1's small stack */
+    uint16_t start, total = 0;
+    unsigned want, room, count = 0;
+    size_t plen;
+    int pass;
+
+    if (req_len < BD_LIST_REQ_LEN || maxpl < BD_LIST_HDR_LEN) {
+        *ax = BD_ST_BADCMD;
+        return 0;
+    }
+    start = get16(req);
+    want = req[2];
+    plen = (size_t)(req_len - BD_LIST_REQ_LEN);
+    if (plen > BD_NAME_MAX) {
+        *ax = BD_ST_BADCMD;
+        return 0;
+    }
+    memcpy(raw, req + BD_LIST_REQ_LEN, plen);       /* answ may alias req: take the path first */
+    raw[plen] = 0;
+    norm_path(list_path, sizeof(list_path), raw);
+    if (list_path[1] == 0) list_path[0] = 0;        /* "\\" alone is the root, like "" */
+    if (!mounted) {
+        *ax = BD_ST_NOTREADY;
+        return 0;
+    }
+    room = (unsigned)(maxpl - BD_LIST_HDR_LEN) / BD_LIST_ENTRY_LEN;
+    if (want > room) want = room;
+
+    switch (f_opendir(&list_dir, list_path[0] ? list_path : "/")) {
+    case FR_OK:
+        break;
+    case FR_NO_PATH: case FR_NO_FILE: case FR_INVALID_NAME:
+        *ax = BD_ST_NODIR;
+        return 0;
+    default:
+        *ax = BD_ST_CTRLFAIL;
+        return 0;
+    }
+    if (list_path[0]) {                             /* below the root: the way back up */
+        if (start == 0 && want > 0) {
+            list_put(answ + BD_LIST_HDR_LEN, BD_KIND_DIR, 0, 0, "..", "..");
+            count = 1;
+        }
+        total = 1;
+    }
+    for (pass = 0; pass < 2; pass++) {
+        if (pass && f_readdir(&list_dir, NULL) != FR_OK) goto fail;     /* rewind */
+        for (;;) {
+            int kind;
+            if (f_readdir(&list_dir, &fno) != FR_OK) goto fail;
+            if (fno.fname[0] == 0) break;
+            kind = list_kind();
+            if (kind < 0 || (kind == BD_KIND_DIR) != (pass == 0)) continue;
+            if (total >= start && count < want) {
+                list_put(answ + BD_LIST_HDR_LEN + count * BD_LIST_ENTRY_LEN, kind, fno.fattrib,
+                         (uint32_t)(fno.fsize / BD_SECTOR),
+                         fno.altname[0] ? fno.altname : fno.fname, fno.fname);
+                count++;
+            }
+            if (total < 0xFFFF) total++;
+        }
+    }
+    f_closedir(&list_dir);
+    put16(answ, total);
+    answ[2] = (uint8_t)count;
+    answ[3] = 0;
+    *ax = BD_ST_OK;
+    return (uint16_t)(BD_LIST_HDR_LEN + count * BD_LIST_ENTRY_LEN);
+fail:
+    f_closedir(&list_dir);
+    *ax = BD_ST_CTRLFAIL;
+    return 0;
+}
+
 uint16_t bd_process(uint8_t al, const uint8_t *req, uint16_t req_len,
                     uint8_t *answ, uint16_t maxpl, uint16_t *ax) {
     bd_tasks();                     /* a floppy commit applies before anything is served */
@@ -702,6 +869,7 @@ uint16_t bd_process(uint8_t al, const uint8_t *req, uint16_t req_len,
     case BD_AL_INFO:  return do_info(req, req_len, answ, maxpl, ax);
     case BD_AL_READ:  return do_read(req, req_len, answ, maxpl, ax);
     case BD_AL_WRITE: return do_write(req, req_len, ax);
+    case BD_AL_LIST:  return do_list(req, req_len, answ, maxpl, ax);
     default:
         *ax = BD_ST_BADCMD;
         return 0;

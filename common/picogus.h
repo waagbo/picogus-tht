@@ -151,6 +151,9 @@ typedef enum {
 #define CMD_BDHDNAME   0x89 // string (DATA_PORT_HIGH): hard disk image path; select rewinds, 0 commits (used from the next boot)
 #define CMD_BDOPTS     0x8A // byte (DATA_PORT_HIGH): bit 0 floppy read-only, 1 hard disk read-only, 2 ROM off, 3 boot the
                             // hard disk first; reads return the value | 80h (firmware without PGBOOT reads FFh)
+#define CMD_BDMENU     0x8B // byte (DATA_PORT_HIGH): boot menu of the ROM: bits 0-1 0 off, 1 offered for a few seconds, 2 always;
+                            // bits 2-5 those seconds (1-15); reads return the value | 40h (firmware without the menu reads FFh)
+#define CMD_BDTUNE     0x8C // byte (DATA_PORT_HIGH): start-up tune on the PC speaker, 0 = silent, 1-3; reads return the value | 40h
 
 #define CMD_DEFAULTS   0xE0 // Select reset to defaults register
 #define CMD_SAVE       0xE1 // Select save settings register

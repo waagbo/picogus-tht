@@ -322,6 +322,8 @@ __force_inline void select_picogus(uint8_t value) {
         bd_ctl_name_select(BD_UNIT_HD);
         break;
     case CMD_BDOPTS:
+    case CMD_BDMENU:
+    case CMD_BDTUNE:
         break;
 #endif // PGDFS
     default:
@@ -612,6 +614,12 @@ __force_inline void write_picogus_high(uint8_t value) {
     case CMD_BDOPTS: // PGBOOT options
         bd_ctl_opts_write(value);
         break;
+    case CMD_BDMENU: // PGBOOT boot menu mode and wait
+        bd_ctl_menu_write(value);
+        break;
+    case CMD_BDTUNE: // PGBOOT start-up tune
+        bd_ctl_tune_write(value);
+        break;
 #endif // PGDFS
     }
 }
@@ -789,6 +797,10 @@ __force_inline uint8_t read_picogus_high(void) {
         return bd_ctl_name_read(BD_UNIT_HD);
     case CMD_BDOPTS: // PGBOOT options | 80h signature
         return bd_ctl_opts_read();
+    case CMD_BDMENU: // PGBOOT boot menu mode and wait | 40h signature
+        return bd_ctl_menu_read();
+    case CMD_BDTUNE: // PGBOOT start-up tune | 40h signature
+        return bd_ctl_tune_read();
 #endif // PGDFS
     case CMD_HWTYPE: // Hardware version
         return BOARD_TYPE;
@@ -1520,6 +1532,7 @@ int main()
     // PGBOOT: bind the image names and options in the settings (core 1 opens
     // the images when the USB drive mounts)
     bd_init(settings.BootDisk.fdImage, settings.BootDisk.hdImage, &settings.BootDisk.options);
+    bd_init_ui(&settings.BootDisk.menu, &settings.BootDisk.tune);
     // a different value on every card boot: image tokens from before a card
     // reboot (mode switch, firmware update) never match the images after it
     bd_set_boot_nonce(get_rand_32());

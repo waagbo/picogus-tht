@@ -104,6 +104,10 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /hdimage x    - hard disk image for C:, - to remove. Used from the next boot\n");
     pageprintf("   /bdopts n     - options, add up: 1 floppy read-only, 2 hard disk read-only,\n");
     pageprintf("                   4 ROM disabled, 8 boot the hard disk image. Default: 0\n");
+    pageprintf("   /bdmenu n     - boot menu of the ROM: 0 off, 1 offered at boot (press M),\n");
+    pageprintf("                   2 opens at every boot. Default: 1\n");
+    pageprintf("   /bdwait n     - seconds the ROM waits for M (1-15). Default: 3\n");
+    pageprintf("   /bdtune n     - start-up tune on the PC speaker: 0 off, 1-3. Default: 1\n");
     if (mode == GUS_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("GUS settings:\n");
@@ -1187,6 +1191,44 @@ static bool cmdBDOpts(const char* arg, const int cmd, const int cmd2, const int 
     return ctrlSendUint8(arg, cmd, 0, 15);
 }
 
+// The boot menu and the start-up tune: firmware with them reads CMD_BDMENU and
+// CMD_BDTUNE with bit 6 set and bit 7 clear; older firmware answers FFh
+static bool bd_ui_read(uint8_t cmd, uint8_t *value)
+{
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, cmd);
+    uint8_t v = inp(DATA_PORT_HIGH);
+    outp(CONTROL_PORT, 0xCC); // Knock again in case the register was unknown
+    *value = v & 0x3F;
+    return (v & 0xC0) == 0x40;
+}
+
+// /bdmenu (cmd2 = 0: the mode, bits 0-1 of CMD_BDMENU) and /bdwait (cmd2 = 1:
+// the seconds, bits 2-5), /bdtune (CMD_BDTUNE)
+static bool cmdBDMenu(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{
+    uint8_t old;
+    char* endptr;
+    unsigned long val = strtoul(arg, &endptr, 10);
+    unsigned long min = (cmd == CMD_BDMENU && cmd2) ? 1 : 0;
+    unsigned long max = (cmd == CMD_BDTUNE) ? 3 : (cmd2 ? 15 : 2);
+
+    if (!bd_ui_read((uint8_t)cmd, &old)) {
+        fprintf(stderr, "Error: this firmware has no PGBOOT boot menu (update the firmware).\n");
+        return false;
+    }
+    if (*endptr != '\0' || val < min || val > max) {
+        usage(gMode, false);
+        return false;
+    }
+    if (cmd == CMD_BDMENU) {
+        val = cmd2 ? ((old & 0x03) | (val << 2)) : ((old & 0x3C) | val);
+    }
+    outp(CONTROL_PORT, cmd);
+    outp(DATA_PORT_HIGH, (uint8_t)val);
+    return true;
+}
+
 static bool cmdCDLoadName(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     send_string(cmd, arg, 127);
@@ -1293,6 +1335,9 @@ ParseCommand parseCommands[] = {
     {"/fdimage", cmdBDImage, CMD_BDFDNAME, ARG_REQUIRE, "-"},
     {"/hdimage", cmdBDImage, CMD_BDHDNAME, ARG_REQUIRE, "-"},
     {"/bdopts", cmdBDOpts, CMD_BDOPTS, ARG_REQUIRE, "0"},
+    {"/bdmenu", cmdBDMenu, CMD_BDMENU, ARG_REQUIRE, "1"},
+    {"/bdwait", cmdBDMenu, CMD_BDMENU, ARG_REQUIRE, "3", 1},
+    {"/bdtune", cmdBDMenu, CMD_BDTUNE, ARG_REQUIRE, "1"},
     {"/mainvol", cmdSetVol, CMD_MAINVOL, ARG_REQUIRE, "100"},
     {"/oplvol", cmdSetVol, CMD_OPLVOL, ARG_REQUIRE, "100"},
     {"/sbvol", cmdSetVol, CMD_SBVOL, ARG_REQUIRE, "100"},
@@ -1555,7 +1600,7 @@ static void printPGDFSStatus()
 
 static void printBootDiskStatus()
 {
-    uint8_t opts;
+    uint8_t opts, menu, tune;
     char name[128];
 
     if (!bd_supported(&opts)) {
@@ -1569,6 +1614,19 @@ static void printBootDiskStatus()
            name[0] && (opts & 2) ? " (read-only)" : "");
     printf("PGBOOT options: %u (ROM %s%s)\n", opts, (opts & 4) ? "disabled" : "enabled",
            (opts & 8) ? ", boots the hard disk image" : "");
+    if (bd_ui_read(CMD_BDMENU, &menu) && bd_ui_read(CMD_BDTUNE, &tune)) {
+        static const char *modes[] = {"off", "offered at boot (press M)", "opens at every boot", "?"};
+        printf("PGBOOT boot menu: %s", modes[menu & 3]);
+        if ((menu & 3) == 1) {
+            printf(", for %u s", menu >> 2);
+        }
+        printf("; start-up tune: ");
+        if (tune) {
+            printf("%u\n", tune);
+        } else {
+            printf("off\n");
+        }
+    }
     outp(CONTROL_PORT, CMD_DFSPORT);
     if (inpw(DATA_PORT_LOW) == 0) {
         printf("PGBOOT needs PGDFS, which is disabled (pgusinit /dfsport 1D4 to enable)\n");

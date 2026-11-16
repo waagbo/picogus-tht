@@ -22,6 +22,7 @@ extern "C" {
 #define BD_AL_INFO      0xF3
 #define BD_AL_READ      0xF4
 #define BD_AL_WRITE     0xF5
+#define BD_AL_LIST      0xF6    /* directory listing for the ROM's boot menu */
 
 /* BDINFO request flags */
 #define BD_INFO_OPEN    0x01
@@ -69,9 +70,48 @@ extern "C" {
 #define BD_OPT_MASK         0x0F
 #define BD_OPTS_SIGNATURE   0x80    /* read value = opts | 80h (bit 6 clear) */
 
+/* BDLIST (PROTOCOL.md). Request: start index u16, max entries u8, flags u8
+ * (0), then the directory path (no terminator, empty = root). Answer: total
+ * entries u16, entries in this answer u8, reserved u8, then the entries. */
+#define BD_LIST_REQ_LEN     4
+#define BD_LIST_HDR_LEN     4
+#define BD_LIST_ENTRY_LEN   48
+#define BD_LIST_OFF_KIND     0  /* u8  BD_KIND_* */
+#define BD_LIST_OFF_FLAGS    1  /* u8  bit 0 read-only file */
+#define BD_LIST_OFF_SECTORS  2  /* u32 size in 512-byte sectors (0 for directories) */
+#define BD_LIST_OFF_DISPLEN  6  /* u8  length of the display name */
+#define BD_LIST_OFF_SFN      8  /* 13 bytes: 8.3 name, zero padded (what a path is built from) */
+#define BD_LIST_OFF_DISP    21  /* 27 bytes: long name for display, zero padded */
+#define BD_LIST_SFN_LEN     13
+#define BD_LIST_DISP_LEN    27
+
+#define BD_KIND_DIR         0   /* directory (".." first, below the root) */
+#define BD_KIND_FLOPPY      1   /* image the size of a floppy disk: goes to A: */
+#define BD_KIND_HARDDISK    2   /* any larger image, and every .VHD/.HDD: goes to C: */
+
+/* Largest file the boot menu offers as a floppy: 2.88 MB */
+#define BD_FLOPPY_MAX_BYTES 2949120UL
+
+/* CMD_BDMENU: bits 0-1 the mode, bits 2-5 the seconds the ROM waits for the
+ * menu key; reads return the value | 40h (bit 7 clear: firmware without the
+ * boot menu reads FFh). CMD_BDTUNE: the start-up tune, same signature. */
+#define BD_MENU_OFF         0   /* no boot menu: boot what is configured */
+#define BD_MENU_KEY         1   /* offer the menu for a few seconds at boot */
+#define BD_MENU_ALWAYS      2   /* open the menu at every boot */
+#define BD_MENU_MODE_MASK   0x03
+#define BD_MENU_WAIT_SHIFT  2
+#define BD_MENU_WAIT_MAX    15
+#define BD_MENU_WAIT_DEFAULT 3
+#define BD_MENU_DEFAULT     ((BD_MENU_WAIT_DEFAULT << BD_MENU_WAIT_SHIFT) | BD_MENU_KEY)
+#define BD_MENU_MASK        0x3F
+#define BD_TUNE_MAX         3   /* 0 = silent, 1..3 = the ROM's tunes */
+#define BD_TUNE_DEFAULT     1
+#define BD_UI_SIGNATURE     0x40
+
 /* INT 13h style status codes returned in AX */
 #define BD_ST_OK            0x00
 #define BD_ST_BADCMD        0x01
+#define BD_ST_NODIR         0x02    /* BDLIST: no such directory */
 #define BD_ST_WRPROT        0x03
 #define BD_ST_NOSECTOR      0x04
 #define BD_ST_CHANGED       0x06    /* floppy: token mismatch = media changed */
@@ -87,12 +127,20 @@ void bd_init(char *fd_name, char *hd_name, uint8_t *opts);
  * matches an image opened after it. Call after bd_init(); 0 if never called. */
 void bd_set_boot_nonce(uint32_t nonce);
 
+/* Binds the boot menu and start-up tune settings (one byte each; NULL: the
+ * registers read their defaults and ignore writes). Call after bd_init(). */
+void bd_init_ui(uint8_t *menu, uint8_t *tune);
+
 /* ---- core 0: control register handlers (O(1), no FatFs, ISR-safe) ----- */
 void    bd_ctl_name_select(uint8_t unit);           /* register selected: rewind */
 void    bd_ctl_name_write(uint8_t unit, uint8_t c); /* append; 0 commits */
 uint8_t bd_ctl_name_read(uint8_t unit);             /* next char; 0 at the end, then rewinds */
 uint8_t bd_ctl_opts_read(void);                     /* opts | BD_OPTS_SIGNATURE */
 void    bd_ctl_opts_write(uint8_t v);
+uint8_t bd_ctl_menu_read(void);                     /* menu | BD_UI_SIGNATURE */
+void    bd_ctl_menu_write(uint8_t v);
+uint8_t bd_ctl_tune_read(void);                     /* tune | BD_UI_SIGNATURE */
+void    bd_ctl_tune_write(uint8_t v);
 
 /* ---- core 1 ------------------------------------------------------------- */
 void bd_tasks(void);                /* from dfs_tasks(): applies committed names */

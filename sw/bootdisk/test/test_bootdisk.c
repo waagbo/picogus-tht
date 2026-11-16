@@ -495,6 +495,37 @@ static void unmount_drive(void) {
     f_unmount("");
 }
 
+static void test_ui_registers(void) {
+    static uint8_t menu, tune;
+    SECTION("boot menu and tune registers (core 0)");
+    bd_init_ui(NULL, NULL);
+    CHECK(bd_ctl_menu_read() == (BD_UI_SIGNATURE | BD_MENU_DEFAULT), "unbound menu reads the default: %02X", bd_ctl_menu_read());
+    CHECK(bd_ctl_tune_read() == (BD_UI_SIGNATURE | BD_TUNE_DEFAULT), "unbound tune reads the default: %02X", bd_ctl_tune_read());
+    bd_ctl_menu_write(2);
+    bd_ctl_tune_write(0);
+    CHECK(bd_ctl_menu_read() == (BD_UI_SIGNATURE | BD_MENU_DEFAULT), "unbound writes are ignored");
+
+    menu = 0xFF;                                        /* erased flash */
+    tune = 0xFF;
+    bd_init_ui(&menu, &tune);
+    CHECK(menu == ((15 << 2) | BD_MENU_KEY) && tune == 0, "erased flash: menu %02X tune %u", menu, tune);
+    CHECK((bd_ctl_menu_read() & 0xC0) == 0x40 && (bd_ctl_tune_read() & 0xC0) == 0x40,
+          "signature: bit 6 set, bit 7 clear (old firmware reads FFh)");
+    bd_ctl_menu_write(BD_MENU_OFF);
+    CHECK(menu == ((BD_MENU_WAIT_DEFAULT << 2) | BD_MENU_OFF), "mode alone gets the default wait: %02X", menu);
+    bd_ctl_menu_write((7 << 2) | BD_MENU_ALWAYS);
+    CHECK(bd_ctl_menu_read() == (0x40 | (7 << 2) | 2), "mode 2, 7 s: %02X", bd_ctl_menu_read());
+    bd_ctl_menu_write(0xFF);
+    CHECK(menu == ((15 << 2) | BD_MENU_KEY), "mode 3 is stored as 1, high bits dropped: %02X", menu);
+    bd_ctl_tune_write(3);
+    CHECK(bd_ctl_tune_read() == 0x43, "tune 3: %02X", bd_ctl_tune_read());
+    bd_ctl_tune_write(4);
+    CHECK(tune == 3, "unknown tune ignored: %u", tune);
+    bd_ctl_tune_write(0);
+    CHECK(bd_ctl_tune_read() == 0x40, "tune off: %02X", bd_ctl_tune_read());
+    bd_init_ui(NULL, NULL);
+}
+
 static void test_setup(void) {
     static uint8_t work[FF_MAX_SS];
     MKFS_PARM opt = { FM_FAT32 | FM_SFD, 1, 0, 0, 512 };
@@ -1163,10 +1194,187 @@ static void test_unmount(void) {
     CHECK(frame(0, 0xF2, NULL, 0) == 0 && ans_len == 60, "DIAG");
 }
 
+/* ---- BDLIST ------------------------------------------------------------------- */
+
+typedef struct {
+    uint8_t  kind, flags, dlen;
+    uint32_t sectors;
+    char     sfn[BD_LIST_SFN_LEN + 1];
+    char     disp[BD_LIST_DISP_LEN + 1];
+} lent_t;
+
+static uint16_t list_total;
+static unsigned list_count;
+
+static uint16_t bdlist(const char *dir, uint16_t start, uint8_t max) {
+    uint8_t p[BD_LIST_REQ_LEN + 200];
+    size_t n = strlen(dir);
+    uint16_t ax;
+    wr16(p, start);
+    p[2] = max;
+    p[3] = 0;
+    memcpy(p + BD_LIST_REQ_LEN, dir, n);
+    ax = frame(0, BD_AL_LIST, p, (uint32_t)(BD_LIST_REQ_LEN + n));
+    list_total = 0;
+    list_count = 0;
+    if (ax != 0) {
+        CHECK(ans_len == 0, "failed BDLIST carries no payload (%u)", ans_len);
+        return ax;
+    }
+    CHECK(ans_len >= BD_LIST_HDR_LEN, "list answer length %u", ans_len);
+    list_total = rd16(pl);
+    list_count = pl[2];
+    CHECK(pl[3] == 0, "reserved byte");
+    CHECK(ans_len == BD_LIST_HDR_LEN + list_count * BD_LIST_ENTRY_LEN, "list length %u for %u entries", ans_len, list_count);
+    return ax;
+}
+
+static lent_t lent(unsigned i) {
+    const uint8_t *e = pl + BD_LIST_HDR_LEN + i * BD_LIST_ENTRY_LEN;
+    lent_t l;
+    memset(&l, 0, sizeof(l));
+    l.kind = e[BD_LIST_OFF_KIND];
+    l.flags = e[BD_LIST_OFF_FLAGS];
+    l.sectors = rd32(e + BD_LIST_OFF_SECTORS);
+    l.dlen = e[BD_LIST_OFF_DISPLEN];
+    memcpy(l.sfn, e + BD_LIST_OFF_SFN, BD_LIST_SFN_LEN);
+    memcpy(l.disp, e + BD_LIST_OFF_DISP, BD_LIST_DISP_LEN);
+    CHECK(e[7] == 0 && e[BD_LIST_OFF_SFN + BD_LIST_SFN_LEN - 1] == 0, "entry %u: reserved byte, terminated 8.3 name", i);
+    CHECK(l.dlen == strlen(l.disp), "entry %u: display length %u for '%s'", i, l.dlen, l.disp);
+    return l;
+}
+
+static bool lent_is(unsigned i, uint8_t kind, uint32_t sectors, const char *sfn, const char *disp) {
+    lent_t l = lent(i);
+    bool ok = l.kind == kind && l.sectors == sectors && strcmp(l.sfn, sfn) == 0 && strcmp(l.disp, disp) == 0;
+    if (!ok) printf("  entry %u: kind %u sectors %u sfn '%s' disp '%s'\n", i, l.kind, l.sectors, l.sfn, l.disp);
+    return ok;
+}
+
+static void test_list(void) {
+    char name[40];
+    info_t inf;
+    lent_t l;
+    unsigned i;
+
+    SECTION("BDLIST: the boot menu's directory listing");
+    unmount_drive();
+    CHECK(bdlist("", 0, 16) == BD_ST_NOTREADY, "no drive -> 80h");
+    f_mount(&fatfs, "", 1);
+    CHECK(f_mkdir("MENU") == FR_OK && f_mkdir("MENU/Alpha") == FR_OK &&
+          f_mkdir("MENU/Beta Long Directory Name Here") == FR_OK && f_mkdir("MENU/MANY") == FR_OK, "directories");
+    CHECK(make_image("MENU/README.TXT", 1, 1, NULL, NULL, 0), "a file that is no image");
+    CHECK(make_image("MENU/A.IMG", 1440, 1, NULL, NULL, 0), "720K");
+    CHECK(make_image("MENU/boot disk number one (copy).ima", 2880, 2, NULL, NULL, 0), "1.44M, long name");
+    CHECK(make_image("MENU/EXACT.dsk", 5760, 3, NULL, NULL, 0), "2.88M: the largest floppy");
+    CHECK(make_image("MENU/BIG.IMG", 5761, 4, NULL, NULL, 0), "one sector more: a hard disk");
+    CHECK(make_image("MENU/tiny.vhd", 64, 5, NULL, NULL, 0), "a VHD is a hard disk whatever its size");
+    CHECK(make_image("MENU/HIDDEN.IMG", 1, 6, NULL, NULL, 0) && f_chmod("MENU/HIDDEN.IMG", AM_HID, AM_HID) == FR_OK, "hidden image");
+    CHECK(make_image("MENU/RO.FLP", 720, 7, NULL, NULL, 0) && f_chmod("MENU/RO.FLP", AM_RDO, AM_RDO) == FR_OK, "read-only image");
+    CHECK(make_image("MENU/NOEXT", 1, 8, NULL, NULL, 0) && make_image("MENU/X.IM", 1, 8, NULL, NULL, 0) &&
+          make_image("MENU/Y.IMGX", 1, 8, NULL, NULL, 0), "names that only look like images");
+    for (i = 0; i < 100; i++) {
+        snprintf(name, sizeof(name), "MENU/MANY/F%03u.IMG", i);
+        if (!make_image(name, 1, 9, NULL, NULL, 0)) break;
+    }
+    CHECK(i == 100, "100 small images");
+    f_unmount("");
+    mount_drive();
+
+    /* a subdirectory: "..", the directories, then the images, in directory order */
+    CHECK(bdlist("\\MENU", 0, 255) == 0 && list_total == 10 && list_count == 10,
+          "\\MENU: total %u, %u entries", list_total, list_count);
+    CHECK(lent_is(0, BD_KIND_DIR, 0, "..", ".."), "the way up comes first");
+    CHECK(lent_is(1, BD_KIND_DIR, 0, "ALPHA", "Alpha"), "directory, long name for display");
+    CHECK(lent_is(2, BD_KIND_DIR, 0, "BETALO~1", "Beta Long Directory Name..."), "long directory name cut to 27");
+    CHECK(lent_is(3, BD_KIND_DIR, 0, "MANY", "MANY"), "third directory");
+    CHECK(lent_is(4, BD_KIND_FLOPPY, 1440, "A.IMG", "A.IMG"), "floppy image");
+    CHECK(lent_is(5, BD_KIND_FLOPPY, 2880, "BOOTDI~1.IMA", "boot disk number one (co..."), "long image name");
+    CHECK(lent_is(6, BD_KIND_FLOPPY, 5760, "EXACT.DSK", "EXACT.dsk"), "2.88M is a floppy");
+    CHECK(lent_is(7, BD_KIND_HARDDISK, 5761, "BIG.IMG", "BIG.IMG"), "larger is a hard disk");
+    CHECK(lent_is(8, BD_KIND_HARDDISK, 64, "TINY.VHD", "tiny.vhd"), "VHD is a hard disk");
+    CHECK(lent_is(9, BD_KIND_FLOPPY, 720, "RO.FLP", "RO.FLP") && (lent(9).flags & BD_FLAG_RO), "read-only flag");
+    CHECK(!(lent(4).flags & BD_FLAG_RO), "writable image has no flag");
+
+    /* the path as the ROM, a user or pgusinit may spell it */
+    CHECK(bdlist("MENU", 0, 1) == 0 && list_total == 10 && list_count == 1, "relative");
+    CHECK(bdlist("/MENU/", 0, 1) == 0 && list_total == 10, "slashes, trailing separator");
+    CHECK(bdlist("E:\\menu", 0, 1) == 0 && list_total == 10, "drive letter, lower case");
+
+    /* paging */
+    CHECK(bdlist("\\MENU", 3, 2) == 0 && list_total == 10 && list_count == 2 &&
+          lent_is(0, BD_KIND_DIR, 0, "MANY", "MANY") && lent_is(1, BD_KIND_FLOPPY, 1440, "A.IMG", "A.IMG"),
+          "start 3, two entries: across the directory/image boundary");
+    CHECK(bdlist("\\MENU", 9, 16) == 0 && list_count == 1 && lent_is(0, BD_KIND_FLOPPY, 720, "RO.FLP", "RO.FLP"), "last entry");
+    CHECK(bdlist("\\MENU", 10, 16) == 0 && list_total == 10 && list_count == 0, "start at the end: nothing");
+    CHECK(bdlist("\\MENU", 1000, 16) == 0 && list_total == 10 && list_count == 0, "start beyond the end");
+    CHECK(bdlist("\\MENU", 0, 0) == 0 && list_total == 10 && list_count == 0, "max 0: just the total");
+
+    /* a directory entered by its 8.3 alias, as the ROM builds the path */
+    CHECK(bdlist("\\MENU\\BETALO~1", 0, 16) == 0 && list_total == 1 && lent_is(0, BD_KIND_DIR, 0, "..", ".."),
+          "empty subdirectory: only the way up");
+    CHECK(bdlist("\\MENU\\Beta Long Directory Name Here", 0, 16) == 0 && list_total == 1, "and by its long name");
+
+    /* more than fits in a frame: as many whole entries as fit */
+    {
+        unsigned room = (DFS_BUF_SIZE - DFS_HDR_LEN - BD_LIST_HDR_LEN) / BD_LIST_ENTRY_LEN;
+        CHECK(bdlist("\\MENU\\MANY", 0, 255) == 0 && list_total == 101 && list_count == (room < 101 ? room : 101),
+              "101 entries, 255 asked: %u returned (room for %u)", list_count, room);
+        CHECK(lent_is(1, BD_KIND_FLOPPY, 1, "F000.IMG", "F000.IMG"), "first image after the way up");
+        CHECK(bdlist("\\MENU\\MANY", 96, 16) == 0 && list_count == 5 && lent_is(4, BD_KIND_FLOPPY, 1, "F099.IMG", "F099.IMG"),
+              "last page: %u entries", list_count);
+    }
+
+    /* the root has no way up; what the earlier tests left there is listed too */
+    CHECK(bdlist("", 0, 255) == 0 && list_count == list_total && list_total >= 4, "root: %u entries", list_total);
+    l = lent(0);
+    CHECK(l.kind == BD_KIND_DIR && strcmp(l.sfn, "..") != 0, "root starts with a directory, not '..': '%s'", l.sfn);
+    {
+        bool dirs_done = false, order = true, hd16 = false, fixed = false, junk = false;
+        for (i = 0; i < list_count; i++) {
+            l = lent(i);
+            if (l.kind != BD_KIND_DIR) dirs_done = true; else if (dirs_done) order = false;
+            if (strcmp(l.sfn, "HD16.IMG") == 0) hd16 = l.kind == BD_KIND_HARDDISK && l.sectors == 32768;
+            if (strcmp(l.sfn, "FIXED.VHD") == 0) fixed = l.kind == BD_KIND_HARDDISK && l.sectors == 8193;
+            if (strcmp(l.sfn, "FILLER.TMP") == 0) junk = true;
+        }
+        CHECK(order, "directories before images");
+        CHECK(hd16 && fixed && !junk, "HD16.IMG %d, FIXED.VHD %d, FILLER.TMP listed %d", hd16, fixed, junk);
+    }
+    {
+        uint16_t root_total = list_total;
+        char first[BD_LIST_SFN_LEN + 1];
+        strcpy(first, lent(0).sfn);
+        CHECK(bdlist("\\", 0, 1) == 0 && list_total == root_total && strcmp(lent(0).sfn, first) == 0,
+              "the root as a backslash: the same %u entries, no '..' ('%s')", list_total, lent(0).sfn);
+        CHECK(bdlist("/", 0, 1) == 0 && list_total == root_total && strcmp(lent(0).sfn, first) == 0, "and as a slash");
+        CHECK(bdlist("C:\\", 0, 1) == 0 && list_total == root_total, "and with a drive letter");
+    }
+
+    /* errors */
+    CHECK(bdlist("\\NOSUCH", 0, 16) == BD_ST_NODIR, "missing directory -> 02h");
+    CHECK(bdlist("\\MENU\\A.IMG", 0, 16) == BD_ST_NODIR, "a file is no directory -> 02h");
+    CHECK(frame(0, BD_AL_LIST, (const uint8_t *)"\0\0\x10", 3) == BD_ST_BADCMD && ans_len == 0, "short request -> 01h");
+    {
+        static uint8_t p[BD_LIST_REQ_LEN + BD_NAME_MAX + 1];
+        memset(p, 'A', sizeof(p));
+        wr16(p, 0); p[2] = 1; p[3] = 0;
+        CHECK(frame(0, BD_AL_LIST, p, sizeof(p)) == BD_ST_BADCMD, "path longer than a name -> 01h");
+    }
+
+    /* listing does not disturb an open image, and a listed name opens */
+    set_name(0, "\\MENU\\BOOTDI~1.IMA");
+    CHECK(get_info(0, BD_INFO_OPEN, &inf) == 0 && inf.state == BD_STATE_READY && inf.total == 2880, "image opened by its 8.3 path");
+    CHECK(bdlist("\\MENU", 0, 16) == 0 && list_total == 10, "list while the image is open");
+    CHECK(bdread(0, 1, 2000) == 0 && sector_ok(pl, 2000, 2), "the open image still reads");
+    set_name(0, "");
+}
+
 int main(void) {
     test_floppy_geometry();
     test_harddisk_geometry();
     test_registers();
+    test_ui_registers();
     test_setup();
     if (n_fails == 0) {
         test_no_drive();
@@ -1178,6 +1386,7 @@ int main(void) {
         test_sync();
         test_unmount();
         test_card_reboot();
+        test_list();
     }
     unmount_drive();
     ramdisk_free();

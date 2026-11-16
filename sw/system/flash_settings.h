@@ -116,6 +116,8 @@ typedef struct Settings {
         char fdImage[BD_NAME_BUF];  // PGBOOT floppy image path on the USB drive, "" = none
         char hdImage[BD_NAME_BUF];  // PGBOOT hard disk image path, "" = none
         uint8_t options;            // BD_OPT_* (CMD_BDOPTS)
+        uint8_t menu;               // boot menu mode and wait (CMD_BDMENU)
+        uint8_t tune;               // start-up tune on the PC speaker, 0 = silent (CMD_BDTUNE)
     } BootDisk;
 } Settings;
 

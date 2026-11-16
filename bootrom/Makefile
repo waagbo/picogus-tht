@@ -1,6 +1,6 @@
 # PGBOOT: PicoGUS boot ROM, RAM loader and EEPROM flasher.
 #
-#   make            PGBOOT.ROM PGBOOT88.ROM PGBOOT.COM PGFLASH.COM test/INT13TST.COM
+#   make            PGBOOT.ROM PGBOOT88.ROM PGBT256.BIN PGBOOT.COM PGFLASH.COM test/INT13TST.COM
 #   make check      verify the ROM images (size, header, checksum) and that the
 #                   8086-only code contains no 186+ instructions
 #   make clean
@@ -15,9 +15,9 @@ PYTHON  ?= python3
 NASMFLAGS = -f bin -w+all -w-unknown-warning -w-reloc-abs-word -w-reloc-abs-byte -w-reloc-abs-dword \
             -w-reloc-rel-word -w-reloc-rel-dword -Werror
 
-ROM_SRCS = pgboot.asm defs.inc xport.inc int13.inc print.inc
+ROM_SRCS = pgboot.asm defs.inc xport.inc int13.inc print.inc menu.inc tune.inc
 
-all: PGBOOT.ROM PGBOOT88.ROM PGBOOT.COM PGFLASH.COM test/INT13TST.COM
+all: PGBOOT.ROM PGBOOT88.ROM PGBT256.BIN PGBOOT.COM PGFLASH.COM test/INT13TST.COM
 
 PGBOOT.ROM: $(ROM_SRCS) mkrom.py
 	$(NASM) $(NASMFLAGS) -l pgboot.lst -o pgboot.bin pgboot.asm
@@ -27,6 +27,12 @@ PGBOOT.ROM: $(ROM_SRCS) mkrom.py
 PGBOOT88.ROM: $(ROM_SRCS) mkrom.py
 	$(NASM) $(NASMFLAGS) -DFORCE8088 -l pgboot88.lst -o pgboot88.bin pgboot.asm
 	$(PYTHON) mkrom.py pgboot88.bin $@
+
+# PGBOOT.ROM in each 8 KB quarter of a 32 KB chip: for a 28C256 written in an
+# EPROM programmer, whichever 8 KB the board's address switches select. Behind
+# a 32 KB window the BIOS finds all four; only the first one installs.
+PGBT256.BIN: PGBOOT.ROM mkrom.py
+	$(PYTHON) mkrom.py --x4 PGBOOT.ROM $@
 
 PGBOOT.COM: pgbootld.asm defs.inc
 	$(NASM) $(NASMFLAGS) -l pgbootld.lst -o $@ pgbootld.asm
@@ -44,6 +50,6 @@ check: PGBOOT.ROM PGBOOT88.ROM
 	$(PYTHON) cpucheck.py pgboot.lst out186 in186
 
 clean:
-	rm -f *.bin *.lst PGBOOT.ROM PGBOOT88.ROM PGBOOT.COM PGFLASH.COM test/INT13TST.COM
+	rm -f *.bin *.lst PGBOOT.ROM PGBOOT88.ROM PGBT256.BIN PGBOOT.COM PGFLASH.COM test/INT13TST.COM
 
 .PHONY: all check clean
