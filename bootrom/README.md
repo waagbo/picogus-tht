@@ -95,6 +95,7 @@ wrong kind can still be set with `pgusinit /fdimage` or `/hdimage`.
 | Space | put the image in its drive without booting: for a floppy **and** a hard disk at once, such as an installation disk with the hard disk image it installs to |
 | A, C | take the image out of A: or C: |
 | S | save: the images now in A: and C: become the ones used at every boot (`pgusinit /save` from the menu; it stores all of the card's settings) |
+| R | read the folder again, after changing the USB drive (Enter does the same while nothing is listed) |
 | Esc | leave the menu and boot what is in A: and C:, the floppy first unless option bit 3 says otherwise |
 
 The two lines under the title show what is in A: and C:. A selection that is
@@ -104,16 +105,22 @@ names (`\BOOTDI~1\DOSBOO~1.IMG`), which is what the boot messages and
 `pgusinit` then show; the list itself shows the long names, cut to 27
 characters.
 
-The menu needs an 80-column text screen (it switches a 40-column mode to
-80x25) and uses only normal and reverse video, so it works on MDA and
-Hercules cards too.
+The menu needs an 80-column text screen (from a 40-column or a graphics mode
+it switches to 80x25 text) and uses only normal and reverse video, so it
+works on MDA and Hercules cards too. A folder path too long for its row is
+shown as `...` and its end.
+
+With no image configured the ROM waits 5 seconds for the USB drive before it
+gives up on the menu, and 15 seconds when the menu is set to open at every
+boot (`/bdmenu 2`), as it does for a configured image.
 
 ## The start-up tune
 
 When the late init has found the card it plays a tune on the PC speaker:
 1 is four rising notes (half a second), 2 a short fanfare (a second), 3 a
 quick sweep. `pgusinit /bdtune 0` turns it off. A key ends the tune, and the
-key still counts (M opens the menu).
+key still counts: M opens the menu, Esc skips PGBOOT, and any other key also
+ends the wait for M and is left for the system that boots.
 
 ## Installing the ROM
 
@@ -156,7 +163,9 @@ Which chip, and which file:
 
 `PGBT256.BIN` holds the ROM in each quarter of the chip, so it is right for
 every switch setting. Behind a 32 KB window the BIOS finds all four copies;
-the first installs and the others see its hook and do nothing. A 28C256
+the first installs and the others see its hook and do nothing (when the
+first has nothing to install, for instance with the ROM disabled by
+`/bdopts`, each copy prints its line). A 28C256
 keeps 32 KB of the upper memory area away from EMM386, so the 28C64B is the
 better fit.
 
@@ -297,7 +306,7 @@ The loader fixes the checksum byte after it patches these fields.
    plays the tune `CMD_BDTUNE` names. If no image name is configured and
    the boot menu is off (or the firmware has none), it continues with the
    BIOS boot at once. Otherwise it waits for the USB drive: up to 15 s with
-   an image configured, 3 s without (`CMD_DFSSTAT` = FFh, BDINFO state 4,
+   an image configured or the menu in mode 2, else 5 s (`CMD_DFSSTAT` = FFh, BDINFO state 4,
    or an empty BDLIST answering 80h, means "not mounted yet"). A countdown
    is shown and Esc skips the wait (other keys, such as F5/F8 for DOS, stay
    in the keyboard buffer). Then comes the boot menu: opened at once in
@@ -433,7 +442,7 @@ PGBOOT 0.2: disabled (pgusinit /bdopts bit 2)
 Card found, floppy and hard disk image, the stick mounts a few seconds late:
 ```
 PGBOOT 0.2: PicoGUS found, data port 1D4h (186+)       [(8088) on an XT, (8088 forced) for PGBOOT88.ROM]
-PGBOOT: waiting for the USB drive (Esc skips)... 12    [only while not mounted; counts down from 15, or from 3 with no image configured]
+PGBOOT: waiting for the USB drive (Esc skips)... 12    [only while not mounted; counts down from 15, or from 5 with no image configured and menu mode 1]
 PGBOOT: press M for the boot menu (Esc skips)... 03    [menu mode 1; the screen is cleared when the menu closes]
 PGBOOT: A: \FD.IMG, 1440K
 PGBOOT: C: \HD.IMG, 31M                                [" (read-only)" appended when read-only]
@@ -473,6 +482,7 @@ simulator) covers these cases:
 * T17: the ROM four times in the option ROM area, as a 28C256 with
   `PGBT256.BIN` shows it behind a 32 KB window.
 * T18: `pgusinit /bdmenu /bdwait /bdtune`.
+* T19, T20: a folder seven levels deep and R; a stick without images.
 
 `tools/emu/README.md` has the full list.
 

@@ -16,7 +16,7 @@ set -u
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
 WORK=$EMU_CACHE/work
-TESTS=${*:-T0 S1 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18}
+TESTS=${*:-T0 S1 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18 T19 T20}
 TIMEOUT=${TIMEOUT:-90}
 ROM=$ROMDIR/PGBOOT.ROM
 ROM88=$ROMDIR/PGBOOT88.ROM
@@ -682,9 +682,72 @@ t_T18() {
     fi
 }
 
+# T19: seven folders deep: the folder row shows the end of a path that is too
+# long for it, R reads the folder again, the image at the bottom boots
+t_T19() {
+    local d i m
+    need_rom T19 "$ROM" || return
+    newwork T19
+    mk_floppy "$W/sub.img" "$SUB_AUTO"
+    echo x > "$W/x.txt"
+    mk_stick "$W/stick.img" "$W/x.txt" README.TXT
+    d=
+    for i in 1 2 3 4 5 6 7; do d=$d/DEEPDIR$i; mmd -i "$W/stick.img" "::$d"; done
+    mcopy -i "$W/stick.img" "$W/sub.img" "::$d/BOTTOM.IMG"
+    start_sim "$W" --stick "$W/stick.img" --menu 2 || { report T19 FAIL "sim did not start"; return; }
+    start_qemu "$W" -option-rom "$ROM" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 '<DIR> +DEEPDIR1$' 30 || { menu_fail T19 "the menu did not come up"; return; }
+    send_keys ret down ret down ret down ret down ret down ret down ret
+    wait_screen "$W" menu2 'BOTTOM\.IMG' 15 || { menu_fail T19 "did not reach the seventh folder"; return; }
+    # 63 characters of path: "..." and its last 51, then the position
+    m=$(on_screen menu2 'Folder: \.\.\.EPDIR2\\DEEPDIR3\\DEEPDIR4\\DEEPDIR5\\DEEPDIR6\\DEEPDIR7 +1/2' \
+        '<DIR> +\.\.$' 'A: +1440K +BOTTOM\.IMG$') || { menu_fail T19 "deep folder: missing$m"; return; }
+    [ "$(wc -l < "$W/menu2.txt")" -le 23 ] || { menu_fail T19 "the screen has more rows than the menu draws"; return; }
+    send_keys r
+    sleep 1
+    wait_screen "$W" menu3 'BOTTOM\.IMG' 10 || { menu_fail T19 "R lost the listing"; return; }
+    send_keys down ret
+    if wait_marker "$W" PGBOOT-SUB-OK "$TIMEOUT"; then
+        finish
+        if grep -q 'BDFDNAME commit "\\DEEPDIR1\\DEEPDIR2\\DEEPDIR3\\DEEPDIR4\\DEEPDIR5\\DEEPDIR6\\DEEPDIR7\\BOTTOM.IMG"' "$W/sim.log" &&
+           [ "$(grep -c 'BDLIST *len=71 ' "$W/sim.log")" -ge 2 ]; then   # 8 + the 63 characters of the path, twice
+            report T19 PASS "seven folders deep: path cut to its end on the folder row, R reread it, BOTTOM.IMG booted"
+        else
+            report T19 FAIL "booted, but the card trace lacks the full path or the second listing; see $W"
+        fi
+    else
+        menu_fail T19 "the image seven folders deep did not boot"
+    fi
+}
+
+# T20: the menu at every boot on a stick without images: it says so, Enter
+# looks again, Esc goes on to the BIOS boot
+t_T20() {
+    need_rom T20 "$ROM" || return
+    newwork T20
+    mk_floppy "$W/native.img" "$NATIVE_AUTO"
+    echo x > "$W/x.txt"
+    mk_stick "$W/stick.img" "$W/x.txt" README.TXT
+    start_sim "$W" --stick "$W/stick.img" --menu 2 --tune 0 || { report T20 FAIL "sim did not start"; return; }
+    start_qemu "$W" -option-rom "$ROM" -drive "file=$W/native.img,format=raw,if=floppy" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 'No disk images or folders here' 30 || { menu_fail T20 "no message for an empty stick"; return; }
+    send_keys down ret
+    sleep 1
+    wait_screen "$W" menu2 'No disk images or folders here' 10 || { menu_fail T20 "Enter on the empty list did not read it again"; return; }
+    send_keys esc
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
+    if wait_marker "$W" PGBOOT-NATIVE-OK "$TIMEOUT" && grep -q 'PGBOOT: no disk image configured' "$W/screen-early.txt" &&
+       [ "$(grep -c 'BDLIST.*start=0 max=16' "$W/sim.log")" -ge 2 ]; then
+        finish
+        report T20 PASS "empty stick: the menu says so, Enter reads it again, Esc: BIOS boot"
+    else
+        menu_fail T20 "no BIOS boot after the menu on an empty stick"
+    fi
+}
+
 for t in $TESTS; do
     case $t in
-        S1|T0|T1|T2|T3|T4|T5|T6|T7|T8|T9|T10|T11|T12|T13|T14|T15|T16|T17|T18) "t_$t" ;;
+        S1|T0|T1|T2|T3|T4|T5|T6|T7|T8|T9|T10|T11|T12|T13|T14|T15|T16|T17|T18|T19|T20) "t_$t" ;;
         P4) rm -f "$WORK/hd-native.img"
             if prep_hd_native; then report P4 PASS "native FDISK /MBR + SYS C: reference image ($WORK/hd-native.img)"
             else report P4 FAIL "see $WORK/P4"; fi ;;

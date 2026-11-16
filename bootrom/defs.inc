@@ -105,7 +105,7 @@ TMO_READ        equ 182         ; ~10 s: reads, verify, BDINFO
 TMO_WRITE       equ 546         ; ~30 s: writes
 TMO_OPEN        equ 546         ; ~30 s: BDINFO with OPEN (fast-seek map build)
 WAIT_SECONDS    equ 15          ; USB drive wait at late init
-WAIT_SECONDS_NOIMG equ 3        ; the same when no image is configured (the menu may pick one)
+WAIT_SECONDS_NOIMG equ 5        ; the same when no image is configured and the menu is offered on a key
 TICKS_PER_SEC   equ 18
 
 ; interrupt vector that holds the pre-PGBOOT INT 19h between POST and late

@@ -325,8 +325,13 @@ int19_entry:
         mov     word [r_count], WAIT_SECONDS
         jnz     .configured
         mov     word [r_count], WAIT_SECONDS_NOIMG
-        test    byte [r_menu], BD_MENU_MODE
-        jnz     .configured                     ; the boot menu can still pick one
+        mov     al, [r_menu]
+        and     al, BD_MENU_MODE
+        jz      .noimg
+        cmp     al, BD_MENU_ALWAYS              ; the boot menu can still pick one;
+        jne     .configured                     ; a menu wanted at every boot is
+        mov     word [r_count], WAIT_SECONDS    ; worth the long wait
+        jmp     short .configured
 .noimg:
         mov     si, msg_noimg
         jmp     chain19_msg
@@ -894,11 +899,11 @@ msg_nosig       db ": not bootable (no 55AAh signature)", 0
 msg_booting     db "booting ", 0
 msg_mprompt     db "press M for the boot menu (Esc skips)... ", 0
 msg_mtitle      db " PGBOOT ", PGBOOT_VERSION, " - PicoGUS boot menu", 0
-msg_mhelp       db " Enter boot/open   Space insert   A,C eject   S save as default   Esc done", 0
+msg_mhelp       db " Enter boot/open   Space insert   A,C eject   S save   R reread   Esc done", 0
 msg_mfolder     db " Folder: ", 0
 msg_mdir        db "<DIR>", 0
-msg_mempty      db " No disk images or folders here", 0
-msg_mlisterr    db " Cannot read the USB drive", 0
+msg_mempty      db " No disk images or folders here (R reads the drive again)", 0
+msg_mlisterr    db " Cannot read the USB drive (R tries again)", 0
 msg_msaved      db " Saved: these images are used from now on", 0
 
 code_end:

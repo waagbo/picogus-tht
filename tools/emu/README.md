@@ -67,7 +67,7 @@ fast seek), copied next to `ff.h` in the build directory as that Makefile does.
 ## Run
 
 ```
-tools/emu/run-tests.sh                 # T0 S1 T1 ... T18 (about 4 minutes)
+tools/emu/run-tests.sh                 # T0 S1 T1 ... T20 (about 5 minutes)
 tools/emu/run-tests.sh T0 T3 T4        # a selection
 KEEP=1 SIM_LOG=3 tools/emu/run-tests.sh T1
 SIM_EXTRA='--busy-polls 300' tools/emu/run-tests.sh    # a slow card: long BUSY phases
@@ -109,6 +109,8 @@ output; the evidence stays in `$EMU_CACHE/work/<test>/`:
 | T16 | ROM, `--fd FD.IMG`, native floppy; key Esc | Esc at the prompt: "skipped", the BIOS boots the native floppy. |
 | T17 | four copies of the ROM as four option ROMs | What a 28C256 with `PGBT256.BIN` shows behind a 32 KB window: one banner, one hook, a normal floppy image boot. |
 | T18 | ROM boot, then `PGUSINIT /bdmenu 2 /bdwait 7 /bdtune 3`, `/bdmenu 1`, `/bdtune 0` | pgusinit's switches write `CMD_BDMENU` / `CMD_BDTUNE` (values in the trace) and its status output shows them. |
+| T19 | ROM, `--menu 2`, an image seven folders down | The path grows a folder at a time, the folder row shows `...` and the end of a path too long for it, R lists the folder again, and the 74-character image path reaches the card. |
+| T20 | ROM, `--menu 2`, a stick without images, native floppy; keys Down, Enter, Esc | "No disk images or folders here", Enter reads the drive again, Esc continues with the BIOS boot. |
 | P4 | native QEMU floppy + IDE disk, no ROM, no card | Helper: the reference hard disk for T4/T8 when T3 did not run (FDISK /MBR + SYS C: through SeaBIOS INT 13h). |
 
 The markers the tests wait for are written by `AUTOEXEC.BAT` with

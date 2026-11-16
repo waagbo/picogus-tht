@@ -29,6 +29,7 @@ COL_POS         equ 66
 ATTR_NORMAL     equ 07h
 ATTR_BAR        equ 70h
 MENU_NAME_COLS  equ 72              ; of an image path shown in the header
+MENU_PATH_COLS  equ 54              ; of the folder path, before the position
 
 %if MENU_ROWS != 16 || (BD_LIST_HDR_LEN + MENU_ROWS * BD_LIST_ENTRY_LEN) > MENU_PAGE_BYTES
 %error menu page size
@@ -117,13 +118,19 @@ menu_prompt:
 ; 0 otherwise (Esc: boot what is configured, in the usual order).
 ; Clobbers AX, BX, CX, DX, SI, DI, ES.
 boot_menu:
-        mov     ax, 40h
-        mov     es, ax
-        cmp     byte [es:4Ah], 80
-        jae     .cols
-        mov     ax, 0003h               ; a 40-column mode: 80x25 text
+        mov     ah, 0Fh                 ; AL = video mode
         int     10h
-.cols:
+        cmp     al, 7                   ; 80x25 text: MDA/Hercules,
+        je      .page
+        cmp     al, 3                   ; colour,
+        je      .page
+        cmp     al, 2                   ; black and white
+        je      .page
+        mov     ax, 0003h               ; 40 columns, or a graphics mode a
+        int     10h                     ; BIOS logo left behind: 80x25 text
+.page:
+        mov     ax, 0500h               ; the menu draws on page 0
+        int     10h
         xor     ax, ax
         mov     [m_plen], ax
         mov     [m_top], ax
@@ -165,6 +172,8 @@ boot_menu:
         je      .ejhd
         cmp     al, 's'
         je      .save
+        cmp     al, 'r'
+        je      .rescan
         jmp     short .key
 .ext:
         mov     bx, [m_sel]
@@ -231,7 +240,7 @@ boot_menu:
 .enter:
         mov     ax, [m_sel]
         call    m_entry
-        jc      .tokey
+        jc      .rescan                 ; nothing listed: look again
         cmp     byte [es:di+BD_LIST_OFF_KIND], BD_KIND_DIR
         jne     .boot
         call    m_chdir
@@ -239,6 +248,7 @@ boot_menu:
         xor     ax, ax
         mov     [m_top], ax
         mov     [m_sel], ax
+.rescan:
         jmp     .reload
 .boot:
         call    m_insert
@@ -407,6 +417,15 @@ m_header:
         mov     si, m_path
         mov     cx, [m_plen]
         jcxz    .root
+        cmp     cx, MENU_PATH_COLS
+        jbe     .path
+        add     si, cx                  ; too long for the row: "..." and
+        mov     cx, MENU_PATH_COLS - 3  ; the end of it
+        sub     si, cx
+        mov     al, '.'
+        call    putc
+        call    putc
+        call    putc
 .path:
         lodsb
         call    putc
