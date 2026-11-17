@@ -310,7 +310,7 @@ int19_entry:
         mov     [m_seg], ax
         xor     ax, ax
         mov     [m_plen], ax
-        mov     [r_bootsel], al
+        mov     [m_list], al
         mov     al, CMD_BDMENU
         call    rd_ui                           ; 0 from firmware without the menu
         cmp     byte [r_maxrd], 2               ; a page of the menu takes a
@@ -323,16 +323,11 @@ int19_entry:
 
         ; ---- anything configured? ------------------------------------------
         call    cfg_check
-        mov     word [r_count], WAIT_SECONDS
-        jnz     .configured
-        mov     word [r_count], WAIT_SECONDS_NOIMG
-        mov     al, [r_menu]
-        and     al, BD_MENU_MODE
+        jnz     .configured                     ; an image: its USB drive is needed
+        test    byte [r_menu], BD_MENU_MODE
         jz      .noimg
-        cmp     al, BD_MENU_ALWAYS              ; the boot menu can still pick one;
-        jne     .configured                     ; a menu wanted at every boot is
-        mov     word [r_count], WAIT_SECONDS    ; worth the long wait
-        jmp     short .configured
+        jmp     .mounted                        ; none, but the boot menu can pick one:
+                                                ; it opens without a drive
 .noimg:
         mov     si, msg_noimg
         jmp     chain19_msg
@@ -340,6 +335,7 @@ int19_entry:
         ; ---- wait for the USB drive ------------------------------------------
         ; not mounted: CMD_DFSSTAT reads NODRIVE, or (a transaction left
         ; READY) BDINFO answers state 4. Checked once per tick, Esc skips.
+        mov     word [r_count], WAIT_SECONDS
         mov     byte [r_shown], 0
         xor     ax, ax
         mov     es, ax
@@ -408,7 +404,10 @@ int19_entry:
         jmp     chain19_msg
 .menu:
         call    boot_menu
+        mov     byte [r_menu], 0                ; once
         call    cfg_check                       ; what the menu left configured
+        jz      .nomenu
+        jmp     .configured                     ; its drive, should it not be there yet
 .nomenu:
         cmp     byte [r_cfg], 0
         je      .noimg
@@ -469,11 +468,6 @@ int19_entry:
         jz      .hdfirst
         test    byte [r_units], 2
         jz      .order
-        mov     al, [r_bootsel]                 ; picked in the boot menu?
-        cmp     al, BD_KIND_FLOPPY
-        je      .order
-        cmp     al, BD_KIND_HARDDISK
-        je      .hdfirst
         test    byte [r_opts], BD_OPT_BOOT_HD
         jz      .order
 .hdfirst:
@@ -609,25 +603,14 @@ cfg_check:
         ret
 
 ; is_mounted: CF=0 when the USB drive is mounted: CMD_DFSSTAT is not
-; NODRIVE and BDINFO (no OPEN) for unit [r_probe] does not answer state 4.
-; With no image configured BDINFO has nothing to say (state 0); an empty
-; BDLIST of the root answers 80h without a drive instead.
+; NODRIVE and BDINFO (no OPEN) for unit [r_probe], which has an image
+; configured, does not answer state 4.
 ; Clobbers AX, CX, DX (not SI, DI, ES).
 is_mounted:
         mov     al, CMD_DFSSTAT
         call    rd8
         cmp     al, DFS_NODRIVE
         je      .no
-        cmp     byte [r_cfg], 0
-        jne     .info
-        xor     ax, ax
-        xor     cx, cx
-        push    word [m_plen]
-        mov     [m_plen], ax                    ; the root
-        call    bdlist
-        pop     word [m_plen]
-        ret
-.info:
         mov     al, [r_probe]
         xor     ah, ah
         call    bdinfo
@@ -908,14 +891,15 @@ MENU_DRV_LEN    equ $ - msg_mdrives - 1
 msg_mdir        db "<DIR>", 0
 ; status line: TH_SKEY / TH_STAT switch between the colour of a key and of
 ; the text (menu.inc, m_puts)
-msg_mhelp       db TH_STAT, " ", TH_SKEY, 18h, 19h, TH_STAT, "=Move ", TH_SKEY, "Enter", TH_STAT, "=Boot "
-                db TH_SKEY, "Space", TH_STAT, "=Insert ", TH_SKEY, "A,C", TH_STAT, "=Eject "
-                db TH_SKEY, "S", TH_STAT, "=Save ", TH_SKEY, "T", TH_STAT, "=Theme "
-                db TH_SKEY, "M", TH_STAT, "=Tune ", TH_SKEY, "Esc", TH_STAT, "=Done", 0
+msg_mhelp       db TH_STAT, " ", TH_SKEY, 18h, 19h, TH_STAT, "=Move  ", TH_SKEY, "Enter", TH_STAT, "=Select  "
+                db TH_SKEY, "Esc", TH_STAT, "=Back", 0
+msg_mhelp0      db TH_STAT, " ", TH_SKEY, 18h, 19h, TH_STAT, "=Move  ", TH_SKEY, "Enter", TH_STAT, "=Select  "
+                db TH_SKEY, "Esc", TH_STAT, "=Boot", 0
+msg_mmain       db "Main Menu"
+MENU_MAIN_LEN   equ $ - msg_mmain
 msg_mempty      db TH_STAT, " No disk images or folders here. ", TH_SKEY, "R", TH_STAT, "=Read the drive again", 0
 msg_mlisterr    db TH_STAT, " Cannot read the USB drive. ", TH_SKEY, "R", TH_STAT, "=Try again", 0
 msg_msaved      db TH_STAT, " Saved: these images and settings are used from now on.", 0
-msg_mtune       db TH_STAT, " Start-up tune: ", 0
 
 code_end:
 

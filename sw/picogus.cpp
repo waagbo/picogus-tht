@@ -326,6 +326,8 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_BDTUNE:
     case CMD_BDTHEME:
         break;
+    case CMD_BDMODE: // PGBOOT boot menu: mode switch
+        break;
     case CMD_BDMELODY: // PGBOOT user melody text: rewind
         bd_ctl_melody_select();
         break;
@@ -632,6 +634,11 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
     case CMD_BDTHEME: // PGBOOT boot menu colours
         bd_ctl_theme_write(value);
+        break;
+    case CMD_BDMODE: // PGBOOT boot menu: the mode to save and restart in (handle_iow does both)
+        if (bd_mode_available(value)) {
+            settings.startupMode = value;
+        }
         break;
     case CMD_BDMELODY: // PGBOOT user melody text: append, 0 commits
         bd_ctl_melody_write(value);
@@ -1197,10 +1204,22 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         if (control_active) {
             write_picogus_high(iow_read & 0xFF);
-            if (sel_reg == CMD_SAVE) {
+            if (sel_reg == CMD_SAVE
+#ifdef PGDFS
+                // PGBOOT's mode switch: the mode, stored like pgusinit /mode x /save does
+                || (sel_reg == CMD_BDMODE && settings.startupMode == (iow_read & 0xFF))
+#endif
+                ) {
                 // Release IOCHRDY then save settings to flash
                 pio_sm_put(pio0, IOW_PIO_SM, IO_END);
                 saveSettings(&settings);
+#ifdef PGDFS
+                if (sel_reg == CMD_BDMODE) {
+                    // ... and the restart into it, as CMD_REBOOT
+                    watchdog_hw->scratch[3] = settings.startupMode;
+                    watchdog_reboot(0, 0, 0);
+                }
+#endif
                 return;
             }
         }
@@ -1555,6 +1574,14 @@ int main()
     // the images when the USB drive mounts)
     bd_init(settings.BootDisk.fdImage, settings.BootDisk.hdImage, &settings.BootDisk.options);
     bd_init_ui(&settings.BootDisk.menu, &settings.BootDisk.tune, &settings.BootDisk.theme, settings.BootDisk.melody);
+    // The modes the boot menu can switch to: all of a multi-mode firmware
+    // (card_mode_t 1-6), none but its own otherwise. processSettings() has
+    // set startupMode to the mode that is running.
+#ifdef PICOGUS_MULTIFW
+    bd_init_modes(0x7E, settings.startupMode);
+#else
+    bd_init_modes((uint8_t)(1u << settings.startupMode), settings.startupMode);
+#endif
     // a different value on every card boot: image tokens from before a card
     // reboot (mode switch, firmware update) never match the images after it
     bd_set_boot_nonce(get_rand_32());

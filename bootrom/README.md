@@ -13,12 +13,13 @@ on the PC speaker if you like, and offers a [boot menu](#the-boot-menu) that
 lists the disk images on the drive: pick one and it boots, as a floppy or as
 a hard disk.
 
-![The boot menu, Setup colours](menu.png)
+![The boot menu's main menu, Setup colours](menu.png)
 
 The menu looks like the PicoGUS web page and comes in its three sets of
-colours, Setup (above), Commander and Mono:
+colours, Setup (above), Commander and Mono (below: the floppy images, the
+start-up tunes):
 
-![Commander colours](menu-commander.png) ![Mono colours](menu-mono.png)
+![Floppy images, Commander colours](menu-commander.png) ![Start-up tunes, Mono colours](menu-mono.png)
 
 The card side (`sw/bootdisk/`) serves 512-byte sectors of the image files
 over the PGDFS transport. The wire protocol is described in
@@ -84,49 +85,67 @@ effect at the next boot.
 
 ## The boot menu
 
-The menu lists the folder it is in: `..`, the folders, then the disk images,
-each group in the order the files have on the drive. A disk image is a file
-named `.IMG`, `.IMA`, `.VFD`, `.FLP`, `.DSK`, `.VHD` or `.HDD`. What it is
-decides where it goes:
+The menu opens on its main menu:
+
+| Entry | |
+|---|---|
+| Floppy Image | the floppy images on the USB drive: Enter on one puts it in A: |
+| HDD Image | the hard disk images: Enter on one puts it in C: |
+| Boot Melody | the start-up tunes: Enter selects one and plays it |
+| Card Mode | the card's modes (Gravis UltraSound, AdLib, MPU-401, Tandy / CMS, Sound Blaster, USB only): Enter stores the mode and restarts the card in it |
+| Colours | Setup, Commander, Mono |
+| Save Settings | what is in A: and C:, the tune and the colours become what every boot starts with (`pgusinit /save` from the menu; it stores all of the card's settings) |
+| Boot | leaves the menu and boots |
+
+| Key | What it does |
+|---|---|
+| Up, Down, PgUp, PgDn, Home, End | move through the list (14 entries a page) |
+| Enter | open the list, folder or choice under the bar |
+| Esc | back to the main menu; in the main menu: boot |
+| R | read the list again, after changing the USB drive |
+
+The Drives window shows what is in A: and C:, and a check mark in a list
+marks what is in effect: the image that is in the drive, the tune, the mode,
+the colours. Leaving the menu boots A: when it holds an image, else C: (the
+other way round with option bit 3); `(none)` at the top of the image lists
+takes the image out of its drive. What is not saved lasts until the card is
+switched off, so the next cold boot starts with the saved settings again.
+A change of mode is the exception: the card has to restart for it and would
+forget what was not saved, so choosing a mode saves everything first.
+
+The lists of images show a folder of the USB drive: `..`, the folders, then
+the images of the kind asked for, each group in the order the files have on
+the drive. A disk image is a file named `.IMG`, `.IMA`, `.VFD`, `.FLP`,
+`.DSK`, `.VHD` or `.HDD`:
 
 * up to 2.88 MB (and not `.VHD`/`.HDD`): a floppy image, shown as `A:`
 * anything larger, and every `.VHD` and `.HDD`: a hard disk image, shown as `C:`
 
 Hidden and system files are left out. An image that the menu sorts into the
-wrong kind can still be set with `pgusinit /fdimage` or `/hdimage`.
+wrong kind can still be set with `pgusinit /fdimage` or `/hdimage`. The menu
+passes the images to the card by their 8.3 names (`\BOOTDI~1\DOSBOO~1.IMG`),
+which is what the Drives window, the boot messages and `pgusinit` then show;
+the list itself shows the long names, cut to 27 characters. Below the root
+the folder is named in the top of the list window's frame (`...` and its end
+when it is too long); the position in the list is in the bottom of it.
 
-| Key | What it does |
-|---|---|
-| Up, Down, PgUp, PgDn, Home, End | move through the list (16 entries a page) |
-| Enter | on a folder: open it. On an image: put it in its drive and boot from it |
-| Space | put the image in its drive without booting: for a floppy **and** a hard disk at once, such as an installation disk with the hard disk image it installs to |
-| A, C | take the image out of A: or C: |
-| S | save: the images now in A: and C: become the ones used at every boot (`pgusinit /save` from the menu; it stores all of the card's settings) |
-| R | read the folder again, after changing the USB drive (Enter does the same while nothing is listed) |
-| T | the next set of colours: Setup, Commander, Mono |
-| M | the next start-up tune, played at once with its name on the status line: off, 1 to 8, then your own if there is one |
-| Esc | leave the menu and boot what is in A: and C:, the floppy first unless option bit 3 says otherwise |
+What the menu offers is decided by the card, not by the ROM: the ROM shows
+the lists the card hands it (see BDLIST in `sw/bootdisk/PROTOCOL.md`) and
+does what their entries say. New firmware can therefore add to the menu
+without a new EEPROM, and the main menu has no Card Mode on a card whose
+firmware has one mode only.
 
-The Drives window shows what is in A: and C:. Images, colours and tune that
-are not saved (S) last until the card is switched off, so the next cold boot
-uses the saved ones again. The menu passes the images to the card by their 8.3
-names (`\BOOTDI~1\DOSBOO~1.IMG`), which is what the boot messages and
-`pgusinit` then show; the list itself shows the long names, cut to 27
-characters.
-
-The folder is named in the top of the list window's frame (`...` and its
-end when it is too long), the position in the list in the bottom of it. The
-menu needs an 80-column text screen: from a 40-column or a graphics mode it
-switches to 80x25 text. On a monochrome adapter (MDA, Hercules) it uses
-normal, bright and reverse video whatever colours are set.
-
-The look follows the web page of the web server feature (`sw/web/www/textmode`
-on its branch): the title bar, the framed windows with their shadows, the
+The menu needs an 80-column text screen: from a 40-column or a graphics mode
+it switches to 80x25 text. On a monochrome adapter (MDA, Hercules) it uses
+normal, bright and reverse video whatever colours are set. The look follows
+the web page of the web server feature (`sw/web/www/textmode` on its
+branch): the title bar, the framed windows with their shadows, the
 `Key=Action` status line, and the colour of every part from its three themes.
 
-With no image configured the ROM waits 5 seconds for the USB drive before it
-gives up on the menu, and 15 seconds when the menu is set to open at every
-boot (`/bdmenu 2`), as it does for a configured image.
+The menu itself needs no USB drive: with no image configured it is offered
+(or opened, with `/bdmenu 2`) at once, and the lists of images say so while
+the drive cannot be read yet (R tries again). With an image configured the
+ROM first waits for the drive, up to 15 seconds, as it must to boot from it.
 
 ## The start-up tune
 
@@ -167,8 +186,8 @@ tunes that come with the firmware are one line each in
 
 A key ends the tune, and the key still counts: M opens the menu, Esc skips
 PGBOOT, and any other key also ends the wait for M and is left for the
-system that boots. In the menu, M steps through the tunes and plays them.
-The notes are timed with the system timer's counter (1.7 ms steps), so a
+system that boots. In the menu, Boot Melody lists the tunes; Enter on one
+selects it and plays it. The notes are timed with the system timer's counter (1.7 ms steps), so a
 tune has the same tempo on an XT and a Pentium.
 
 ## Installing the ROM
@@ -354,20 +373,19 @@ The loader fixes the checksum byte after it patches these fields.
    runs on its own stack at the top of that block, reads `CMD_BDMENU` and
    plays the tune the card has selected (`CMD_BDTUNEDATA`). If no image name is configured and
    the boot menu is off (or the firmware has none), it continues with the
-   BIOS boot at once. Otherwise it waits for the USB drive: up to 15 s with
-   an image configured or the menu in mode 2, else 5 s (`CMD_DFSSTAT` = FFh, BDINFO state 4,
-   or an empty BDLIST answering 80h, means "not mounted yet"). A countdown
-   is shown and Esc skips the wait (other keys, such as F5/F8 for DOS, stay
-   in the keyboard buffer). Then comes the boot menu: opened at once in
+   BIOS boot at once. With an image configured it waits for the USB drive,
+   up to 15 s (`CMD_DFSSTAT` = FFh, or BDINFO state 4, means "not mounted
+   yet"). A countdown is shown and Esc skips the wait (other keys, such as
+   F5/F8 for DOS, stay in the keyboard buffer). Then comes the boot menu: opened at once in
    mode 2; in mode 1 after M at the prompt, which counts down the seconds
    of `CMD_BDMENU` (Esc there continues with the BIOS boot, any other key
    ends the wait and stays in the buffer). The menu writes the image names
    to the card; if none is configured after it, the ROM continues with the
-   BIOS boot. The
+   BIOS boot, and if one is, it waits for the drive as above. The
    ROM then sends BDINFO with OPEN for unit 0 (floppy) and unit 1 (hard
    disk), prints a line per configured unit, adjusts the BIOS data area,
    hooks INT 13h and reads sector 0 of the boot image to 0000:7C00. It boots
-   the image picked with Enter in the menu; otherwise the floppy image
+   the floppy image
    first, or the hard disk image when option bit 3 is set or
    there is no floppy image. A hard disk needs 55AAh at the end of the
    sector. A floppy boot sector without the signature is accepted when it
@@ -467,12 +485,12 @@ an INT 13h call), the ROM waits for it to finish, within the same timeout.
 | 70h | INT 13h trampoline: `push cs / push cs / jmp far ROM:int13_entry`. The INT 13h vector points here. The handler reads its RAM segment from the pushed words and puts the caller's DS back before it returns or chains. |
 | 78h-B3h | transaction and transfer parameters |
 | C0h-13Fh | BDINFO answer buffer |
-| 140h-151h | boot menu setting, the image picked to boot from, the menu's page, selection and theme |
-| 152h-1C5h | folder shown in the boot menu |
+| 140h-171h | boot menu setting, the menu's list, page, selection, theme and title |
+| 172h-1E5h | folder shown in the boot menu |
 | up to 400h | stack for the late init (the INT 13h handler runs on the caller's stack, about 50 bytes) |
 
 Everything up to 13Fh is where version 0.1 had it. While the boot menu is open, the kilobyte below the block holds the page of
-the folder listing (16 entries of 48 bytes). That memory is free until the
+the list (14 entries of 48 bytes). That memory is free until the
 boot sector has been loaded, and the ROM does not keep it.
 
 If INT 19h runs again (a reboot through INT 19h), the ROM finds its block
@@ -491,7 +509,7 @@ PGBOOT 0.3: disabled (pgusinit /bdopts bit 2)
 Card found, floppy and hard disk image, the stick mounts a few seconds late:
 ```
 PGBOOT 0.3: PicoGUS found, data port 1D4h (186+)       [(8088) on an XT, (8088 forced) for PGBOOT88.ROM]
-PGBOOT: waiting for the USB drive (Esc skips)... 12    [only while not mounted; counts down from 15, or from 5 with no image configured and menu mode 1]
+PGBOOT: waiting for the USB drive (Esc skips)... 12    [only while not mounted and an image is configured; counts down from 15]
 PGBOOT: press M for the boot menu (Esc skips)... 03    [menu mode 1; the screen is cleared when the menu closes]
 PGBOOT: A: \FD.IMG, 1440K
 PGBOOT: C: \HD.IMG, 31M                                [" (read-only)" appended when read-only]
@@ -523,17 +541,19 @@ simulator) covers these cases:
 * T6: no card.
 * T7-T11: missing image, boot order, floppy swap from DOS, PGDFS next to
   the ROM, another data port.
-* T12-T14, T16: the boot menu, driven with keystrokes: browse into a folder
-  and boot an image there, insert a floppy image and boot a hard disk image,
-  save, eject, Esc; M and Esc at the prompt.
+* T12-T14, T16: the boot menu, driven with keystrokes: the main menu, the
+  floppy images, a folder and back, an image into A: and boot; a floppy and
+  a hard disk image, Save Settings, Boot; `(none)`; M and Esc at the prompt.
 * T15: the start-up tune (the speaker gate is traced) and the prompt
   running out with nothing configured.
 * T17: the ROM four times in the option ROM area, as a 28C256 with
   `PGBT256.BIN` shows it behind a 32 KB window.
-* T18: `pgusinit /bdmenu /bdwait /bdtune`.
-* T19, T20: a folder seven levels deep and R; a stick without images.
-* T21: the three sets of colours (the attributes of the screen are checked).
-* T22: the tunes: off, the length of tune 1, the user's melody.
+* T18: `pgusinit /bdmenu /bdwait /bdtheme /bdtune /bdmelody`.
+* T19, T20: a folder seven levels deep and R; the menu before the USB drive
+  is mounted.
+* T21: Colours (the attributes of the screen are checked).
+* T22: Boot Melody: off, the length of tune 1, the user's melody.
+* T23: Card Mode: the card restarts and the menu waits for it.
 
 `tools/emu/README.md` has the full list.
 
@@ -579,7 +599,12 @@ LBA of 80h. The last line is `INT13TST DONE, n failures`.
   read-only window, running ROM) have been checked in QEMU.
 * The boot menu shows at most 65535 entries of a folder, in the order they
   have on the drive (not sorted), and follows folders up to a path of 114
-  characters. It needs a card frame of at least 1 KB (`CMD_DFSMAXLEN`; the
+  characters. The main menu and its lists need firmware that has them; with
+  older firmware (before 0.3's lists) the menu shows the root folder under
+  the title Main Menu and works as a plain image browser.
+* After a change of card mode the USB drive takes a few seconds to come
+  back; a list of images opened before that says the drive cannot be read
+  (R tries again). It needs a card frame of at least 1 KB (`CMD_DFSMAXLEN`; the
   default is 4 KB) and is left out below that.
 * With the default settings every boot waits three seconds for M. `pgusinit
   /bdmenu 0` (and `/save`) takes the prompt away; `/bdwait` shortens it.

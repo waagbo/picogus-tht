@@ -1,14 +1,26 @@
 ; ---------------------------------------------------------------------------
-; PGBOOT boot menu: pick the disk images on the USB drive at boot.
+; PGBOOT boot menu: pick the disk images on the USB drive, and set up the
+; card, at boot.
 ;
 ; Runs inside the late init (INT 19h), on the ROM's own stack, DS = RAM block.
-; The card lists a folder with BDLIST (sw/bootdisk/PROTOCOL.md): its folders
-; first, then its disk images, 16 entries at a time into the kilobyte below
-; the RAM block, which nothing uses before the boot sector is loaded. An
-; image is selected by writing its path to the card's image name register
-; (CMD_BDFDNAME for a floppy-sized image, CMD_BDHDNAME for any other), the
-; same registers pgusinit /fdimage and /hdimage write; the late init then
-; opens and boots what the registers hold.
+; The menu is a list browser, and the card says what is in the lists (BDLIST,
+; sw/bootdisk/PROTOCOL.md): the main menu, a folder of the USB drive with
+; its floppy or its hard disk images, the start-up tunes, the card's modes,
+; the colours. 14 entries at a time are loaded into the kilobyte below the
+; RAM block, which nothing uses before the boot sector is loaded. What Enter
+; does is in the entry's kind:
+;   a folder        the list of that folder
+;   a disk image    its path goes to the card's image name register
+;                   (CMD_BDFDNAME for a floppy image, CMD_BDHDNAME for a
+;                   hard disk image: what pgusinit /fdimage and /hdimage
+;                   write), and the menu returns to the main menu
+;   a menu          the list it names, with the entry's name as its title
+;   a choice        the value it carries is written to the control register
+;                   it names (the tune, the colours, the mode, "no image",
+;                   save); the list is then read again
+;   boot            the menu ends
+; The late init then opens and boots what the image name registers hold. New
+; firmware can add lists and choices without a new ROM.
 ;
 ; The look is that of the PicoGUS web page (its Textmode design system,
 ; sw/web/www/textmode on the web server branch): a title bar, a framed list
@@ -22,22 +34,23 @@
 ; to. 80 columns, 25 rows.
 ; ---------------------------------------------------------------------------
 
-MENU_ROWS       equ 16              ; entries per page (a power of two)
+MENU_ROWS       equ 14              ; entries per page
 ROW_TITLE       equ 0
-LIST_Y          equ 1               ; the list window: top row, left column,
-LIST_X          equ 17              ; columns, rows (with its frame)
+LIST_Y          equ 2               ; the list window: top row (a row below
+LIST_X          equ 17              ; the title bar), left column, columns
 LIST_W          equ 46
-LIST_H          equ MENU_ROWS + 2
 MENU_Y          equ LIST_Y + 1      ; first entry row
 ENT_X           equ LIST_X + 2      ; an entry: its bar,
 ENT_W           equ LIST_W - 4
-COL_TAG         equ ENT_X + 1       ; "A:" / "C:",
+COL_TAG         equ ENT_X + 2       ; (the check mark is at ENT_X) "A:" / "C:",
+COL_ITEM        equ ENT_X + 3       ; the name of a menu entry,
 COL_SIZE        equ COL_TAG + 4     ; "1440K" / "<DIR>",
-COL_NAME        equ COL_SIZE + 8    ; the name (27 characters at most)
+COL_NAME        equ COL_SIZE + 8    ; the name of a file (27 characters at most)
+COL_MORE        equ ENT_X + ENT_W - 2   ; the arrow of an entry that opens a list
 POS_X           equ LIST_X + LIST_W - 2 - POS_W     ; "3/41" in the bottom frame
 POS_W           equ 13
-DRV_Y           equ 20              ; the drives window
-DRV_X           equ 8
+DRV_Y           equ 19              ; the drives window: a row is left
+DRV_X           equ 8               ; between it and the status line
 DRV_W           equ 64
 DRV_H           equ 4
 ROW_A           equ DRV_Y + 1
@@ -70,8 +83,11 @@ TH_SKEY         equ 13              ; a key on the status line
 TH_SIZE         equ 14
 THEME_MDA       equ 3               ; index of the monochrome adapter's set
 
-%if MENU_ROWS != 16 || (BD_LIST_HDR_LEN + MENU_ROWS * BD_LIST_ENTRY_LEN) > MENU_PAGE_BYTES
+%if (BD_LIST_HDR_LEN + MENU_ROWS * BD_LIST_ENTRY_LEN) > MENU_PAGE_BYTES
 %error menu page size
+%endif
+%if LIST_Y + MENU_ROWS + 2 >= DRV_Y || DRV_Y + DRV_H >= ROW_STATUS
+%error the windows overlap
 %endif
 %if COL_NAME + BD_LIST_DISP_LEN > ENT_X + ENT_W || POS_X < ENT_X
 %error list window too narrow
@@ -155,10 +171,9 @@ menu_prompt:
         int     16h
         ret
 
-; boot_menu: the menu itself. Returns when the user leaves it: [r_bootsel] =
-; BD_KIND_FLOPPY / BD_KIND_HARDDISK when an image was picked to boot from,
-; 0 otherwise (Esc: boot what is configured, in the usual order).
-; Clobbers AX, BX, CX, DX, SI, DI, ES.
+; boot_menu: the menu itself. Returns when the user leaves it (Esc in the
+; main menu, or its Boot entry); what the image name registers then hold is
+; what boots. Clobbers AX, BX, CX, DX, SI, DI, BP, ES.
 boot_menu:
         mov     ah, 0Fh                 ; AL = video mode
         int     10h
@@ -175,12 +190,28 @@ boot_menu:
         mov     ax, 0500h               ; the menu draws on page 0
         int     10h
         xor     ax, ax
+.main:
+        ; ---- the main menu, with entry AX selected -------------------------
+        mov     [m_sel], ax
+        push    ds
+        pop     es
+        mov     si, msg_mmain
+        mov     di, m_title
+        mov     cx, MENU_MAIN_LEN
+        mov     [m_tlen], cl
+.title:
+        cs lodsb
+        stosb
+        loop    .title
+        mov     al, BD_LIST_MAIN
+.list:
+        ; ---- list AL from its top: [m_sel] and the title are set -----------
+        mov     [m_list], al
+        xor     ax, ax
         mov     [m_plen], ax
         mov     [m_top], ax
-        mov     [m_sel], ax
-        mov     [r_bootsel], al
 .restyle:
-        ; ---- everything that only changes with the theme ----------------
+        ; ---- everything but the list window --------------------------------
         mov     al, CMD_BDTHEME
         call    rd_ui                   ; 0 from firmware without themes
         cmp     byte [m_mode], 7
@@ -227,7 +258,6 @@ boot_menu:
         call    m_hints
 .reload:
         call    m_load
-.header:
         call    m_header
         call    m_draw_all
 .key:
@@ -239,31 +269,14 @@ boot_menu:
         je      .nomsg
         call    m_hints                 ; a key takes the last message away
 .nomsg:
-        or      al, al
-        jz      .ext
+        mov     bx, [m_sel]
         cmp     al, 1Bh
         je      .esc
         cmp     al, 0Dh
         je      .enter
-        cmp     al, ' '
-        je      .space
         or      al, 20h
-        cmp     al, 'a'
-        je      .ejfd
-        cmp     al, 'c'
-        je      .ejhd
-        cmp     al, 's'
-        je      .save
         cmp     al, 'r'
-        je      .rescan
-        cmp     al, 't'
-        je      .next_theme
-        cmp     al, 'm'
-        je      .next_tune
-.tokey1:
-        jmp     short .key
-.ext:
-        mov     bx, [m_sel]
+        je      .reload                 ; read the list again
         mov     al, ah
         cmp     al, 48h                 ; up
         je      .up
@@ -311,90 +324,114 @@ boot_menu:
         cmp     ax, bx
         je      .key
         mov     [m_sel], bx
-        mov     dx, bx
-        and     dl, 0F0h                ; its page (MENU_ROWS = 16)
-        cmp     dx, [m_top]
+        push    ax                      ; the entry it left
+        mov     ax, bx
+        xor     dx, dx
+        mov     cx, MENU_ROWS
+        div     cx
+        mul     cx                      ; the top of its page
+        cmp     ax, [m_top]
         je      .samepage
-        mov     [m_top], dx
+        mov     [m_top], ax
+        pop     ax
         jmp     .reload
 .samepage:
+        pop     ax
         call    m_draw_row              ; the row it left
         mov     ax, bx
         call    m_draw_row
         call    m_pos
+.tokey:
         jmp     .key
 
 .enter:
-        mov     ax, [m_sel]
+        mov     ax, bx
         call    m_entry
-        jc      .rescan                 ; nothing listed: look again
-        cmp     byte [es:di+BD_LIST_OFF_KIND], BD_KIND_DIR
-        jne     .boot
+        jc      .reload                 ; nothing listed: look again
+        mov     al, [es:di+BD_LIST_OFF_KIND]
+        cmp     al, BD_KIND_DIR
+        je      .folder
+        cmp     al, BD_KIND_HARDDISK
+        jbe     .image
+        cmp     al, BD_KIND_MENU
+        je      .open
+        cmp     al, BD_KIND_CHOICE
+        je      .choice
+        jmp     .exit                   ; boot (or what newer firmware means by it)
+.folder:
         call    m_chdir
         jc      .tokey
         xor     ax, ax
         mov     [m_top], ax
         mov     [m_sel], ax
-.rescan:
+.toreload:
         jmp     .reload
-.boot:
-        call    m_insert
-        mov     al, [es:di+BD_LIST_OFF_KIND]
-        mov     [r_bootsel], al
-        jmp     short .exit
-.space:
-        mov     ax, [m_sel]
-        call    m_entry
-        jc      .tokey
-        cmp     byte [es:di+BD_LIST_OFF_KIND], BD_KIND_DIR
-        je      .tokey
-        call    m_insert
-        jmp     .header
-.ejfd:
-        mov     al, CMD_BDFDNAME
-        jmp     short .eject
-.ejhd:
-        mov     al, CMD_BDHDNAME
-.eject:
-        call    select                  ; rewinds the name
-        mov     dx, DATA_PORT_HIGH
-        xor     al, al
-        out     dx, al                  ; an empty name: no image
-        jmp     .header
-.save:
-        mov     al, CMD_SAVE
+.image:
+        call    m_insert                ; into its drive, and back to the main menu
+.back:
+        mov     ax, [m_back]
+        jmp     .main
+.open:
+        ; the list the entry names; its name is the title
+        mov     [m_back], bx
+        mov     cl, [es:di+BD_LIST_OFF_DISPLEN]
+        xor     ch, ch
+        cmp     cl, BD_LIST_DISP_LEN
+        jbe     .named
+        mov     cl, BD_LIST_DISP_LEN
+.named:
+        mov     [m_tlen], cl
+        lea     si, [di+BD_LIST_OFF_DISP]
+        mov     al, [es:di+BD_LIST_OFF_ARG]
+        mov     di, m_title
+        push    ds
+        push    es
+        pop     ds                      ; DS = the page, ES = the RAM block
+        pop     es
+        rep movsb
+        push    es
+        pop     ds
+        mov     [m_sel], cx             ; 0
+        jmp     .list
+.choice:
+        ; the value goes to the register the entry names
+        mov     bp, [es:di+BD_LIST_OFF_ARG]
+        mov     ax, bp
         call    select
         mov     dx, DATA_PORT_HIGH
+        mov     al, ah
         out     dx, al
-        mov     cx, 5                   ; the card is busy writing its flash
+        ; the card stores its settings, compiles a tune, or restarts in
+        ; another mode: wait, then until it answers again
+        mov     cx, 5
         call    wait_ticks
+        mov     di, 10 * TICKS_PER_SEC
+.card:
+        call    detect_card
+        jnc     .answers
+        or      ah, ah
+        jnz     .answers
+        mov     cx, 1
+        call    wait_ticks
+        dec     di
+        jnz     .card
+.answers:
+        mov     ax, bp
+        cmp     al, CMD_SAVE
+        jne     .played
         mov     si, msg_msaved
         call    m_msg
-.tokey:
         jmp     .key
-.next_theme:
-        mov     al, CMD_BDTHEME
-        call    .next
-        jmp     .restyle
-.next_tune:
-        mov     al, CMD_BDTUNE
-        call    .next
-        mov     cx, 3                   ; the card compiles the tune
-        call    wait_ticks
-        mov     si, msg_mtune
-        call    m_msg
-        mov     al, 1                   ; with its name
-        call    tune_play
-        jmp     .key
-; the card moves the setting in register AL on to its next value
-.next:
-        call    select
-        mov     dx, DATA_PORT_HIGH
-        mov     al, BD_UI_NEXT
-        out     dx, al
-        ret
+.played:
+        cmp     al, CMD_BDTUNE
+        jne     .chosen
+        xor     al, al
+        call    tune_play               ; the tune that was chosen
+.chosen:
+        jmp     .restyle                ; the colours may be new, the list's mark has moved
 .esc:
-        mov     byte [r_bootsel], 0
+        cmp     byte [m_list], BD_LIST_MAIN
+        jne     .back
 .exit:
         ; fall through: leave a clean screen for the boot messages
 
@@ -489,6 +526,10 @@ m_puts:
 ; m_hints: the key hints there. Clobber SI.
 m_hints:
         mov     si, msg_mhelp
+        cmp     byte [m_list], BD_LIST_MAIN
+        jne     .show
+        mov     si, msg_mhelp0
+.show:
         call    m_msg
         mov     byte [m_msgon], 0
         ret
@@ -600,8 +641,10 @@ m_entry:
 m_load:
         pushm   ax, cx, dx, es
 .again:
+        mov     byte [m_rows], MENU_ROWS
         mov     ax, [m_top]
-        mov     cx, MENU_ROWS
+        mov     cl, MENU_ROWS
+        mov     ch, [m_list]
         call    bdlist
         jnc     .ok
         xor     ax, ax
@@ -621,7 +664,15 @@ m_load:
         mov     ax, [es:0]
         mov     [m_total], ax
         or      ax, ax
-        jnz     .ret
+        jz      .empty
+        ; a menu's window is as tall as the menu; a folder's keeps its size
+        cmp     byte [m_list], BD_LIST_MAIN
+        jb      .ret
+        cmp     ax, MENU_ROWS
+        jae     .ret
+        mov     [m_rows], al
+        jmp     short .ret
+.empty:
         mov     si, msg_mempty
 .say:
         call    m_msg
@@ -629,28 +680,31 @@ m_load:
         popm    ax, cx, dx, es
         ret
 
-; m_header: the list window with the folder in its frame, and the images
-; in A: and C: in the drives window. Preserves all but SI.
+; m_header: the list window with its title in its frame (the folder when
+; the list is of one below the root, "..." and its end when that is too
+; long), and the images in A: and C: in the drives window. Preserves all but SI.
 m_header:
-        pushm   ax, bx, cx, dx
+        pushm   ax, bx, cx, dx, di
         mov     al, TH_LIST
         call    th
         mov     dx, (LIST_Y << 8) | LIST_X
-        mov     cx, (LIST_H << 8) | LIST_W
+        mov     cl, LIST_W
+        mov     ch, [m_rows]
+        add     ch, 2
         call    m_box
-        ; the folder, centred in the top of the frame; "..." and its end
-        ; when it is too long
         mov     si, m_path
         mov     cx, [m_plen]
+        or      cx, cx
+        jnz     .long
+        mov     si, m_title
+        mov     cl, [m_tlen]
+.long:
+        mov     di, cx                  ; its whole length
         cmp     cx, MENU_PATH_COLS
-        jbe     .fits
+        jbe     .place
         add     si, cx
         mov     cx, MENU_PATH_COLS
         sub     si, cx
-.fits:
-        or      cx, cx
-        jnz     .place
-        inc     cx                      ; the root: a backslash
 .place:
         mov     dl, LIST_W - 2
         sub     dl, cl
@@ -663,11 +717,10 @@ m_header:
         sub     cx, 2
         mov     al, ' '
         call    putc
-        cmp     word [m_plen], 0
-        je      .root
+        jcxz    .drives
 .path:
         lodsb
-        cmp     word [m_plen], MENU_PATH_COLS
+        cmp     di, MENU_PATH_COLS
         jbe     .char
         cmp     cx, MENU_PATH_COLS - 3
         jbe     .char
@@ -675,10 +728,6 @@ m_header:
 .char:
         call    putc
         loop    .path
-        jmp     short .drives
-.root:
-        mov     al, '\'
-        call    putc
 .drives:
         mov     al, ' '
         call    putc
@@ -688,7 +737,7 @@ m_header:
         mov     dh, ROW_C
         mov     ax, ('C' << 8) | CMD_BDHDNAME
         call    .drive
-        popm    ax, bx, cx, dx
+        popm    ax, bx, cx, dx, di
         ret
 ; row DH: drive letter AH and the image name in register AL ("-": none)
 .drive:
@@ -735,7 +784,8 @@ m_header:
 m_draw_all:
         pushm   ax, cx
         mov     ax, [m_top]
-        mov     cx, MENU_ROWS
+        mov     cl, [m_rows]
+        xor     ch, ch
 .row:
         call    m_draw_row
         inc     ax
@@ -748,7 +798,9 @@ m_pos:
         pushm   ax, bx, cx, dx
         mov     al, TH_LIST
         call    th
-        mov     dx, ((LIST_Y + LIST_H - 1) << 8) | POS_X
+        mov     dh, [m_rows]
+        add     dh, LIST_Y + 1
+        mov     dl, POS_X
         mov     cx, POS_W
         mov     al, 0C4h
         call    m_rep                   ; the frame under an older, longer number
@@ -794,7 +846,15 @@ m_draw_row:
         mov     ax, si
         call    m_entry
         jc      .done
+        ; a check mark: the choice in effect, the image that is in the drive
+        test    byte [es:di+BD_LIST_OFF_FLAGS], BD_LIST_FLAG_CURRENT
+        jz      .kind
+        mov     al, 0FBh
+        call    putc
+.kind:
         mov     al, [es:di+BD_LIST_OFF_KIND]
+        cmp     al, BD_KIND_HARDDISK
+        ja      .item
         or      al, al
         jnz     .image
         mov     dl, COL_SIZE
@@ -804,6 +864,17 @@ m_draw_row:
         call    print
         pop     si
         jmp     short .name
+.item:
+        ; a menu entry: an arrow when it opens a list
+        cmp     al, BD_KIND_MENU
+        jne     .text
+        mov     dl, COL_MORE
+        call    m_goto
+        mov     al, 10h
+        call    putc
+.text:
+        mov     dl, COL_ITEM
+        jmp     short .at
 .image:
         mov     dl, COL_TAG
         cmp     si, [m_sel]
@@ -830,6 +901,7 @@ m_draw_row:
         pop     dx
 .name:
         mov     dl, COL_NAME
+.at:
         call    m_goto
         mov     cl, [es:di+BD_LIST_OFF_DISPLEN]
         xor     ch, ch

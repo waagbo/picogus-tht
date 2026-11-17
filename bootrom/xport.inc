@@ -375,13 +375,14 @@ bdinfo:
 .ret:
         ret
 
-; bdlist: BDLIST for the folder [m_path]: at most CX entries from index AX
-; into the page buffer at [m_seg]:0 (TT TT CC 00, then the entries).
+; bdlist: BDLIST for list CH (of the folder [m_path], when it is a folder
+; list): at most CL entries from index AX into the page buffer at
+; [m_seg]:0 (TT TT CC 00, then the entries).
 ; out: CF=0 and the page valid; CF=1 otherwise (AH = status: 80h no USB
 ; drive, 02h no such folder, ...). Clobbers AX, CX, DX.
 bdlist:
         mov     [x_hdr+4], ax           ; SS SS
-        mov     [x_hdr+6], cx           ; NN FF
+        mov     [x_hdr+6], cx           ; NN LL
         mov     word [x_hdr+2], (BD_AL_LIST << 8) | 0
         mov     word [x_hlen], 4 + BD_LIST_REQ_LEN
         mov     ax, [m_plen]

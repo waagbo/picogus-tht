@@ -45,6 +45,10 @@
 #include "bootdisk.h"
 #include "bd_geometry.h"
 #include "../dfs/dfs_server.h"         /* dfs_platform_millis() */
+#ifndef PICOGUS_NO_MODENAMES
+#define PICOGUS_NO_MODENAMES            /* only the register numbers are wanted */
+#endif
+#include "../../common/picogus.h"       /* CMD_* for the menu's choices */
 
 #if FF_FS_READONLY || FF_MAX_SS != 512
 #error "PGBOOT needs FatFs with write support and 512-byte sectors"
@@ -89,6 +93,8 @@ static uint8_t *cfg_opts;
 static uint8_t *cfg_menu;                   /* CMD_BDMENU, CMD_BDTUNE storage */
 static uint8_t *cfg_tune;
 static uint8_t *cfg_theme;
+static uint8_t  modes_available;            /* bit n: the card can be switched to mode n */
+static uint8_t  mode_current;
 static char    *cfg_melody;                 /* BD_MELODY_BUF, the user's melody as RTTTL */
 static uint16_t melody_wr, melody_rd;       /* core 0 only */
 static uint16_t tunedata_rd;                /* core 0 only */
@@ -140,6 +146,9 @@ static char      list_path[BD_PATH_BUF];
 static bd_sec0_t sec0;              /* identification scratch */
 static uint8_t   scratch[128];
 _Static_assert(sizeof(scratch) >= BD_NAME_BUF, "scratch holds a path for BDLIST");
+static char      list_have[BD_PATH_BUF];    /* BDLIST: an image name as configured, normalised */
+_Static_assert(BD_LIST_FLOPPY == BD_KIND_FLOPPY && BD_LIST_HARDDISK == BD_KIND_HARDDISK,
+               "the list of one kind of image has that kind's number");
 
 static uint16_t get16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 static uint32_t get32(const uint8_t *p) { return (uint32_t)get16(p) | ((uint32_t)get16(p + 2) << 16); }
@@ -634,6 +643,15 @@ void bd_init_ui(uint8_t *menu, uint8_t *tune, uint8_t *theme, char *melody) {
     tune_compile();
 }
 
+void bd_init_modes(uint8_t available, uint8_t current) {
+    modes_available = available;
+    mode_current = current;
+}
+
+bool bd_mode_available(uint8_t mode) {
+    return mode >= 1 && mode < 7 && ((modes_available >> mode) & 1);
+}
+
 void bd_set_boot_nonce(uint32_t nonce) {
     boot_nonce = nonce;
 }
@@ -874,12 +892,12 @@ static int list_kind(void) {
 
 /* One 48-byte entry: the 8.3 name the ROM builds paths from, and the long
  * name it shows (cut with "..." when it does not fit). */
-static void list_put(uint8_t *e, int kind, uint8_t attr, uint32_t sectors, const char *sfn, const char *disp) {
+static void list_put(uint8_t *e, int kind, uint8_t flags, uint32_t sectors, const char *sfn, const char *disp) {
     size_t n = strlen(disp), k = strlen(sfn);
     if (k > BD_LIST_SFN_LEN - 1) k = BD_LIST_SFN_LEN - 1;
     memset(e, 0, BD_LIST_ENTRY_LEN);
     e[BD_LIST_OFF_KIND] = (uint8_t)kind;
-    e[BD_LIST_OFF_FLAGS] = (attr & AM_RDO) ? BD_FLAG_RO : 0;
+    e[BD_LIST_OFF_FLAGS] = flags;
     put32(e + BD_LIST_OFF_SECTORS, sectors);
     memcpy(e + BD_LIST_OFF_SFN, sfn, k);
     if (n > BD_LIST_DISP_LEN) {
@@ -892,16 +910,143 @@ static void list_put(uint8_t *e, int kind, uint8_t attr, uint32_t sectors, const
     e[BD_LIST_OFF_DISPLEN] = (uint8_t)n;
 }
 
-/* The directories of a directory (".." first, below the root), then its
- * disk images, each group in directory order. The ROM asks for a screenful
- * at a time by index, so every request walks the directory twice; nothing
- * is kept between requests and the listing follows what is on the drive. */
+/* ---- the boot menu's own lists ---------------------------------------------------
+ * The ROM is a list browser: what the menu offers is decided here, so that
+ * new firmware can add to it without a new ROM. An entry opens another list
+ * (BD_KIND_MENU), writes a value to a control register (BD_KIND_CHOICE; the
+ * one in effect is flagged), or boots (BD_KIND_BOOT). */
+
+static const char *const mode_name[] = {    /* by card_mode_t */
+    NULL, "Gravis UltraSound", "AdLib", "MPU-401", "Tandy / CMS", "Sound Blaster", "USB only", NULL
+};
+static const char *const theme_name[BD_THEME_MAX + 1] = { "Setup", "Commander", "Mono" };
+
+static unsigned mode_count(void) {
+    unsigned n = 0;
+    for (unsigned m = 1; m < 7; m++) n += (modes_available >> m) & 1;
+    return n;
+}
+
+/* The tune with index i of the tunes list: 0 off, then the firmware's, then
+ * the user's. False past the end. */
+static bool tune_at(unsigned i, uint8_t *value, char *name) {
+    const char *text, *colon;
+    size_t n;
+    if (i == 0) {
+        *value = 0;
+        strcpy(name, "Off");
+        return true;
+    }
+    if (i <= BD_TUNE_BUILTIN) {
+        *value = (uint8_t)i;
+        text = bd_tune_builtin[i - 1];
+    } else if (i == BD_TUNE_BUILTIN + 1 && tune_valid(BD_TUNE_CUSTOM)) {
+        *value = BD_TUNE_CUSTOM;
+        text = cfg_melody;
+    } else {
+        return false;
+    }
+    colon = strchr(text, ':');
+    n = (colon && strchr(colon + 1, ':')) ? (size_t)(colon - text) : 0;     /* as bd_tune_compile() names it */
+    if (n > BD_TUNE_NAME_MAX) n = BD_TUNE_NAME_MAX;
+    memcpy(name, text, n);
+    name[n] = 0;
+    if (n == 0) strcpy(name, "Custom");
+    return true;
+}
+
+/* Entry i of a menu list into e (e may be NULL: only whether there is one) */
+static bool menu_entry(uint8_t list, unsigned i, uint8_t *e) {
+    char name[BD_TUNE_NAME_MAX + 1];
+    const char *disp = name;
+    int kind = BD_KIND_CHOICE;
+    uint8_t a = 0, b = 0, flags = 0;
+
+    switch (list) {
+    case BD_LIST_MAIN: {
+        static const struct { const char *name; uint8_t kind, a, b; } item[] = {
+            { "Floppy Image",  BD_KIND_MENU,   BD_LIST_FLOPPY,   0 },
+            { "HDD Image",     BD_KIND_MENU,   BD_LIST_HARDDISK, 0 },
+            { "Boot Melody",   BD_KIND_MENU,   BD_LIST_TUNES,    0 },
+            { "Card Mode",     BD_KIND_MENU,   BD_LIST_MODES,    0 },
+            { "Colours",       BD_KIND_MENU,   BD_LIST_THEMES,   0 },
+            { "Save Settings", BD_KIND_CHOICE, CMD_SAVE,         1 },
+            { "Boot",          BD_KIND_BOOT,   0,                0 },
+        };
+        if (mode_count() < 2 && i >= 3) i++;        /* nothing to switch to: no "Card Mode" */
+        if (i >= sizeof(item) / sizeof(item[0])) return false;
+        disp = item[i].name;
+        kind = item[i].kind;
+        a = item[i].a;
+        b = item[i].b;
+        break;
+    }
+    case BD_LIST_TUNES:
+        if (!tune_at(i, &b, name)) return false;
+        a = CMD_BDTUNE;
+        if (b == (bd_ctl_tune_read() & BD_MENU_MASK)) flags = BD_LIST_FLAG_CURRENT;
+        break;
+    case BD_LIST_MODES: {
+        unsigned m;
+        for (m = 1; m < 7; m++) {
+            if (!((modes_available >> m) & 1)) continue;
+            if (i == 0) break;
+            i--;
+        }
+        if (m >= 7) return false;
+        disp = mode_name[m];
+        a = CMD_BDMODE;
+        b = (uint8_t)m;
+        if (m == mode_current) flags = BD_LIST_FLAG_CURRENT;
+        break;
+    }
+    case BD_LIST_THEMES:
+        if (i > BD_THEME_MAX) return false;
+        disp = theme_name[i];
+        a = CMD_BDTHEME;
+        b = (uint8_t)i;
+        if (b == (bd_ctl_theme_read() & BD_MENU_MASK)) flags = BD_LIST_FLAG_CURRENT;
+        break;
+    default:
+        return false;
+    }
+    if (e) list_put(e, kind, flags, (uint32_t)a | ((uint32_t)b << 8), "", disp);
+    return true;
+}
+
+/* Whether unit's configured image is the file sfn of the folder list_path
+ * (sfn NULL: whether the unit has no image). The boot menu writes the path
+ * it built from the folder and the 8.3 name, which is what is compared;
+ * an image set by another path to the same file (a long name) is not marked. */
+static bool list_current(int unit, const char *sfn) {
+    char *have = list_have;
+    size_t n = strlen(list_path), i;
+    if (!cfg_name[unit]) return false;
+    norm_path(have, sizeof(list_have), cfg_name[unit]);
+    if (sfn == NULL) return have[0] == 0;
+    for (i = 0; i < n; i++) {
+        if (upper(have[i]) != upper(list_path[i])) return false;
+    }
+    if (have[n] != '\\') return false;
+    for (i = 0; sfn[i]; i++) {
+        if (upper(have[n + 1 + i]) != upper(sfn[i])) return false;
+    }
+    return have[n + 1 + i] == 0;
+}
+
+/* A folder: its directories (".." first, below the root), then its disk
+ * images (all, or of one kind), each group in directory order. The ROM asks
+ * for a screenful at a time by index, so every request walks the directory
+ * twice; nothing is kept between requests and the listing follows what is on
+ * the drive. The boot menu's own lists are served from the same request and
+ * need no drive. */
 static uint16_t do_list(const uint8_t *req, uint16_t req_len, uint8_t *answ, uint16_t maxpl, uint16_t *ax) {
     char *raw = (char *)scratch;    /* not on core 1's small stack */
     uint16_t start, total = 0;
     unsigned want, room, count = 0;
+    uint8_t list;
     size_t plen;
-    int pass;
+    int pass, unit;
 
     if (req_len < BD_LIST_REQ_LEN || maxpl < BD_LIST_HDR_LEN) {
         *ax = BD_ST_BADCMD;
@@ -909,8 +1054,25 @@ static uint16_t do_list(const uint8_t *req, uint16_t req_len, uint8_t *answ, uin
     }
     start = get16(req);
     want = req[2];
+    list = req[3];
     plen = (size_t)(req_len - BD_LIST_REQ_LEN);
     if (plen > BD_NAME_MAX) {
+        *ax = BD_ST_BADCMD;
+        return 0;
+    }
+    room = (unsigned)(maxpl - BD_LIST_HDR_LEN) / BD_LIST_ENTRY_LEN;
+    if (want > room) want = room;
+
+    if (list >= BD_LIST_MAIN) {
+        while (menu_entry(list, total, NULL)) total++;
+        if (total == 0) {
+            *ax = BD_ST_BADCMD;                     /* no such list */
+            return 0;
+        }
+        while (count < want && menu_entry(list, start + count, answ + BD_LIST_HDR_LEN + count * BD_LIST_ENTRY_LEN)) count++;
+        goto done;
+    }
+    if (list > BD_LIST_HARDDISK) {
         *ax = BD_ST_BADCMD;
         return 0;
     }
@@ -922,8 +1084,6 @@ static uint16_t do_list(const uint8_t *req, uint16_t req_len, uint8_t *answ, uin
         *ax = BD_ST_NOTREADY;
         return 0;
     }
-    room = (unsigned)(maxpl - BD_LIST_HDR_LEN) / BD_LIST_ENTRY_LEN;
-    if (want > room) want = room;
 
     switch (f_opendir(&list_dir, list_path[0] ? list_path : "/")) {
     case FR_OK:
@@ -941,6 +1101,16 @@ static uint16_t do_list(const uint8_t *req, uint16_t req_len, uint8_t *answ, uin
             count = 1;
         }
         total = 1;
+    } else if (list != BD_LIST_ALL) {
+        /* at the top of the list of one kind of image: the drive without
+         * one, as a choice that writes an empty name to its register */
+        unit = (list == BD_LIST_FLOPPY) ? BD_UNIT_FD : BD_UNIT_HD;
+        if (start == 0 && want > 0) {
+            list_put(answ + BD_LIST_HDR_LEN, BD_KIND_CHOICE, list_current(unit, NULL) ? BD_LIST_FLAG_CURRENT : 0,
+                     (unit == BD_UNIT_FD) ? CMD_BDFDNAME : CMD_BDHDNAME, "", "(none)");
+            count = 1;
+        }
+        total = 1;
     }
     for (pass = 0; pass < 2; pass++) {
         if (pass && f_readdir(&list_dir, NULL) != FR_OK) goto fail;     /* rewind */
@@ -950,16 +1120,21 @@ static uint16_t do_list(const uint8_t *req, uint16_t req_len, uint8_t *answ, uin
             if (fno.fname[0] == 0) break;
             kind = list_kind();
             if (kind < 0 || (kind == BD_KIND_DIR) != (pass == 0)) continue;
+            if (list != BD_LIST_ALL && kind != BD_KIND_DIR && kind != (int)list) continue;  /* the other kind of image */
             if (total >= start && count < want) {
-                list_put(answ + BD_LIST_HDR_LEN + count * BD_LIST_ENTRY_LEN, kind, fno.fattrib,
-                         (uint32_t)(fno.fsize / BD_SECTOR),
-                         fno.altname[0] ? fno.altname : fno.fname, fno.fname);
+                const char *sfn = fno.altname[0] ? fno.altname : fno.fname;
+                uint8_t flags = (fno.fattrib & AM_RDO) ? BD_LIST_FLAG_RO : 0;
+                if (kind != BD_KIND_DIR && list_current(kind == BD_KIND_FLOPPY ? BD_UNIT_FD : BD_UNIT_HD, sfn))
+                    flags |= BD_LIST_FLAG_CURRENT;
+                list_put(answ + BD_LIST_HDR_LEN + count * BD_LIST_ENTRY_LEN, kind, flags,
+                         (uint32_t)(fno.fsize / BD_SECTOR), sfn, fno.fname);
                 count++;
             }
             if (total < 0xFFFF) total++;
         }
     }
     f_closedir(&list_dir);
+done:
     put16(answ, total);
     answ[2] = (uint8_t)count;
     answ[3] = 0;

@@ -1413,13 +1413,15 @@ typedef struct {
 static uint16_t list_total;
 static unsigned list_count;
 
+static uint8_t list_id;         /* which list bdlist() asks for */
+
 static uint16_t bdlist(const char *dir, uint16_t start, uint8_t max) {
     uint8_t p[BD_LIST_REQ_LEN + 200];
     size_t n = strlen(dir);
     uint16_t ax;
     wr16(p, start);
     p[2] = max;
-    p[3] = 0;
+    p[3] = list_id;
     memcpy(p + BD_LIST_REQ_LEN, dir, n);
     ax = frame(0, BD_AL_LIST, p, (uint32_t)(BD_LIST_REQ_LEN + n));
     list_total = 0;
@@ -1577,6 +1579,143 @@ static void test_list(void) {
     set_name(0, "");
 }
 
+/* A menu entry: kind, argument bytes, flags, name */
+static bool ment_is(unsigned i, uint8_t kind, uint8_t a, uint8_t b, uint8_t flags, const char *disp) {
+    lent_t l = lent(i);
+    bool ok = l.kind == kind && (l.sectors & 0xFF) == a && ((l.sectors >> 8) & 0xFF) == b && l.flags == flags &&
+              l.sfn[0] == 0 && strcmp(l.disp, disp) == 0;
+    if (!ok) printf("  entry %u: kind %u a %02X b %02X flags %02X disp '%s'\n", i, l.kind, l.sectors & 0xFF,
+                    (l.sectors >> 8) & 0xFF, l.flags, l.disp);
+    return ok;
+}
+
+static void test_menu_lists(void) {
+    static uint8_t menu, tunereg, theme;
+    static char melody[BD_MELODY_BUF];
+    unsigned i;
+
+    SECTION("BDLIST: one kind of image");
+    list_id = BD_LIST_FLOPPY;
+    CHECK(bdlist("\\MENU", 0, 255) == 0 && list_total == 8 && list_count == 8, "floppy images of \\MENU: %u", list_total);
+    CHECK(lent_is(0, BD_KIND_DIR, 0, "..", "..") && lent_is(3, BD_KIND_DIR, 0, "MANY", "MANY"), "the folders are all there");
+    CHECK(lent_is(4, BD_KIND_FLOPPY, 1440, "A.IMG", "A.IMG") && lent_is(6, BD_KIND_FLOPPY, 5760, "EXACT.DSK", "EXACT.dsk") &&
+          lent_is(7, BD_KIND_FLOPPY, 720, "RO.FLP", "RO.FLP") && lent(7).flags == BD_LIST_FLAG_RO, "and the floppy images, no hard disk image");
+    list_id = BD_LIST_HARDDISK;
+    CHECK(bdlist("\\MENU", 0, 255) == 0 && list_total == 6, "hard disk images of \\MENU: %u", list_total);
+    CHECK(lent_is(4, BD_KIND_HARDDISK, 5761, "BIG.IMG", "BIG.IMG") && lent_is(5, BD_KIND_HARDDISK, 64, "TINY.VHD", "tiny.vhd"),
+          "the two hard disk images after the folders");
+    CHECK(bdlist("\\MENU", 5, 4) == 0 && list_total == 6 && list_count == 1, "paging counts only what is listed");
+    /* at the root: the drive without an image comes first, as a choice */
+    set_name(0, "");
+    set_name(1, "");
+    list_id = BD_LIST_FLOPPY;
+    CHECK(bdlist("", 0, 255) == 0 && ment_is(0, BD_KIND_CHOICE, 0x88, 0, BD_LIST_FLAG_CURRENT, "(none)") &&
+          lent(1).kind == BD_KIND_DIR, "floppy images of the root start with '(none)', in effect while A: is empty");
+    {
+        unsigned all, fd, hd, dirs = 0;
+        fd = list_total;
+        for (unsigned k = 0; k < list_count; k++) dirs += lent(k).kind == BD_KIND_DIR;
+        list_id = BD_LIST_HARDDISK;
+        CHECK(bdlist("", 0, 255) == 0 && ment_is(0, BD_KIND_CHOICE, 0x89, 0, BD_LIST_FLAG_CURRENT, "(none)"), "and so do the hard disk images");
+        hd = list_total;
+        list_id = BD_LIST_ALL;
+        CHECK(bdlist("", 0, 255) == 0 && lent(0).kind == BD_KIND_DIR, "the list of everything has no such entry");
+        all = list_total;
+        CHECK(fd - 1 - dirs + hd - 1 - dirs == all - dirs, "floppy (%u) and hard disk (%u) lists share out the images of the full list (%u, %u folders)",
+              fd, hd, all, dirs);
+    }
+    /* the image that is in the drive is marked: by the path the ROM writes */
+    set_name(0, "\\MENU\\BOOTDI~1.IMA");
+    set_name(1, "\\menu\\big.img");
+    list_id = BD_LIST_FLOPPY;
+    CHECK(bdlist("\\MENU", 0, 255) == 0 && lent(5).flags == BD_LIST_FLAG_CURRENT && lent(4).flags == 0 && lent(6).flags == 0,
+          "the floppy image in A: is flagged (%02X)", lent(5).flags);
+    CHECK(bdlist("", 0, 1) == 0 && ment_is(0, BD_KIND_CHOICE, 0x88, 0, 0, "(none)"), "'(none)' is not in effect now");
+    list_id = BD_LIST_HARDDISK;
+    CHECK(bdlist("/MENU/", 0, 255) == 0 && lent(4).flags == BD_LIST_FLAG_CURRENT && lent(5).flags == 0,
+          "the hard disk image in C: is flagged, whatever the case of the name");
+    list_id = BD_LIST_ALL;
+    CHECK(bdlist("\\MENU", 0, 255) == 0 && lent(5).flags == BD_LIST_FLAG_CURRENT && lent(7).flags == BD_LIST_FLAG_CURRENT,
+          "both in the list of everything");
+    set_name(0, "\\MENU\\MANY\\F001.IMG");
+    list_id = BD_LIST_FLOPPY;
+    CHECK(bdlist("\\MENU", 0, 255) == 0 && lent(5).flags == 0 && lent(3).flags == 0, "an image in a subfolder marks nothing in its parent");
+    set_name(0, "");
+    set_name(1, "");
+    list_id = 3;
+    CHECK(bdlist("", 0, 16) == BD_ST_BADCMD, "no list 3 -> 01h");
+
+    SECTION("BDLIST: the boot menu's own lists");
+    menu = BD_MENU_DEFAULT;
+    tunereg = 2;
+    theme = BD_THEME_COMMANDER;
+    melody[0] = 0;
+    bd_init_ui(&menu, &tunereg, &theme, melody);
+    bd_init_modes(0x7E, 5);
+    unmount_drive();                                    /* they need no drive */
+    list_id = BD_LIST_MAIN;
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 7 && list_count == 7, "main menu: %u entries", list_total);
+    CHECK(ment_is(0, BD_KIND_MENU, BD_LIST_FLOPPY, 0, 0, "Floppy Image") && ment_is(1, BD_KIND_MENU, BD_LIST_HARDDISK, 0, 0, "HDD Image") &&
+          ment_is(2, BD_KIND_MENU, BD_LIST_TUNES, 0, 0, "Boot Melody") && ment_is(3, BD_KIND_MENU, BD_LIST_MODES, 0, 0, "Card Mode") &&
+          ment_is(4, BD_KIND_MENU, BD_LIST_THEMES, 0, 0, "Colours"), "the lists it opens");
+    CHECK(ment_is(5, BD_KIND_CHOICE, 0xE1, 1, 0, "Save Settings") && ment_is(6, BD_KIND_BOOT, 0, 0, 0, "Boot"), "save and boot");
+    CHECK(bdlist("\\ignored", 5, 1) == 0 && list_total == 7 && list_count == 1 && ment_is(0, BD_KIND_CHOICE, 0xE1, 1, 0, "Save Settings"),
+          "paged like any list; a path does not matter");
+    bd_init_modes(1u << 5, 5);
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 6 && ment_is(3, BD_KIND_MENU, BD_LIST_THEMES, 0, 0, "Colours"),
+          "a single-mode firmware has no Card Mode entry (%u entries)", list_total);
+    bd_init_modes(0x7E, 5);
+
+    list_id = BD_LIST_TUNES;
+    CHECK(bdlist("", 0, 255) == 0 && list_total == BD_TUNE_BUILTIN + 1, "tunes: off and the built-in ones (%u)", list_total);
+    CHECK(ment_is(0, BD_KIND_CHOICE, 0x8C, 0, 0, "Off") && ment_is(1, BD_KIND_CHOICE, 0x8C, 1, 0, "Rising") &&
+          ment_is(2, BD_KIND_CHOICE, 0x8C, 2, BD_LIST_FLAG_CURRENT, "Fanfare"), "the selected one is flagged");
+    {
+        bool names = true;
+        for (i = 1; i <= BD_TUNE_BUILTIN; i++) {
+            lent_t l = lent(i);
+            size_t n = (size_t)(strchr(bd_tune_builtin[i - 1], ':') - bd_tune_builtin[i - 1]);
+            if (strlen(l.disp) != n || memcmp(l.disp, bd_tune_builtin[i - 1], n) != 0 || ((l.sectors >> 8) & 0xFF) != i) names = false;
+        }
+        CHECK(names, "every built-in tune by its name and number");
+    }
+    bd_ctl_melody_select();
+    for (const char *p = "My Own:d=4,o=5,b=120:c"; *p; p++) bd_ctl_melody_write((uint8_t)*p);
+    bd_ctl_melody_write(0);
+    bd_ctl_tune_write(BD_TUNE_CUSTOM);
+    CHECK(bdlist("", 0, 255) == 0 && list_total == BD_TUNE_BUILTIN + 2 &&
+          ment_is(BD_TUNE_BUILTIN + 1, BD_KIND_CHOICE, 0x8C, BD_TUNE_CUSTOM, BD_LIST_FLAG_CURRENT, "My Own") &&
+          lent(2).flags == 0, "the user's melody is the last entry, and now the selected one");
+    bd_ctl_melody_select();
+    for (const char *p = "c,e,g"; *p; p++) bd_ctl_melody_write((uint8_t)*p);
+    bd_ctl_melody_write(0);
+    CHECK(bdlist("", BD_TUNE_BUILTIN + 1, 1) == 0 && ment_is(0, BD_KIND_CHOICE, 0x8C, BD_TUNE_CUSTOM, BD_LIST_FLAG_CURRENT, "Custom"),
+          "a melody without a name is 'Custom'");
+
+    list_id = BD_LIST_THEMES;
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 3 && ment_is(0, BD_KIND_CHOICE, 0x8D, 0, 0, "Setup") &&
+          ment_is(1, BD_KIND_CHOICE, 0x8D, 1, BD_LIST_FLAG_CURRENT, "Commander") && ment_is(2, BD_KIND_CHOICE, 0x8D, 2, 0, "Mono"),
+          "colours: three, Commander in effect");
+
+    list_id = BD_LIST_MODES;
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 6 && ment_is(0, BD_KIND_CHOICE, 0x90, 1, 0, "Gravis UltraSound") &&
+          ment_is(4, BD_KIND_CHOICE, 0x90, 5, BD_LIST_FLAG_CURRENT, "Sound Blaster") && ment_is(5, BD_KIND_CHOICE, 0x90, 6, 0, "USB only"),
+          "modes: six, Sound Blaster running");
+    bd_init_modes((1u << 1) | (1u << 6), 6);
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 2 && ment_is(0, BD_KIND_CHOICE, 0x90, 1, 0, "Gravis UltraSound") &&
+          ment_is(1, BD_KIND_CHOICE, 0x90, 6, BD_LIST_FLAG_CURRENT, "USB only"), "only the modes the firmware has");
+    CHECK(bd_mode_available(1) && bd_mode_available(6) && !bd_mode_available(2) && !bd_mode_available(0) && !bd_mode_available(7) &&
+          !bd_mode_available(200), "bd_mode_available");
+
+    list_id = 0x14;
+    CHECK(bdlist("", 0, 16) == BD_ST_BADCMD, "no list 14h -> 01h");
+    list_id = BD_LIST_ALL;
+    CHECK(bdlist("", 0, 16) == BD_ST_NOTREADY, "a folder list still needs the drive");
+    mount_drive();
+    bd_init_ui(NULL, NULL, NULL, NULL);
+    bd_init_modes(0, 0);
+}
+
 int main(void) {
     test_floppy_geometry();
     test_harddisk_geometry();
@@ -1595,6 +1734,7 @@ int main(void) {
         test_unmount();
         test_card_reboot();
         test_list();
+        test_menu_lists();
     }
     unmount_drive();
     ramdisk_free();

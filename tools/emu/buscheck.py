@@ -341,6 +341,31 @@ def main():
     ax, _, _ = blist('\\NOSUCH', 0, 16)
     check(ax == 0x02, 'BDLIST of a missing folder answers 02h (AX=%04X)' % ax)
 
+    # the boot menu's lists: the fourth request byte names one
+    def mlist(list_id, path=''):
+        ax, pl, seq = card.transact(0xF6, struct.pack('<HBB', 0, 16, list_id) + path.encode('latin-1'))
+        if ax != 0 or len(pl) < 4:
+            return ax, []
+        n = pl[2]
+        return ax, [(pl[4 + 48 * i], pl[5 + 48 * i], pl[6 + 48 * i], pl[7 + 48 * i],
+                     pl[25 + 48 * i:25 + 48 * i + pl[10 + 48 * i]].decode('latin-1')) for i in range(n)]
+    ax, ents = mlist(0x10)
+    check(ax == 0 and [e[4] for e in ents] == ['Floppy Image', 'HDD Image', 'Boot Melody', 'Card Mode', 'Colours', 'Save Settings', 'Boot'],
+          'main menu: %s' % [e[4] for e in ents])
+    check(ax == 0 and ents[0][:4] == (3, 0, 0x01, 0) and ents[5][:4] == (4, 0, 0xE1, 1) and ents[6][0] == 5,
+          'its entries open list 01h, write 1 to CMD_SAVE, boot')
+    ax, ents = mlist(0x01)
+    check(ax == 0 and ents[0][:4] == (4, 0, 0x88, 0) and ents[0][4] == '(none)' and [e[4] for e in ents[1:]] == ['FD.IMG'] and
+          ents[1][1] & 2 == 2, 'floppy images: (none), then FD.IMG, flagged as the one in A: (%s)' % ents)
+    ax, ents = mlist(0x02)
+    check(ax == 0 and [e[4] for e in ents] == ['(none)', 'HD.IMG'] and ents[1][0] == 2, 'hard disk images: (none), HD.IMG')
+    ax, ents = mlist(0x12)
+    check(ax == 0 and len(ents) == 6 and ents[5][:5] == (4, 2, 0x90, 6, 'USB only'), 'modes: six, USB only running (%s)' % ents[-1:])
+    ax, ents = mlist(0x13)
+    check(ax == 0 and [e[4] for e in ents] == ['Setup', 'Commander', 'Mono'] and [e[3] for e in ents] == [0, 1, 2], 'colours: three choices')
+    ax, ents = mlist(0x77)
+    check(ax == 0x01, 'an unknown list answers 01h (AX=%04X)' % ax)
+
     # an old/unknown unit
     ax, _, _ = card.transact(0xF3, bytes((5, 0)))
     check(ax == 0x01, 'BDINFO unit 5 answers 01h (AX=%04X)' % ax)

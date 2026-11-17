@@ -121,46 +121,87 @@ FatFs or USB error). After a 20h the next request tries the drive again.
 
 ### F6h BDLIST
 
-One screenful of a folder for the ROM's boot menu: the way up (`..`, not in
-the root), the folders, then the disk images, each group in the order the
-entries have in the directory. Nothing is kept on the card between requests:
-every request reads the directory again, so the listing follows the drive.
+One screenful of a list for the ROM's boot menu. The ROM is a list browser:
+which lists there are and what their entries do is the card's business, so
+firmware can add to the menu without a new ROM.
 
-Request payload: `SS SS NN FF` + path
+Request payload: `SS SS NN LL` + path
 * `SS SS` index of the first entry wanted (u16)
 * `NN` most entries wanted; the card returns fewer when the frame is smaller
   (`(CMD_DFSMAXLEN - 4) / 48`, 85 with the default 4096). 0 asks for the
-  total alone, which is how the ROM asks "is a drive mounted?" when no image
-  is configured.
-* `FF` flags, 0
-* path: the folder, without a terminator, at most 127 characters, spelled
-  like an image name (`\DISKS\DOS`, `/disks/dos`, `E:\disks\dos\`). Empty or a
-  separator alone: the root.
+  total alone.
+* `LL` the list:
+
+  | LL | List | Needs the USB drive |
+  |---|---|---|
+  | 00h | a folder: its folders and all its disk images | yes |
+  | 01h | a folder: its folders and its floppy images | yes |
+  | 02h | a folder: its folders and its hard disk images | yes |
+  | 10h | the main menu | no |
+  | 11h | the start-up tunes | no |
+  | 12h | the card's modes | no |
+  | 13h | the colours of the menu | no |
+
+  Firmware before the lists ignored this byte (the ROM sent 0) and answers
+  every value with list 00h. Any other value: 01h.
+* path (lists 00h-02h; ignored by the others): the folder, without a
+  terminator, at most 127 characters, spelled like an image name
+  (`\DISKS\DOS`, `/disks/dos`, `E:\disks\dos\`). Empty or a separator
+  alone: the root.
 
 Answer: AX = 00h and `TT TT CC 00` followed by `CC` entries of 48 bytes.
-`TT TT` is the number of entries the folder has for the menu (at most
-65535), `CC` the number in this answer.
+`TT TT` is the number of entries the list has (at most 65535), `CC` the
+number in this answer.
 
 | Off | Size | Field |
 |---|---|---|
-| 0 | u8 | kind: 0 folder, 1 floppy image (goes to A:), 2 hard disk image (goes to C:) |
-| 1 | u8 | flags: bit 0 the file is read-only |
-| 2 | u32 | size in 512-byte sectors, rounded down; 0 for folders |
+| 0 | u8 | kind, see below |
+| 1 | u8 | flags: bit 0 the image file is read-only; bit 1 this is what is in effect (the image in the drive, the tune, mode or colours selected) |
+| 2 | u32 | images: size in 512-byte sectors, rounded down. Menu entries: byte 2 = a, byte 3 = b (see the kinds), the rest 0. Folders: 0 |
 | 6 | u8 | length of the display name |
 | 7 | u8 | reserved, 0 |
-| 8 | 13 | 8.3 name, zero padded, always terminated: what a path is built from (`..` for the way up) |
-| 21 | 27 | display name: the long name, zero padded; a longer one is cut to 24 characters and `...` |
+| 8 | 13 | 8.3 name, zero padded, always terminated: what a path is built from (`..` for the way up); empty for menu entries |
+| 21 | 27 | display name, zero padded; a longer one is cut to 24 characters and `...` |
 
-What is listed: folders and files that are neither hidden nor system. A
-file is a disk image by its extension: `IMG`, `IMA`, `VFD`, `FLP`, `DSK`
-(a floppy image up to 2,949,120 bytes = 2.88 MB, a hard disk image above),
-`VHD` and `HDD` (always a hard disk image). The kind is a guess for the menu
-from the name and size alone; whether the image is usable shows when it is
-opened (BDINFO state).
+| Kind | Entry | What Enter does in the ROM |
+|---|---|---|
+| 0 | folder | lists that folder (`..`: the one above) |
+| 1 | floppy image | writes its path (the folder, `\`, the 8.3 name) to `CMD_BDFDNAME`, returns to the main menu |
+| 2 | hard disk image | the same to `CMD_BDHDNAME` |
+| 3 | menu | opens list a; the entry's display name is that list's title |
+| 4 | choice | writes the value b to control register a (`DATA_PORT_HIGH`), waits a quarter of a second and until the card answers again, then draws everything anew and reads the list again. After a write to `CMD_BDTUNE` it plays the tune; after one to `CMD_SAVE` it only says so |
+| 5 | boot | leaves the menu |
 
-Other answers, without a payload: 01h request shorter than 4 bytes or path
-longer than 127 characters, 02h no such folder, 20h FatFs or USB error, 80h
-no USB drive mounted.
+A ROM leaves the menu on any kind it does not know.
+
+Folder lists (00h-02h): the way up (`..`, not in the root), the folders,
+then the disk images, each group in the order the entries have in the
+directory. At the top of the root of lists 01h and 02h comes `(none)`: a
+choice that writes 0 to the image name register, which empties the drive.
+Nothing is kept on the card between requests: every request reads the
+directory again, so the listing follows the drive. Listed are folders and
+files that are neither hidden nor system. A file is a disk image by its
+extension: `IMG`, `IMA`, `VFD`, `FLP`, `DSK` (a floppy image up to 2,949,120
+bytes = 2.88 MB, a hard disk image above), `VHD` and `HDD` (always a hard
+disk image). The kind is a guess for the menu from the name and size alone;
+whether the image is usable shows when it is opened (BDINFO state). An image
+is flagged as the one in the drive when the configured name is this folder's
+path with this entry's 8.3 name, which is how the ROM writes it.
+
+The menu's own lists:
+
+* 10h, main menu: Floppy Image (menu 01h), HDD Image (menu 02h), Boot Melody
+  (menu 11h), Card Mode (menu 12h; left out when the firmware has one mode),
+  Colours (menu 13h), Save Settings (choice: `CMD_SAVE` <- 1), Boot.
+* 11h, tunes: Off, the firmware's tunes by name, then the user's melody when
+  there is one; choices `CMD_BDTUNE` <- the tune's number.
+* 12h, modes: the modes the firmware can restart in, by `card_mode_t`;
+  choices `CMD_BDMODE` <- the mode.
+* 13h, colours: Setup, Commander, Mono; choices `CMD_BDTHEME` <- 0, 1, 2.
+
+Other answers, without a payload: 01h request shorter than 4 bytes, path
+longer than 127 characters or no such list, 02h no such folder, 20h FatFs
+or USB error, 80h no USB drive mounted (folder lists).
 
 ### Status codes (AX)
 
@@ -192,6 +233,7 @@ instead of a different image. A USB replug reopens the units that were open.
 | 8Dh | `CMD_BDTHEME` | byte, `DATA_PORT_HIGH` | Colours of the ROM's boot menu, as the themes of the web page: 0 Setup, 1 Commander, 2 Mono. Other values are not stored; 3Fh written: the next one. Reads return the value with bit 6 set and bit 7 clear. Default 0. |
 | 8Eh | `CMD_BDMELODY` | string, `DATA_PORT_HIGH` | The user's melody as RTTTL text (`name:d=4,o=5,b=120:c,e,g`; the name and the defaults may be left out), at most 255 characters. Same rules as the image names: select rewinds, writes append, a 0 byte commits, reads return the text then 0. |
 | 8Fh | `CMD_BDTUNEDATA` | read stream, `DATA_PORT_HIGH` | The selected tune, compiled for the ROM. Selecting the register rewinds; reads return the stream below, then FFh. |
+| 90h | `CMD_BDMODE` | write, `DATA_PORT_HIGH` | The boot menu's mode switch: a mode (`card_mode_t`) the firmware can restart in is stored with all the settings (as `CMD_SAVE`), and the card restarts in it (as `CMD_BOOTMODE` and `CMD_REBOOT`). The card is off the bus for a second or two; its USB drive takes longer to come back. Other values do nothing. |
 
 ### The tune stream (`CMD_BDTUNEDATA`)
 

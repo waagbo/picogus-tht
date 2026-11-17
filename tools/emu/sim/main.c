@@ -58,6 +58,9 @@
 #define CMD_BDMELODY 0x8E
 #define CMD_BDTUNEDATA 0x8F
 #endif
+#ifndef CMD_BDMODE
+#define CMD_BDMODE 0x90
+#endif
 
 #define SIM_FWSTRING "pgcard-sim v1.0 (PicoGUS card simulator)"
 
@@ -95,6 +98,8 @@ uint32_t dfs_platform_millis(void) {
 static const char *opt_socket = "/tmp/pgcard.sock";
 static const char *opt_stick;
 static long opt_mount_delay_ms;
+static long opt_restart_ms = 1500;          /* how long a mode switch takes the card off the bus */
+static uint64_t absent_until;               /* the card is restarting: nothing answers */
 static int  opt_busy_polls = 1;
 static bool opt_persist;
 
@@ -150,7 +155,7 @@ static bool is_known_reg(uint8_t r) {
     case CMD_DFSSTAT: case CMD_DFSREQ: case CMD_DFSEXEC: case CMD_DFSRESP:
     case CMD_DFSINFO: case CMD_DFSMAXLEN: case CMD_DFSTIME: case CMD_DFSPORT:
     case CMD_BDFDNAME: case CMD_BDHDNAME: case CMD_BDOPTS: case CMD_BDMENU: case CMD_BDTUNE:
-    case CMD_BDTHEME: case CMD_BDMELODY: case CMD_BDTUNEDATA:
+    case CMD_BDTHEME: case CMD_BDMELODY: case CMD_BDTUNEDATA: case CMD_BDMODE:
         return true;
     }
     return false;
@@ -182,6 +187,7 @@ static const char *reg_name(uint8_t r) {
     case CMD_BDTHEME: return "BDTHEME";
     case CMD_BDMELODY: return "BDMELODY";
     case CMD_BDTUNEDATA: return "BDTUNEDATA";
+    case CMD_BDMODE: return "BDMODE";
     }
     return is_known_reg(r) ? "other" : "UNKNOWN";
 }
@@ -236,8 +242,8 @@ static void log_request(void) {
                frame_no, al_name(al), len, pl[0], pl[1], lba, tok, req_bytes);
     } else if (al == 0xF6) {
         uint32_t n = req_bytes > 8 ? req_bytes - 8 : 0;
-        logmsg("REQ #%u %-9s len=%u start=%u max=%u dir=\"%.*s\" (%u bytes streamed)",
-               frame_no, al_name(al), len, pl[0] | (pl[1] << 8), pl[2],
+        logmsg("REQ #%u %-9s len=%u start=%u max=%u list=%02x dir=\"%.*s\" (%u bytes streamed)",
+               frame_no, al_name(al), len, pl[0] | (pl[1] << 8), pl[2], pl[3],
                (int)(n > CAP - 8 ? CAP - 8 : n), (const char *)pl + 4, req_bytes);
     } else if (al == 0xF3) {
         logmsg("REQ #%u %-9s len=%u unit=%u flags=%02x (%u bytes streamed)",
@@ -382,6 +388,16 @@ static void write_high(uint8_t v) {
     case CMD_BDTUNE: bd_ctl_tune_write(v); if (sim_log_level >= 1) logmsg("tune is now %u", bd_tune); break;
     case CMD_BDTHEME: bd_ctl_theme_write(v); if (sim_log_level >= 1) logmsg("theme is now %u", bd_theme); break;
     case CMD_BDMELODY: bd_ctl_melody_write(v); if (!v && sim_log_level >= 1) logmsg("BDMELODY commit \"%s\"", bd_melody); break;
+    case CMD_BDMODE:
+        /* picogus.cpp: the mode, saved, and the card restarts in it. Here the
+         * card is gone from the bus for a while and comes back in the mode. */
+        if (bd_mode_available(v)) {
+            startup_mode = v;
+            bd_init_modes(0x7E, startup_mode);
+            absent_until = now_ms() + opt_restart_ms;
+            logmsg("CMD_BDMODE: settings saved, card restarts in mode %u (off the bus for %ld ms)", v, opt_restart_ms);
+        }
+        break;
     default: plain_regs[sel_reg] = v; break;
     }
 }
@@ -445,6 +461,12 @@ static uint8_t read_high(void) {
 
 /* One byte-wide bus cycle. Returns the value for reads. */
 static uint8_t bus_cycle(bool is_write, uint16_t port, uint8_t v) {
+    if (absent_until) {                     /* restarting: writes are lost, reads float */
+        if (now_ms() < absent_until) return 0xFF;
+        absent_until = 0;
+        control_active = false;
+        logmsg("card is back on the bus");
+    }
     if (dfs_base && (port & ~1u) == dfs_base) {
         if (is_write) {
             if (req_bytes < CAP) req_cap[req_bytes] = v;
@@ -559,6 +581,7 @@ static void usage(void) {
         "  --theme N            CMD_BDTHEME value: 0 Setup, 1 Commander, 2 Mono (default 0)\n"
         "  --melody RTTTL       the user's melody (CMD_BDMELODY)\n"
         "  --mount-delay-ms N   report NODRIVE for N ms after the bridge connects\n"
+        "  --restart-ms N       a mode switch (CMD_BDMODE) takes the card off the bus for N ms (default 1500)\n"
         "  --dfsport N          PGDFS data window base (default 0x1d4, 0 = disabled)\n"
         "  --busy-polls N       status polls that see BUSY before a request is served (default 1)\n"
         "  --socket PATH        UNIX socket to listen on (default /tmp/pgcard.sock)\n"
@@ -578,6 +601,7 @@ int main(int argc, char **argv) {
         { "theme", required_argument, 0, 'T' },
         { "melody", required_argument, 0, 'M' },
         { "mount-delay-ms", required_argument, 0, 'd' },
+        { "restart-ms", required_argument, 0, 'R' },
         { "dfsport", required_argument, 0, 'p' },
         { "busy-polls", required_argument, 0, 'b' },
         { "socket", required_argument, 0, 'S' },
@@ -600,6 +624,7 @@ int main(int argc, char **argv) {
         case 'T': bd_theme = (uint8_t)strtoul(optarg, NULL, 0); break;
         case 'M': snprintf(bd_melody, sizeof(bd_melody), "%s", optarg); break;
         case 'd': opt_mount_delay_ms = strtol(optarg, NULL, 0); break;
+        case 'R': opt_restart_ms = strtol(optarg, NULL, 0); break;
         case 'p': dfs_base = (uint16_t)strtoul(optarg, NULL, 0); break;
         case 'b': opt_busy_polls = atoi(optarg); break;
         case 'S': opt_socket = optarg; break;
@@ -626,6 +651,7 @@ int main(int argc, char **argv) {
     /* card boot, core 0: settings, then the servers (before core 1 starts) */
     bd_init(bd_fd_name, bd_hd_name, &bd_opts);
     bd_init_ui(&bd_menu, &bd_tune, &bd_theme, bd_melody);
+    bd_init_modes(0x7E, startup_mode);      /* a multi-mode firmware */
     /* per-boot nonce for the image tokens: a new sim process is a new card boot */
     bd_set_boot_nonce((uint32_t)time(NULL) ^ ((uint32_t)getpid() << 16) ^ (uint32_t)now_ms());
     dfs_init();

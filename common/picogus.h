@@ -161,6 +161,9 @@ typedef enum {
 #define CMD_BDTUNEDATA 0x8F // read stream (DATA_PORT_HIGH): the selected tune for the ROM: n, n name characters, then timer
                             // divisor u16 and length u16 per note, FFh FFh at the end; select rewinds
 
+#define CMD_BDMODE     0x90 // write (DATA_PORT_HIGH): the boot menu's mode switch: the card stores mode n (card_mode_t) with its
+                            // settings and restarts in it
+
 #define CMD_DEFAULTS   0xE0 // Select reset to defaults register
 #define CMD_SAVE       0xE1 // Select save settings register
 #define CMD_REBOOT     0xE2 // Select reboot register

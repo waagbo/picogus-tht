@@ -71,9 +71,10 @@ extern "C" {
 #define BD_OPT_MASK         0x0F
 #define BD_OPTS_SIGNATURE   0x80    /* read value = opts | 80h (bit 6 clear) */
 
-/* BDLIST (PROTOCOL.md). Request: start index u16, max entries u8, flags u8
- * (0), then the directory path (no terminator, empty = root). Answer: total
- * entries u16, entries in this answer u8, reserved u8, then the entries. */
+/* BDLIST (PROTOCOL.md). Request: start index u16, max entries u8, list id u8,
+ * then the directory path (no terminator, empty = root; folder lists only).
+ * Answer: total entries u16, entries in this answer u8, reserved u8, then
+ * the entries. */
 #define BD_LIST_REQ_LEN     4
 #define BD_LIST_HDR_LEN     4
 #define BD_LIST_ENTRY_LEN   48
@@ -86,9 +87,27 @@ extern "C" {
 #define BD_LIST_SFN_LEN     13
 #define BD_LIST_DISP_LEN    27
 
+#define BD_LIST_OFF_ARG      2  /* menu entries, in place of the size: u8 a, u8 b (see the kinds) */
+
 #define BD_KIND_DIR         0   /* directory (".." first, below the root) */
 #define BD_KIND_FLOPPY      1   /* image the size of a floppy disk: goes to A: */
 #define BD_KIND_HARDDISK    2   /* any larger image, and every .VHD/.HDD: goes to C: */
+#define BD_KIND_MENU        3   /* opens another list: a = its id; the entry's name is its title */
+#define BD_KIND_CHOICE      4   /* a setting: the value b is written to control register a */
+#define BD_KIND_BOOT        5   /* leaves the menu and boots */
+
+#define BD_LIST_FLAG_RO      0x01   /* the image file is read-only */
+#define BD_LIST_FLAG_CURRENT 0x02   /* the choice that is in effect */
+
+/* The lists: a folder of the USB drive (the request carries its path), or
+ * one of the boot menu's own */
+#define BD_LIST_ALL         0x00    /* a folder: its folders and disk images */
+#define BD_LIST_FLOPPY      0x01    /* its folders and floppy images */
+#define BD_LIST_HARDDISK    0x02    /* its folders and hard disk images */
+#define BD_LIST_MAIN        0x10    /* the main menu */
+#define BD_LIST_TUNES       0x11    /* the start-up tunes */
+#define BD_LIST_MODES       0x12    /* the card's modes */
+#define BD_LIST_THEMES      0x13    /* the colours of the menu */
 
 /* Largest file the boot menu offers as a floppy: 2.88 MB */
 #define BD_FLOPPY_MAX_BYTES 2949120UL
@@ -142,6 +161,12 @@ void bd_set_boot_nonce(uint32_t nonce);
  * that register reads its default and ignores writes. Call after bd_init();
  * compiles the selected tune. */
 void bd_init_ui(uint8_t *menu, uint8_t *tune, uint8_t *theme, char *melody);
+
+/* The modes the card can be switched to from the boot menu (bit n: mode n of
+ * card_mode_t; one bit or none: no "Card Mode" in the menu) and the one that
+ * is running. The switch itself is the firmware's (CMD_BDMODE). */
+void bd_init_modes(uint8_t available, uint8_t current);
+bool bd_mode_available(uint8_t mode);       /* ISR-safe */
 
 /* ---- core 0: control register handlers (O(1), no FatFs, ISR-safe) ----- */
 void    bd_ctl_name_select(uint8_t unit);           /* register selected: rewind */

@@ -58,11 +58,14 @@ BD_UI_VALUE     equ 3Fh
 BD_MENU_MODE    equ 03h             ; CMD_BDMENU bits 0-1: 0 off, 1 on a key, 2 always
 BD_MENU_ALWAYS  equ 2               ; bits 2-5: seconds the menu is offered
 
-; BDLIST: request SS SS NN FF + folder path; answer TT TT CC 00 + CC entries
+; BDLIST: request SS SS NN LL (LL: which list) + folder path; answer TT TT CC 00
+; + CC entries
 BD_LIST_REQ_LEN     equ 4
 BD_LIST_HDR_LEN     equ 4
 BD_LIST_ENTRY_LEN   equ 48
 BD_LIST_OFF_KIND    equ 0           ; BD_KIND_*
+BD_LIST_OFF_FLAGS   equ 1           ; bit 1: the choice in effect
+BD_LIST_OFF_ARG     equ 2           ; a menu entry: db a, db b (see the kinds)
 BD_LIST_OFF_SECTORS equ 2           ; dd size in sectors
 BD_LIST_OFF_DISPLEN equ 6           ; db length of the display name
 BD_LIST_OFF_SFN     equ 8           ; 13 bytes: 8.3 name, zero terminated
@@ -72,6 +75,11 @@ BD_LIST_DISP_LEN    equ 27
 BD_KIND_DIR         equ 0
 BD_KIND_FLOPPY      equ 1
 BD_KIND_HARDDISK    equ 2
+BD_KIND_MENU        equ 3           ; opens list a
+BD_KIND_CHOICE      equ 4           ; value b goes to control register a
+BD_KIND_BOOT        equ 5           ; the menu ends
+BD_LIST_FLAG_CURRENT equ 02h
+BD_LIST_MAIN        equ 10h         ; list id of the main menu; below it: folders
 
 ; BDINFO record offsets
 BI_VERSION      equ 0
@@ -108,7 +116,6 @@ TMO_READ        equ 182         ; ~10 s: reads, verify, BDINFO
 TMO_WRITE       equ 546         ; ~30 s: writes
 TMO_OPEN        equ 546         ; ~30 s: BDINFO with OPEN (fast-seek map build)
 WAIT_SECONDS    equ 15          ; USB drive wait at late init
-WAIT_SECONDS_NOIMG equ 5        ; the same when no image is configured and the menu is offered on a key
 TICKS_PER_SEC   equ 18
 
 ; interrupt vector that holds the pre-PGBOOT INT 19h between POST and late
@@ -207,7 +214,6 @@ x_ans           resb 128        ; BDINFO answer
 ; boot menu and late init (added in 0.2, after everything 0.1 had)
 r_menu          resb 1          ; CMD_BDMENU value (0: no boot menu, or firmware without it)
 r_cfg           resb 1          ; not 0: an image name is configured
-r_bootsel       resb 1          ; picked in the menu to boot from: BD_KIND_FLOPPY / BD_KIND_HARDDISK, 0 = usual order
 m_cnt           resb 1          ; boot menu: entries in the page that is loaded
 m_top           resw 1          ; index of its first entry
 m_sel           resw 1          ; index of the selected entry
@@ -217,6 +223,11 @@ m_seg           resw 1          ; segment the page is loaded to (below this bloc
 m_theme         resw 1          ; the theme in use: offset of its table in the ROM
 m_mode          resb 1          ; video mode the menu found (7: monochrome adapter)
 m_msgon         resb 1          ; the status line shows a message, not the key hints
+m_list          resb 1          ; the list shown: its id for BDLIST
+m_rows          resb 1          ; entry rows of the list window
+m_back          resw 1          ; the main menu entry the list was opened from
+m_tlen          resb 1          ; length of m_title
+m_title         resb BD_LIST_DISP_LEN + 1   ; title of the list window
 m_path          resb MENU_PATH_MAX + 2  ; folder shown in the boot menu, "" = the root
 ram_vars_end:
 endstruc

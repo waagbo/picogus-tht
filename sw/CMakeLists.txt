@@ -171,6 +171,8 @@ function(config_target TARGET_NAME MULTIFW)
     # target_compile_options(${TARGET_NAME} PRIVATE -save-temps -fverbose-asm)
     if(MULTIFW)
         set_linker_script(${TARGET_NAME} ${CMAKE_BINARY_DIR}/${TARGET_NAME}.ld)
+        # one of the modes of a multi-mode firmware: PGBOOT's boot menu offers the others
+        target_compile_definitions(${TARGET_NAME} PRIVATE PICOGUS_MULTIFW=1)
     endif()
 
     if(USB_JOYSTICK OR USB_MOUSE OR CDROM)
