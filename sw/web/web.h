@@ -27,6 +27,8 @@
 //  * The CYW43 driver runs in lwIP "poll" mode: no background interrupts besides
 //    the tiny host-wake GPIO handler, which runs at the lowest NVIC priority.
 //  * web_task() is rate limited and each call does a bounded amount of work.
+//    Where the WiFi driver has to wait for its chip, the mode's wait hook keeps
+//    the audio going (web_set_wait_hook()).
 
 #pragma once
 
@@ -62,6 +64,26 @@ void web_flash_unlock(void);
 
 // Call from the core 1 main loop of every mode. Cheap when there is no work.
 void web_task(void);
+
+// Work that must go on while web_task() waits for the WiFi chip. The chip's
+// driver busy waits on core 1, in steps of up to 50ms while it starts the chip
+// and of a few ms while it joins a network or waits for an answer. Modes whose
+// audio is made in the core 1 loop, not in an interrupt (Sound Blaster and
+// AdLib: the OPL emulation), pass the part of their loop that keeps the audio
+// buffer filled. It is called over and over during those waits, never from
+// itself, and must return quickly once the buffer is full.
+void web_set_wait_hook(void (*hook)(void));
+
+// ---- provided by the mode, for the Information screen (optional) ----------
+
+typedef struct {
+    const char *name;   // what is buffered, e.g. "OPL"
+    uint32_t underruns; // times the buffer ran empty while playing
+    uint32_t size;      // buffer size in samples
+    uint32_t low;       // fewest samples left in the buffer seen
+} web_audio_stats_t;
+// Weak default returns false: the mode makes its audio in an interrupt
+bool web_audio_stats(web_audio_stats_t *stats);
 
 // ---- provided by picogus.cpp, used by the web API (core 1) -----------------
 

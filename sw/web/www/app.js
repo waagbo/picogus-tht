@@ -827,6 +827,7 @@ function information() {
   const v = dialog("Card Information", [lines], [button("&Close", () => close(v), true)], {keys: [["Enter", "Close"], ["Esc", "Close"]]});
   v.paint = () => {
     const n = st.net, t = st.uptime, pico = st.chip === "RP2350" ? "Pico 2 W" : "Pico W";
+    const ms = samples => (samples / 44.1).toFixed(1);
     const row = (k, val) => pre(lead(k, 12).nodes.join("") + " " + ("" + val).slice(0, 50));
     lines.replaceChildren(
       row("Mode", modeName(st.mode)),
@@ -836,7 +837,9 @@ function information() {
       row("Network", n.ssid ? n.ssid + (n.rssi ? ", " + n.rssi + " dBm" : "") : "None"),
       row("Address", n.ip),
       row("MAC", n.mac.toUpperCase()),
-      row("Web server", (n.loadPermille / 10).toFixed(1) + "% of core 1, longest run " + (n.pollRecentUs / 1000).toFixed(1) + " ms"),
+      row("Web server", (n.loadPermille / 10).toFixed(1) + "% of core 1, longest pause " + (n.pauseRecentUs / 1000).toFixed(1) + " ms"),
+      st.audio ? row(st.audio.name + " buffer", ms(st.audio.size) + " ms, lowest " + ms(st.audio.low) + " ms, ran dry " + st.audio.underruns + "x") : null,
+      n.stackSize ? row("Stack", n.stackUsed + " of " + n.stackSize + " bytes used on core 1") : null,
       st.cd ? row("CD image", st.cd.image ? "#" + st.cd.index + " " + st.cd.image.toUpperCase() : st.cd.error || "None") : null);
   };
   v.paint();

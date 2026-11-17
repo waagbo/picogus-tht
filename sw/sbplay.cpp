@@ -116,6 +116,44 @@ static inline void opl_fifo_add_sample(sample_pair sample) {
     opl_out_fifo.write_idx++;
 }
 
+#ifdef WEBSERVER
+// For the web UI's Information screen: how often the OPL output FIFO ran dry,
+// and how low it has been. Updated in the audio interrupt. Counting starts
+// once the FIFO is half full, and again after each time it ran dry.
+static volatile uint32_t opl_underruns;
+static volatile uint32_t opl_fifo_low = OPL_FIFO_SIZE;
+static bool opl_fifo_dry = true;    // not filled yet
+
+static inline void opl_stats_sample() {
+    uint32_t level = opl_out_fifo.write_idx - opl_out_fifo.read_idx;
+    if (opl_fifo_dry) {
+        if (level < OPL_FIFO_SIZE / 2) {
+            return;
+        }
+        opl_fifo_dry = false;
+    }
+    if (level < opl_fifo_low) {
+        opl_fifo_low = level;
+    }
+}
+
+static inline void opl_stats_empty() {
+    if (!opl_fifo_dry) {
+        opl_fifo_dry = true;
+        ++opl_underruns;
+        opl_fifo_low = 0;
+    }
+}
+
+bool web_audio_stats(web_audio_stats_t *stats) {
+    stats->name = "OPL";
+    stats->underruns = opl_underruns;
+    stats->size = OPL_FIFO_SIZE;
+    stats->low = opl_fifo_low;
+    return true;
+}
+#endif
+
 // OPL stereo sample callback — returns a clamped stereo pair.
 // Volume is applied in the ISR after FIFO read, not here.
 static sample_pair get_opl_stereo_sample()
@@ -209,12 +247,20 @@ void audio_sample_handler(void) {
     // OPL FIFO: no start-threshold needed (same-core, filled continuously).
     // Just check level directly.
     if (opl_out_fifo.write_idx != opl_out_fifo.read_idx) {
+#ifdef WEBSERVER
+        opl_stats_sample();
+#endif
         sample_pair opl = opl_out_fifo.buffer[opl_out_fifo.read_idx & OPL_FIFO_BITS];
         opl_out_fifo.read_idx++;
         // 1.5x boost to match DSP levels (DOSBox-X uses SetScale(1.5f) for FM)
         sample_l += scale_sample((int32_t)opl.data16[0] * 3 >> 1, volume.opl[0], 0);
         sample_r += scale_sample((int32_t)opl.data16[1] * 3 >> 1, volume.opl[1], 0);
     }
+#ifdef WEBSERVER
+    else {
+        opl_stats_empty();
+    }
+#endif
 
 #ifdef SOUND_SB
     // apply SB master volume and clamp the output
@@ -227,6 +273,42 @@ void audio_sample_handler(void) {
 
     audio_pio->txf[PICO_AUDIO_I2S_SM] = ((sample_l & 0xFFFF) | (sample_r << 16));
 }
+
+static __force_inline void opl_drain_commands() {
+#if OPL_CMD_BUFFER && USE_EMU8950_OPL
+    // emu8950 doesn't drain the command buffer internally (unlike dbopl/ymfm
+    // which do it in their refill_prebuf()), so drain it here.
+    while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
+        auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
+        OPL_Pico_WriteRegister(cmd.addr, cmd.data);
+        ++opl_cmd_buffer.tail;
+    }
+#endif
+}
+
+static __force_inline void opl_fill() {
+    for (uint32_t opl_i = 0;
+         opl_i < OPL_FILL_PER_ITER && opl_fifo_free_space() >= 1;
+         opl_i++) {
+#ifdef USE_LINEAR_RESAMPLER
+        opl_fifo_add_sample(opl_resample_tick());
+#else
+        opl_fifo_add_sample(opl_resampler.get_sample());
+#endif
+    }
+}
+
+#ifdef WEBSERVER
+// While the WiFi driver waits for its chip (web_set_wait_hook()), keep doing
+// what the loop below does for the audio
+static void web_wait_hook() {
+    opl_drain_commands();
+#if SOUND_SB
+    sbdsp_process();
+#endif
+    opl_fill();
+}
+#endif
 
 void play_adlib() {
     DBG_PUTS("starting core 1");
@@ -305,6 +387,9 @@ void play_adlib() {
 #if OPL_CMD_BUFFER
     uint8_t opl_led_head = opl_cmd_buffer.head;
 #endif
+#ifdef WEBSERVER
+    web_set_wait_hook(web_wait_hook);
+#endif
 
     for (;;) {
 #if OPL_CMD_BUFFER
@@ -318,15 +403,7 @@ void play_adlib() {
         cdrom_audio_callback(&cdrom, AUDIO_FIFO_SIZE - STEREO_SAMPLES_PER_SECTOR);
 #endif
 
-#if OPL_CMD_BUFFER && USE_EMU8950_OPL
-        // emu8950 doesn't drain the command buffer internally (unlike dbopl/ymfm
-        // which do it in their refill_prebuf()), so drain it here.
-        while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
-            auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
-            OPL_Pico_WriteRegister(cmd.addr, cmd.data);
-            ++opl_cmd_buffer.tail;
-        }
-#endif
+        opl_drain_commands();
 
 #if SOUND_SB
         // Process DSP commands
@@ -334,15 +411,7 @@ void play_adlib() {
 #endif
 
         // Generate OPL stereo pairs and add to output FIFO.
-        for (uint32_t opl_i = 0;
-             opl_i < OPL_FILL_PER_ITER && opl_fifo_free_space() >= 1;
-             opl_i++) {
-#ifdef USE_LINEAR_RESAMPLER
-            opl_fifo_add_sample(opl_resample_tick());
-#else
-            opl_fifo_add_sample(opl_resampler.get_sample());
-#endif
-        }
+        opl_fill();
 #ifdef USB_STACK
         // Service TinyUSB events
         tuh_task();

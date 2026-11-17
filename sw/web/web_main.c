@@ -87,6 +87,10 @@ static uint8_t reconnect_shift;
 static uint32_t last_link_check_us;
 static int32_t rssi;
 static uint32_t last_rssi_us;
+// Asking the chip for the signal strength makes the driver wait for its
+// answer: only done while someone is looking (web page, pgusinit /wifistatus)
+#define WEB_RSSI_WANTED_US      (15 * 1000 * 1000)
+static uint64_t rssi_wanted_until_us;     // core 1 only
 static char ssid[33];
 static char password[64];
 
@@ -95,10 +99,8 @@ static bool reboot_pending;
 static uint8_t reboot_mode;
 static uint32_t reboot_at_us;
 
-// Timing statistics
-static uint32_t poll_max_us;
-static uint32_t poll_max_window_us;
-static uint32_t poll_max_prev_window_us;
+// Timing statistics (the pause ones are with the wait hook, above)
+static uint32_t pause_max_prev_window_us;
 static uint32_t window_start_us;
 static uint32_t window_busy_us;
 static uint16_t load_permille;
@@ -228,18 +230,110 @@ void web_flash_release(void) {
     }
 }
 
+// ---- Core 1 stack use -------------------------------------------------------
+// Core 1 has PICO_CORE1_STACK_SIZE of stack (the scratch X bank), with the
+// network stack's deepest call chains and the interrupts on top of the mode's
+// own. The unused part is painted once, and the Information screen shows how
+// much was ever used.
+
+#define STACK_PAINT 0x6b617453u     // "Stak"
+extern uint32_t __StackOneBottom;
+static bool stack_painted;
+
+static void paint_core1_stack(void) {
+    uint32_t *p = &__StackOneBottom;
+    uint32_t sp;
+    __asm volatile ("mov %0, sp" : "=r" (sp));
+    // nothing below the stack pointer is in use, unless an interrupt comes
+    uint32_t ints = save_and_disable_interrupts();
+    while ((uintptr_t)p < sp - 64) {
+        *p++ = STACK_PAINT;
+    }
+    restore_interrupts(ints);
+    stack_painted = true;
+}
+
+uint32_t web_core1_stack_used(void) {
+    if (!stack_painted) {
+        return 0;
+    }
+    const uint32_t *bottom = &__StackOneBottom;
+    const uint32_t *p = bottom;
+    const uint32_t *top = bottom + PICO_CORE1_STACK_SIZE / 4;
+    while (p < top && *p == STACK_PAINT) {
+        ++p;
+    }
+    return (uint32_t)((uintptr_t)top - (uintptr_t)p);
+}
+
+// Modes that make their audio in an interrupt have nothing to show
+__attribute__((weak)) bool web_audio_stats(web_audio_stats_t *stats) {
+    (void)stats;
+    return false;
+}
+
 // ---- Keep CYW43 driver waits on core 1 -------------------------------------
 // In poll mode the CYW43 driver waits with sleep_until()/semaphore timeouts,
 // which arm alarms on the SDK's default alarm pool. That pool's interrupt fires
 // on core 0, where it would interrupt ISA bus handling. These link-time
-// wrappers (-Wl,--wrap=...) turn those waits into busy waits on core 1.
+// wrappers (-Wl,--wrap=...) turn those waits into busy waits on core 1, which
+// run the mode's wait hook meanwhile so its audio keeps going.
+
+static void (*wait_hook)(void);
+static bool in_web_task;        // the hook only runs inside web_task()
+static bool in_wait_hook;
+// Pause statistics: how long core 1 went without doing audio work
+static uint32_t pause_start_us; // last time the audio was served
+static uint32_t hook_us;        // time spent in the hook in this web_task() call
+static uint32_t pause_max_us;
+static uint32_t pause_max_window_us;
+
+void web_set_wait_hook(void (*hook)(void)) {
+    wait_hook = hook;
+}
+
+static inline void note_pause(uint32_t now) {
+    uint32_t pause = now - pause_start_us;
+    if (pause > pause_max_window_us) {
+        pause_max_window_us = pause;
+        if (pause > pause_max_us) {
+            pause_max_us = pause;
+        }
+    }
+}
+
+static void run_wait_hook(void) {
+    if (!wait_hook || !in_web_task || in_wait_hook) {
+        return;
+    }
+    uint32_t start = time_us_32();
+    note_pause(start);
+    in_wait_hook = true;
+    wait_hook();
+    in_wait_hook = false;
+    uint32_t end = time_us_32();
+    hook_us += end - start;
+    pause_start_us = end;
+}
+
+// Called by the driver between the blocks it sends while starting the chip
+void web_cyw43_event_poll_hook(void) {
+    run_wait_hook();
+}
+
+static void wait_us(uint32_t us) {
+    uint32_t start = time_us_32();
+    while (time_us_32() - start < us) {
+        run_wait_hook();
+    }
+}
 
 void __wrap_cyw43_delay_ms(uint32_t ms) {
-    busy_wait_ms(ms);
+    wait_us(ms * 1000);
 }
 
 void __wrap_cyw43_delay_us(uint32_t us) {
-    busy_wait_us_32(us);
+    wait_us(us);
 }
 
 void __wrap_cyw43_await_background_or_timeout_us(uint32_t timeout_us) {
@@ -250,6 +344,7 @@ void __wrap_cyw43_await_background_or_timeout_us(uint32_t timeout_us) {
         if (gpio_get(CYW43_PIN_WL_HOST_WAKE)) {
             break;
         }
+        run_wait_hook();
     }
 }
 
@@ -258,14 +353,16 @@ extern void __real_sleep_us(uint64_t us);
 
 void __wrap_sleep_ms(uint32_t ms) {
     if (get_core_num() == 1) {
-        busy_wait_ms(ms);
+        wait_us(ms * 1000);
     } else {
         __real_sleep_ms(ms);
     }
 }
 
 void __wrap_sleep_us(uint64_t us) {
-    if (get_core_num() == 1) {
+    if (get_core_num() == 1 && us <= UINT32_MAX) {
+        wait_us((uint32_t)us);
+    } else if (get_core_num() == 1) {
         busy_wait_us(us);
     } else {
         __real_sleep_us(us);
@@ -447,7 +544,11 @@ static void web_run(uint32_t now) {
             last_link = link;
             last_rssi_us = now - WEB_RSSI_REFRESH_US;
         }
-        if (link == CYW43_LINK_UP && now - last_rssi_us >= WEB_RSSI_REFRESH_US) {
+        if (status_requested) {
+            rssi_wanted_until_us = time_us_64() + WEB_RSSI_WANTED_US;
+        }
+        if (link == CYW43_LINK_UP && now - last_rssi_us >= WEB_RSSI_REFRESH_US
+            && time_us_64() < rssi_wanted_until_us) {
             last_rssi_us = now;
             if (cyw43_wifi_get_rssi(&cyw43_state, &rssi) != 0) {
                 rssi = 0;
@@ -467,13 +568,7 @@ static void web_run(uint32_t now) {
     }
 }
 
-void web_task(void) {
-    uint32_t now = time_us_32();
-    if ((int32_t)(now - next_run_us) < 0) {
-        return;
-    }
-    next_run_us = now + WEB_POLL_INTERVAL_US;
-
+static void web_step(uint32_t now) {
     switch (state) {
     case WEB_WAIT_CORE0:
         if (core0_ready) {
@@ -529,29 +624,45 @@ void web_task(void) {
             tight_loop_contents();
         }
     }
+}
 
-    // Timing statistics: how long a single call took, and how much of core 1
-    // the web server used over the last window
+void web_task(void) {
+    uint32_t now = time_us_32();
+    if ((int32_t)(now - next_run_us) < 0) {
+        return;
+    }
+    next_run_us = now + WEB_POLL_INTERVAL_US;
+
+    if (!stack_painted) {
+        paint_core1_stack();
+    }
+    in_web_task = true;
+    pause_start_us = now;
+    hook_us = 0;
+    web_step(now);
+    in_web_task = false;
+
+    // Timing statistics: the longest the audio went unserved, and how much of
+    // core 1 the web server used over the last window (not counting the audio
+    // work done by the wait hook)
     uint32_t end = time_us_32();
-    uint32_t took = end - now;
-    if (took > poll_max_us) {
-        poll_max_us = took;
+    note_pause(end);
+    if (state != WEB_RUNNING) {
+        return;
     }
-    if (took > poll_max_window_us) {
-        poll_max_window_us = took;
-    }
-    window_busy_us += took;
+    window_busy_us += end - now - hook_us;
     uint32_t window = end - window_start_us;
     if (window >= WEB_STATS_WINDOW_US) {
         load_permille = (uint16_t)(((uint64_t)window_busy_us * 1000) / window);
-        poll_max_prev_window_us = poll_max_window_us;
-        poll_max_window_us = 0;
+        pause_max_prev_window_us = pause_max_window_us;
+        pause_max_window_us = 0;
         window_busy_us = 0;
         window_start_us = end;
     }
 }
 
 void web_get_net_info(web_net_info_t *info) {
+    rssi_wanted_until_us = time_us_64() + WEB_RSSI_WANTED_US;
     memset(info, 0, sizeof(*info));
     info->link = (int8_t)last_link;
     info->rssi = rssi;
@@ -560,8 +671,8 @@ void web_get_net_info(web_net_info_t *info) {
         info->ip = ip4_addr_get_u32(netif_ip4_addr(sta_netif()));
         memcpy(info->mac, cyw43_state.mac, 6);
     }
-    info->poll_max_us = poll_max_us;
-    info->poll_max_recent_us = poll_max_prev_window_us > poll_max_window_us ? poll_max_prev_window_us : poll_max_window_us;
+    info->pause_max_us = pause_max_us;
+    info->pause_max_recent_us = pause_max_prev_window_us > pause_max_window_us ? pause_max_prev_window_us : pause_max_window_us;
     info->load_permille = load_permille;
 }
 

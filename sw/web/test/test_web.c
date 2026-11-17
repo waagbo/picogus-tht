@@ -94,6 +94,14 @@ void web_get_net_info(web_net_info_t *info) {
     info->link = 3;
     info->rssi = -50;
 }
+uint32_t web_core1_stack_used(void) { return 1234; }
+bool web_audio_stats(web_audio_stats_t *stats) {
+    stats->name = "OPL";
+    stats->underruns = 3;
+    stats->size = 256;
+    stats->low = 17;
+    return true;
+}
 
 // flash: 2MB NOR flash
 static uint8_t flash_mem[PICO_FLASH_SIZE_BYTES];
@@ -359,6 +367,9 @@ static void test_status(void) {
     CHECK(strstr(b, "\"fw\":\"picogus-test v0.0.0\"") != NULL, "fw in status: %s", b);
     CHECK(strstr(b, "\"sbvol\":") != NULL, "settings in status");
     CHECK(strstr(b, "\"ssid\":\"TestNet\"") != NULL, "net info in status");
+    CHECK(strstr(b, "\"stackUsed\":1234,\"stackSize\":4096") != NULL, "core 1 stack in status: %s", b);
+    CHECK(strstr(b, "\"audio\":{\"name\":\"OPL\",\"underruns\":3,\"size\":256,\"low\":17}") != NULL,
+          "audio buffer in status: %s", b);
     FILE *f = fopen("status.json", "w");
     if (f) { fputs(b, f); fclose(f); }
     client_free(c);

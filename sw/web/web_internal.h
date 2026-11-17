@@ -36,12 +36,16 @@ typedef struct {
     uint32_t ip;            // IPv4 address in network byte order, 0 if none
     uint8_t mac[6];
     const char *ssid;
-    uint32_t poll_max_us;   // longest single web_task() call since boot
-    uint32_t poll_max_recent_us; // longest web_task() call in the last ~10s
+    // Longest time web_task() kept core 1 from the mode's audio work (the wait
+    // hook serves the audio during driver waits), since boot / last ~10s
+    uint32_t pause_max_us;
+    uint32_t pause_max_recent_us;
     uint16_t load_permille; // share of wall clock time spent in web_task()
 } web_net_info_t;
 
 void web_get_net_info(web_net_info_t *info);
+// Bytes of core 1's stack (PICO_CORE1_STACK_SIZE) used at most so far
+uint32_t web_core1_stack_used(void);
 // Reboot after the current HTTP responses had a chance to go out.
 // mode: card_mode_t to boot into (multifw), or 0 for the mode that is running
 void web_schedule_reboot(uint8_t mode, uint32_t delay_ms);

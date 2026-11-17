@@ -279,10 +279,22 @@ void json_status(Json &j) {
         mac[i * 3 + 2] = i < 5 ? ':' : 0;
     }
     j.kvs("mac", mac);
-    j.kv("pollMaxUs", (int32_t)net.poll_max_us);
-    j.kv("pollRecentUs", (int32_t)net.poll_max_recent_us);
+    j.kv("pauseMaxUs", (int32_t)net.pause_max_us);
+    j.kv("pauseRecentUs", (int32_t)net.pause_max_recent_us);
     j.kv("loadPermille", net.load_permille);
+    j.kv("stackUsed", (int32_t)web_core1_stack_used());
+    j.kv("stackSize", PICO_CORE1_STACK_SIZE);
     j.close('}');
+
+    web_audio_stats_t audio;
+    if (web_audio_stats(&audio)) {
+        j.open("audio", '{');
+        j.kvs("name", audio.name);
+        j.kv("underruns", (int32_t)audio.underruns);
+        j.kv("size", (int32_t)audio.size);
+        j.kv("low", (int32_t)audio.low);
+        j.close('}');
+    }
 
     j.open("s", '{');
     for (const SettingDef &d : setting_defs) {

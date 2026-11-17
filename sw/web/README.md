@@ -142,9 +142,22 @@ The ISA bus and the sound emulation always come first:
 * **Audio buffers come first.** In Sound Blaster and AdLib modes, whose OPL
   synthesis runs in the main loop, the web server only runs while at least
   half of the OPL output buffer (~2.9ms of audio) is filled.
+* **The audio goes on while the WiFi driver waits.** The driver waits for its
+  chip in busy loops on core 1: in steps of up to 50ms while it starts the
+  chip, and of a few ms while it joins a network or waits for an answer. That
+  is longer than the OPL buffer lasts, so those waits run the mode's wait hook
+  (`web_set_wait_hook()`), which does what the main loop does for the audio:
+  it hands the OPL register writes to the emulator, runs the Sound Blaster
+  DSP and refills the OPL buffer. The other modes make their audio in an
+  interrupt and need no hook.
 * **No interrupts on core 0.** The WiFi driver's waits are busy-waits on
   core 1 (`--wrap` in `webserver.cmake`); in poll mode they would otherwise set
   alarms whose interrupts fire on core 0.
+* **The WiFi chip's bus stays awake.** By default the driver lets the bus to
+  the chip sleep after ~2.5s without traffic, and waking it for the next packet
+  or query takes a few ms of waiting each time (`CYW43_SLEEP_MAX` in
+  `web_cyw43_config.h`). The signal strength, which also has to be asked of the
+  chip, is only asked for while someone looks at it.
 * **Flash is shared safely.** The WiFi firmware and the web page are read from
   flash, and firmware updates write it. A hardware spinlock keeps core 0 from
   saving settings (which erases flash) at the same time: `pgusinit /save`
@@ -175,8 +188,17 @@ The ISA bus and the sound emulation always come first:
 
   SysEx messages from files may be up to 512 bytes.
 
-The status page shows how much of core 1 the web server used over the last
-10 seconds, and its longest single run.
+The Information screen of the web page shows:
+
+* how much of core 1 the web server used over the last 10 seconds, and the
+  longest it kept core 1 from the audio work (the wait hook's time is not
+  counted as a pause);
+* in Sound Blaster and AdLib modes, the OPL output buffer: how long it lasts,
+  the least it has held, and how many times it ran dry while playing, each
+  of which is a click in the sound;
+* the most of core 1's 4KB stack that was ever used. Core 1 runs the network
+  stack's deepest calls on top of the mode's own, and ordinary RAM lies below
+  its stack.
 
 ### Memory
 

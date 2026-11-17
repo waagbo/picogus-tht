@@ -28,13 +28,16 @@ state = {
     "fw": "picogus-sb v4.2.0-beta.2", "mode": MODE, "board": 0, "chip": "RP2040", "uptime": 3725,
     "features": FEATURES,
     "net": {"ssid": "RetroLAN", "link": 3, "rssi": -58, "ip": "192.168.1.42", "mac": "28:cd:c1:00:11:22",
-            "pollMaxUs": 4120, "pollRecentUs": 830, "loadPermille": 7},
+            "pauseMaxUs": 4120, "pauseRecentUs": 830, "loadPermille": 7,
+            "stackUsed": 2316, "stackSize": 4096},
     "s": {"joy": 1, "gusport": 0x240, "gusbuf": 4, "gusdma": 0, "gus44k": 0, "sbport": 0x220, "sbirq": 5, "sbdma": 1,
           "sbtype": 6, "sbfixtc": 0, "sblockmixer": 0, "oplport": 0x388, "oplwait": 0, "mpuport": 0x330, "mpudelay": 0,
           "mpufake": 0, "mpuwait": 0, "tandyport": 0x2c0, "cmsport": 0x220, "mouseport": 0, "mouseproto": 0,
           "mouserate": 60, "mousesen": 256, "cdport": 0x250, "cdauto": 1, "mainvol": 100, "oplvol": 100, "sbvol": 90,
           "cdvol": 100, "gusvol": 100, "psgvol": 80},
     "savePending": 0, "midiFree": 1023, "midiHeld": 0,
+    # the OPL modes make their audio in the core 1 loop, and report its buffer
+    **({"audio": {"name": "OPL", "underruns": 0, "size": 256, "low": 131}} if "opl" in FEATURES else {}),
     "upload": {"kind": 0, "state": 0, "done": 0, "total": 0, "error": ""},
 }
 if "cd" in FEATURES:

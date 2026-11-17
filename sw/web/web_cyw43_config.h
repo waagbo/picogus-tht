@@ -16,3 +16,19 @@
 // fallback, so we must provide it for cyw43 sources that call printf directly
 // (e.g. cyw43_stats.c:cyw43_dump_stats — dead code, stripped by --gc-sections).
 #include <stdio.h>
+
+// Keep the bus to the WiFi chip awake. By default the driver lets it sleep
+// after ~2.5s without traffic, and waking it up again (for the next packet, or
+// any query) makes the driver busy wait for the chip in 1ms steps, on core 1,
+// a few ms at a time. The chip draws a little more power; the ISA slot has
+// plenty. cyw43_sleep counts down every 50ms: this is years.
+#define CYW43_SLEEP_MAX 0xffffffffu
+
+// Run the mode's audio work between the blocks of the WiFi firmware while the
+// chip is started, ~250KB over SPI (see web_set_wait_hook())
+#ifdef __cplusplus
+extern "C" void web_cyw43_event_poll_hook(void);
+#else
+void web_cyw43_event_poll_hook(void);
+#endif
+#define CYW43_EVENT_POLL_HOOK web_cyw43_event_poll_hook()
