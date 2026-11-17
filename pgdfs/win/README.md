@@ -158,9 +158,8 @@ registry name of a MIDI driver entry (the keys of
 `HKLM\System\CurrentControlSet\Control\MediaResources\midi`, which is
 where the list comes from; the name is shown in parentheses); under Windows
 NT 4.0 and 2000 `CurrentInstrument`, and under Windows XP `szPname`, hold the
-name of the MIDI output device. The MIDI tab shows the value as the registry
-has it, and a value it does not know (one that the Control Panel set) stays
-in the list.
+name of the MIDI output device. A value the program does not know (one that
+the Control Panel set) stays in the list, as the registry has it.
 
 The program looks at the card when its menu or window opens, every few
 seconds while the window shows, and when the mouse rests on its icon;

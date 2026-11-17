@@ -339,6 +339,7 @@ static void switch_mode(unsigned char mode, int save) {
 static struct {
   char value[MIDI_VALUE];       /* what the MIDIMap key calls it; "" cannot be chosen */
   char label[MIDI_LABEL];       /* what the lists show */
+  char name[MIDI_VALUE];        /* the device alone, for the line below the list */
 } midi_out[MIDI_OUTPUTS];
 static int midi_outs;
 static int midi_now = -1;       /* the one Windows plays on, -1: none of them */
@@ -387,8 +388,10 @@ static void midi_scan(void) {
           lstrcpyA(midi_out[midi_outs].value, name);
           if (reg_string(sub, "Description", text, 64) || reg_string(sub, "FriendlyName", text, 64)) {
             wsprintfA(midi_out[midi_outs].label, "%s (%s)", text, name);
+            lstrcpyA(midi_out[midi_outs].name, text);
           } else {
             lstrcpyA(midi_out[midi_outs].label, name);
+            lstrcpyA(midi_out[midi_outs].name, name);
           }
           midi_outs++;
         }
@@ -403,6 +406,7 @@ static void midi_scan(void) {
       if (midiOutGetDevCapsA(id, &caps, sizeof(caps)) != MMSYSERR_NOERROR || !caps.szPname[0]) continue;
       lstrcpynA(midi_out[midi_outs].value, caps.szPname, MIDI_VALUE);
       lstrcpynA(midi_out[midi_outs].label, caps.szPname, MIDI_LABEL);
+      lstrcpynA(midi_out[midi_outs].name, caps.szPname, MIDI_VALUE);
       midi_outs++;
     }
   }
@@ -424,6 +428,7 @@ static void midi_scan(void) {
     lstrcpyA(midi_out[midi_outs].value, now);
     if (custom) lstrcpyA(midi_out[midi_outs].label, "(custom configuration of Multimedia Properties)");
     else lstrcpynA(midi_out[midi_outs].label, now, MIDI_LABEL);
+    lstrcpyA(midi_out[midi_outs].name, custom ? "custom configuration of Multimedia Properties" : now);
     midi_now = midi_outs++;
   }
 }
@@ -437,15 +442,10 @@ static void fill_midi(void) {
   SendMessageA(cb, CB_RESETCONTENT, 0, 0);
   for (i = 0; i < midi_outs; i++) SendMessageA(cb, CB_ADDSTRING, 0, (LPARAM)midi_out[i].label);
   SendMessageA(cb, CB_SETCURSEL, midi_now >= 0 ? (WPARAM)midi_now : (WPARAM)-1, 0);
-  if (midi_now >= 0 && midi_out[midi_now].value[0]) {
-    wsprintfA(text, "What Windows plays MIDI on, as in Multimedia Properties. Registry: %s = \"%s\".", midimap_value(),
-              midi_out[midi_now].value);
-  } else if (midi_now >= 0) {
-    lstrcpyA(text, "Multimedia Properties has a custom configuration of several outputs. Choosing one here replaces it.");
-  } else if (midi_outs == 0) {
-    lstrcpyA(text, "Windows lists no MIDI output.");
+  if (midi_now >= 0) {
+    wsprintfA(text, "Current MIDI Device: %s", midi_out[midi_now].name);
   } else {
-    lstrcpyA(text, "What Windows plays MIDI on, as in Multimedia Properties. Nothing is chosen there now.");
+    lstrcpyA(text, midi_outs ? "Current MIDI Device: none chosen" : "Current MIDI Device: none (Windows lists no MIDI output)");
   }
   set_text(page[PAGE_MIDI], IDC_MIDI_INFO, text);
 }
