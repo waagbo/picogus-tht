@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "flash_settings.h"
+#include "../../common/picogus.h"   // DFS_DEFAULT_DATA_PORT
 #include "../include/pg_debug.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
@@ -94,6 +95,9 @@ static const Settings defaultSettings = {
         .sbType = 6,
         .fixTC = 0,
         .lockMixer = 0
+    },
+    .DFS = {
+        .basePort = DFS_DEFAULT_DATA_PORT
     }
 };
 
@@ -139,6 +143,14 @@ static const VersionFields versionFieldsTable[] = {
     // version 5 - added SB16 settings
     {(const FieldInfo[]){
         FIELD(SB16),
+    }, 1},
+
+    // version 6 - added the MPU wait on busy status reads setting, a bit in the existing MPU field
+    {NULL, 0},
+
+    // version 7 - added PGDFS settings
+    {(const FieldInfo[]){
+        FIELD(DFS),
     }, 1},
 };
 
