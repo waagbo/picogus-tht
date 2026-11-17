@@ -443,9 +443,9 @@ static void fill_midi(void) {
   for (i = 0; i < midi_outs; i++) SendMessageA(cb, CB_ADDSTRING, 0, (LPARAM)midi_out[i].label);
   SendMessageA(cb, CB_SETCURSEL, midi_now >= 0 ? (WPARAM)midi_now : (WPARAM)-1, 0);
   if (midi_now >= 0) {
-    wsprintfA(text, "Current MIDI Device: %s", midi_out[midi_now].name);
+    wsprintfA(text, "Active Device: %s", midi_out[midi_now].name);
   } else {
-    lstrcpyA(text, midi_outs ? "Current MIDI Device: none chosen" : "Current MIDI Device: none (Windows lists no MIDI output)");
+    lstrcpyA(text, midi_outs ? "Active Device: none chosen" : "Active Device: none (Windows lists no MIDI output)");
   }
   set_text(page[PAGE_MIDI], IDC_MIDI_INFO, text);
 }
