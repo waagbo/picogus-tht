@@ -171,6 +171,10 @@ silkscreen. Each round found real faults. Apply these from the start on the next
     the first check, no autorouter.
   - **A standing resistor can usually lie if two tracks move.** R31/R32 stood because their lower pads would
     have sat on two diagonal tracks; the tracks now run as a vertical pair between the two pads.
+  - **When a standing resistor will not lie flat, try the 0204 size.** A 0204 resistor (about 3.4 × 1.9 mm, 1/6 W,
+    on 5.08 mm) needs 7 × 2.2 mm of board, against 12.4 × 3.1 mm for the usual 0207 on 10.16 mm. On THT v2.1 that
+    let R33 lie above the radio module and R34 upright between the Core2350B and the module's lands, where only
+    standing 0207s had fitted. For signal resistors the lower power rating does not matter.
   - **Freerouting on a few nets in a full corner can run away.** Moving THT v2.1's J3 displaced fourteen links;
     Freerouting, with everything else locked, sat at seven open links for 15 minutes and grew to 40 GB of
     memory. The grid router closed all fourteen, but only in one of three net orders: route first the nets with

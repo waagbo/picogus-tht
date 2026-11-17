@@ -38167,7 +38167,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38189,7 +38189,7 @@
 				)
 			)
 		)
-		(property "Description" "470R 1/4W 1% metal film: RM2 data out to the shared data GPIO (as on the Pico W); standing"
+		(property "Description" "470R 1/6W 1% metal film, 0204 size (3.4 x 1.9 mm): RM2 data out to the shared data GPIO (as on the Pico W); lying, 5.08 mm"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38200,7 +38200,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" "Stackpole"
+		(property "Manufacturer" "Yageo"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38211,7 +38211,7 @@
 				)
 			)
 		)
-		(property "MPN" "RNMF14FTC470R"
+		(property "MPN" "MFR-12FTF52-470R"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38222,7 +38222,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "S470CACT-ND"
+		(property "DigiKey" "13-MFR-12FTF52-470RCT-ND"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38233,7 +38233,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C58592 (UNI-ROYAL MFR0W4F4700A50)"
+		(property "LCSC" "C172904 (YAGEO MFR-12FTE52-470R)"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38293,7 +38293,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38315,7 +38315,7 @@
 				)
 			)
 		)
-		(property "Description" "10k 1/4W 1% metal film: RM2 host-wake IRQ onto the shared data GPIO (as on the Pico W); standing"
+		(property "Description" "10k 1/6W 1% metal film, 0204 size (3.4 x 1.9 mm): RM2 host-wake IRQ onto the shared data GPIO (as on the Pico W); lying, 5.08 mm"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38337,7 +38337,7 @@
 				)
 			)
 		)
-		(property "MPN" "MFR-25FBF52-10K"
+		(property "MPN" "MFR-12FTF52-10K"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38348,7 +38348,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "10.0KXBK-ND"
+		(property "DigiKey" "13-MFR-12FTF52-10KCT-ND"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38359,7 +38359,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C1519255"
+		(property "LCSC" "C172889 (YAGEO MFR-12FTE52-10K)"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)

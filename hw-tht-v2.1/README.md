@@ -124,15 +124,19 @@ digikey.no prices of 2026-10-30, for one board, in NOK; shipping not included. P
 
 | | NOK excl. MVA | NOK incl. 25 % MVA |
 |---|---|---|
-| DigiKey order, `docs/BOM-THT-digikey.csv` (47 lines, with the boot ROM) | 626.99 + two parts | 783.74 + two parts |
+| DigiKey order, `docs/BOM-THT-digikey.csv` (49 lines, with the boot ROM) | 625.11 + four parts | 781.39 + four parts |
 | Optional IC sockets, `docs/BOM-THT-digikey-optional.csv` (U3–U7, U11) | 58.98 | 73.73 |
-| Both | 685.97 + two parts | 857.46 + two parts |
+| Both | 684.09 + four parts | 855.11 + four parts |
 
-* **The boot ROM's four lines** (U15, its socket, U16, C48/C49; R35 is one more 10 kΩ on the line of R1, R5 and
-  R34): 26.27 NOK for the flash (18.87, price of 2026-10-05), the capacitors and the resistor, **plus the PLCC-32
+* **The boot ROM's four lines** (U15, its socket, U16, C48/C49; R35 is one more 10 kΩ on the line of R1 and
+  R5): 26.27 NOK for the flash (18.87, price of 2026-10-05), the capacitors and the resistor, **plus the PLCC-32
   socket and the 74HCT138PW, whose digikey.no prices were not looked up** (the socket was US$1.91 on digikey.com
-  on 2026-11-12; a 74HCT138 costs a few kroner). Without the boot ROM the order is the plain v2.1's: 43 lines,
-  600.72 NOK (750.90 with MVA).
+  on 2026-11-12; a 74HCT138 costs a few kroner). Without the boot ROM the order is the plain v2.1's: 45 lines,
+  598.84 NOK (748.55 with MVA) plus R33 and R34.
+* **R33 and R34 have their own lines** (Yageo MFR-12, 0204 size, so that they lie flat: see [Radio
+  module](#radio-module-optional)); their digikey.no prices and stock were not looked up (DigiKey lists them as
+  13-MFR-12FTF52-470RCT-ND and 13-MFR-12FTF52-10KCT-ND). The 470 Ω and 10 kΩ lines of the other resistors are one
+  part shorter each.
 
 * **Not in the DigiKey order**: the Core2350B2 (waveshare.com, US$6.99), the M62429L (LCSC C52260216, minimum 5),
   the optional Radio Module 2 (RMC20452T, Farnell 4737257; its two resistors and capacitor are in the order) and the
@@ -146,9 +150,12 @@ line):
 
 | | US$ |
 |---|---|
-| LCSC order, `docs/BOM-THT-lcsc.csv` (40 lines, quantities raised to LCSC's minimums) | 53.27 |
+| LCSC order, `docs/BOM-THT-lcsc.csv` (42 lines, quantities raised to LCSC's minimums) | 53.27 + R33, R34 |
 | Optional IC sockets, `docs/BOM-THT-lcsc-optional.csv` | 7.77 |
 
+* **R33 and R34** are LCSC C172904 and C172889 (Yageo MFR-12FTE52-470R and -10K, the same resistors on ammo
+  tape), 100 each at LCSC's minimum; LCSC has listed the 10 kΩ at about US$0.007 each, so the two lines add about
+  US$1.50. Their stock and prices were not re-checked (2026-11-17).
 * **Not at LCSC**: U3 SN74AHC14N, U6 SN74AHCT126N and U9 MCP1826S-3302E/AB (none in stock, and no LCSC part fits
   without a design change: the 74HC14 does not take 5 V inputs at 3.3 V, the 125 has the opposite enable, the
   LM2940 clones want a larger output capacitor with ESR): buy them at DigiKey (296-4550-5-ND, 296-4659-5-ND,
@@ -321,7 +328,11 @@ is as before.
   the 21 castellations. Pin 1 is at the dot, top right, next to the antenna end.
 * **Firmware**: `sw/boards/picogus21.h` gives the SDK's CYW43 driver the four pins, and the NE2000 firmware builds
   for the card (`pg-ne2k-v21.uf2`). Not tested on hardware. The other firmware modes do not use the radio.
-* **R33 and R34 stand** (as R19/R20 at the USB-C do): one lead folded back along the body, pads 2.54 mm apart.
+* **R33 and R34 lie flat, as 0204-size resistors** (Yageo MFR-12: 3.4 × 1.9 mm body, 1/6 W, on 5.08 mm). R33
+  lies above the module with its DATA_OUT pad straight above pin 6; R34 stands upright in the board's plane
+  between the Core2350B's pin column and the module's left lands, its IRQ pad level with pin 10. A 6.3 mm (0207)
+  resistor fits neither place. The D3 and +5V tracks step 0.25–0.3 mm left beside R34. Solder the module first,
+  then R34.
 
 ## Boot ROM (experimental)
 
@@ -454,7 +465,7 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
 
 ## Layout status
 
-**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12; its socket lined up with the DIPs and R31, R32, R35 laid flat 2026-11-14; J3 3 mm to the right and R31/R32 in line with J8's top row 2026-11-16), for review.** The placement and the silkscreen labels are the user's (the DAC
+**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12; its socket lined up with the DIPs and R31, R32, R35 laid flat 2026-11-14; J3 3 mm to the right and R31/R32 in line with J8's top row 2026-11-16; R33/R34 laid flat 2026-11-17), for review.** The placement and the silkscreen labels are the user's (the DAC
 block turned and moved under the daughterboard; regulator, module, USB-C parts and headers moved), with the changes
 listed below. **DRC with schematic parity: 0 unconnected items, no clearance, hole or parity errors.** What is left:
 the 12 accepted courtyard overlaps of the logic column (U3–U7 on v1.3.2's 12.05 mm pitch with their decoupling discs
@@ -527,7 +538,8 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   and from the end of `v2.1.0` to the edge (letters x 186.92–212.69, `v2.1.0` at (212.84, 40.58)).
 * **Radio module in, USB-C moved (2026-11-11)**: U14 took the USB-C's place at the bracket end. J6 went to v2.0's
   place on the bottom edge, with R19/R20 standing above it. D2 moved to the strip above SW1/SW2 (and into the
-  `Core2350B + power` group). R33/R34 stand in a row above the module, C47 above them. What crossed that corner was
+  `Core2350B + power` group). R33/R34 stood in a row above the module, C47 above them (since 2026-11-17 they lie
+  flat: see [Radio module](#radio-module-optional)). What crossed that corner was
   rerouted by hand: **+5V** from the ISA finger to F1 (the feed of everything on +5V) now runs on the front between
   the Core2350B's pin column and the module's lands and changes to the back at (198.6, 120.2); **RV_DATA, RV_CLK,
   the USB-C's VBUS and its data pair** run on the back under the module; the radio's four signals leave the
@@ -537,8 +549,9 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   `USB HOST` moved 1.7 mm right; `WIFI` is new. H2's reference is hidden; the references of J6 and F1 are inside
   their own outlines.
 * **Labels to look at** (visible references over a neighbour's courtyard): C23 under J9's body and U13 under C41
-  (both hidden once the parts are fitted), D1 over R13, C16 over C14; R33/R34 sit between their resistors and C47,
-  R19/R20 between the two resistors, U14 left of the module's lands.
+  (both hidden once the parts are fitted), D1 over R13, C16 over C14; R33 between its resistor and C47, R34 above
+  its upper pad, U14 below R34 left of the module's lands, R19/R20 between the two resistors. C38's reference is
+  horizontal, left of the capacitor (2026-11-17; it stood on end before).
 * **PicoGUS logo in copper, as on v1.3.2**: the eight solder-mask openings (the letters) with copper letters 0.15 mm
   larger under them, and a rule area that keeps tracks and vias off them. `v2.1.0` stands right of it (Jost 1.2 mm).
 * **Silkscreen labels** (Jost, embedded in the board file as on v1.3.2): `WAVEBLASTER`, `MIXER`, `DAC`, `WT VOL`,
@@ -556,6 +569,7 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
 * **R21–R30 (mixer) are on 10.16 mm pitch** like every other lying resistor on the card, and so are R31, R32
   (side by side right of J8, their upper pads in line with its top pin row; -12 V and UART_TX pass between their
   lower pads) and, on this branch,
-  R35 (below U9). **R19, R20, R33 and R34 still stand** (2.54 mm): between the USB-A connector, the radio module,
-  its antenna keep-out, the USB-C connector and the board edge there is room for one lying resistor above the
-  module and one below it, not for four.
+  R35 (below U9); R33 and R34 lie flat as smaller 0204-size resistors (see [Radio module](#radio-module-optional)).
+  **R19 and R20 still stand** (2.54 mm): between the radio module and the USB-C connector J6 (with H2 beside it)
+  the strip is 13.1 × 3.2 mm, room for one lying resistor but not two, even in the 0204 size, and both J6 and H2
+  are fixed by the bracket and the card edge.
