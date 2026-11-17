@@ -81,7 +81,8 @@ TH_WIN          equ 10              ; drives window: frame, fill, text
 TH_WTITLE       equ 11              ; its title and A: / C:
 TH_STAT         equ 12              ; status line
 TH_SKEY         equ 13              ; a key on the status line
-TH_SIZE         equ 14
+TH_BOX          equ 14              ; the frames: offset of their characters from box_single
+TH_SIZE         equ 15
 THEME_MDA       equ 3               ; index of the monochrome adapter's set
 
 %if (BD_LIST_HDR_LEN + MENU_ROWS * BD_LIST_ENTRY_LEN) > MENU_PAGE_BYTES
@@ -556,16 +557,25 @@ m_msg:
         ret
 
 ; m_box: a window: top row DH, left column DL, CL columns, CH rows, in
-; attribute BL, a single-line frame one cell inside its left and right
-; edges, and the theme's shadow at its right and below. Preserves everything.
+; attribute BL, the theme's frame (single or double lines) one cell inside
+; its left and right edges, and the theme's shadow at its right and below.
+; Preserves everything.
 m_box:
         pushm   ax, bx, cx, dx, si, di
+        mov     di, cx                  ; DI: rows << 8 | columns
         mov     bh, ch                  ; rows to go
-        xor     ch, ch
-        mov     di, cx                  ; columns
-        mov     si, box_top
 .row:
+        call    m_frame                 ; SI: the frame's characters, top row first
+        mov     ax, di
+        cmp     ah, bh
+        je      .chars                  ; the top row
+        add     si, 3
+        cmp     bh, 1
+        jne     .chars
+        add     si, 3                   ; the bottom row
+.chars:
         mov     cx, di
+        xor     ch, ch
         call    m_fill
         inc     dl
         mov     cx, 1
@@ -573,6 +583,7 @@ m_box:
         call    m_rep
         inc     dl
         mov     cx, di
+        xor     ch, ch
         sub     cx, 4
         cs lodsb                        ; between,
         call    m_rep
@@ -581,26 +592,35 @@ m_box:
         cs lodsb                        ; right
         call    m_rep
         add     dl, 2                   ; the shadow starts a row down
-        mov     cx, 2
-        cmp     si, box_mid
+        mov     ax, di
+        cmp     ah, bh
         je      .lit
+        mov     cx, 2
         call    m_shadow
 .lit:
         mov     ax, di
         sub     dl, al
         inc     dh
-        mov     si, box_mid
         dec     bh
-        jz      .below
-        cmp     bh, 1
-        jne     .row
-        mov     si, box_bottom
-        jmp     short .row
-.below:
+        jnz     .row
         add     dl, 2
         mov     cx, di
+        xor     ch, ch
         call    m_shadow
         popm    ax, bx, cx, dx, si, di
+        ret
+
+; m_frame: SI = the frame characters of the theme: three for the top row
+; (left, between, right), three for the rows between, three for the bottom.
+; Preserves everything else.
+m_frame:
+        pushm   ax, bx
+        mov     al, TH_BOX
+        call    th
+        xor     bh, bh
+        mov     si, box_single
+        add     si, bx
+        popm    ax, bx
         ret
 
 ; m_shadow: CX cells of shadow from row DH, column DL. Preserves everything.
@@ -612,19 +632,22 @@ m_shadow:
         popm    ax, bx
         ret
 
-box_top         db 0DAh, 0C4h, 0BFh
-box_mid         db 0B3h, ' ', 0B3h
-box_bottom      db 0C0h, 0C4h, 0D9h
+box_single      db 0DAh, 0C4h, 0BFh
+                db 0B3h, ' ', 0B3h
+                db 0C0h, 0C4h, 0D9h
+box_double      db 0C9h, 0CDh, 0BBh
+                db 0BAh, ' ', 0BAh
+                db 0C8h, 0CDh, 0BCh
 
 ; The themes: the semantic colours of the web page (tokens.css) as text
 ; attributes (background << 4 | foreground). Order: Setup, Commander, Mono
 ; as CMD_BDTHEME numbers them, then the set for a monochrome adapter.
 theme_tab:
-        ;  screen     shadow     title list  ltit  ltext lkey  sel   win   wtit  stat  skey
-        db 0B0h, 10h, ' ', 00h,  70h,  1Fh,  1Eh,  17h,  1Eh,  4Fh,  70h,  71h,  70h,  71h   ; Setup
-        db ' ', 07h,  ' ', 07h,  30h,  30h,  30h,  30h,  31h,  0Fh,  70h,  71h,  07h,  0Fh   ; Commander
-        db 0B0h, 08h, 0DBh, 08h, 70h,  07h,  0Fh,  07h,  0Fh,  70h,  07h,  0Fh,  70h,  70h   ; Mono
-        db ' ', 07h,  ' ', 07h,  70h,  07h,  0Fh,  07h,  0Fh,  70h,  07h,  0Fh,  70h,  70h   ; MDA
+        ;  screen     shadow     title list  ltit  ltext lkey  sel   win   wtit  stat  skey  frame
+        db 0B0h, 10h, ' ', 00h,  70h,  1Fh,  1Eh,  17h,  1Eh,  4Fh,  70h,  71h,  70h,  71h,  box_double - box_single  ; Setup
+        db ' ', 07h,  ' ', 07h,  30h,  30h,  30h,  30h,  31h,  0Fh,  70h,  71h,  07h,  0Fh,  0     ; Commander
+        db 0B0h, 08h, 0DBh, 08h, 70h,  07h,  0Fh,  07h,  0Fh,  70h,  07h,  0Fh,  70h,  70h,  0     ; Mono
+        db ' ', 07h,  ' ', 07h,  70h,  07h,  0Fh,  07h,  0Fh,  70h,  07h,  0Fh,  70h,  70h,  0     ; MDA
 %if ($ - theme_tab) != 4 * TH_SIZE
 %error theme table
 %endif
@@ -815,7 +838,10 @@ m_pos:
         add     dh, LIST_Y + 1
         mov     dl, POS_X
         mov     cx, POS_W
-        mov     al, 0C4h
+        push    si
+        call    m_frame
+        mov     al, [cs:si+1]
+        pop     si
         call    m_rep                   ; the frame under an older, longer number
         mov     al, ' '
         call    putc

@@ -91,6 +91,7 @@ The menu opens on its main menu:
 |---|---|
 | Floppy Image | the floppy images on the USB drive: Enter on one puts it in A: |
 | HDD Image | the hard disk images: Enter on one puts it in C: |
+| Boot Order | which one boots when both drives hold an image: the floppy in A: first, or the hard disk in C: first |
 | Boot Melody | the start-up tunes: Enter selects one and plays it |
 | Card Mode | the card's modes (Gravis UltraSound, AdLib, MPU-401, Tandy / CMS, Sound Blaster, USB only): Enter stores the mode and restarts the card in it |
 | Colours | Setup, Commander, Mono |
@@ -105,10 +106,12 @@ The menu opens on its main menu:
 | R | read the list again, after changing the USB drive |
 
 The Drives window shows what is in A: and C:, and a check mark in a list
-marks what is in effect: the image that is in the drive, the tune, the mode,
-the colours. Leaving the menu boots A: when it holds an image, else C: (the
-other way round with option bit 3); `(none)` at the top of the image lists
-takes the image out of its drive. What is not saved lasts until the card is
+marks what is in effect: the image that is in the drive, the boot order, the
+tune, the mode, the colours. Leaving the menu boots the drive that holds an
+image; when both do, Boot Order decides: A: first unless it says otherwise
+(it is option bit 3 of `pgusinit /bdopts`, and saved like the rest). If the
+first does not boot, the other is tried. `(none)` at the top of the image
+lists takes the image out of its drive. What is not saved lasts until the card is
 switched off, so the next cold boot starts with the saved settings again.
 A change of mode is the exception: the card has to restart for it and would
 forget what was not saved, so choosing a mode saves everything first.
@@ -141,6 +144,8 @@ normal, bright and reverse video whatever colours are set. The look follows
 the web page of the web server feature (`sw/web/www/textmode` on its
 branch): the title bar, the framed windows with their shadows, the
 `Key=Action` status line, and the colour of every part from its three themes.
+The windows have the double-line frame of its design system in the Setup
+colours and a single-line frame in the other two.
 
 The menu itself needs no USB drive: with no image configured it is offered
 (or opened, with `/bdmenu 2`) at once, and the lists of images say so while
@@ -386,7 +391,7 @@ The loader fixes the checksum byte after it patches these fields.
    disk), prints a line per configured unit, adjusts the BIOS data area,
    hooks INT 13h and reads sector 0 of the boot image to 0000:7C00. It boots
    the floppy image
-   first, or the hard disk image when option bit 3 is set or
+   first, or the hard disk image when option bit 3 (the menu's Boot Order) is set or
    there is no floppy image. A hard disk needs 55AAh at the end of the
    sector. A floppy boot sector without the signature is accepted when it
    starts with a jump (EBh/E9h). The ROM then jumps to 0000:7C00 with
@@ -554,6 +559,7 @@ simulator) covers these cases:
 * T21: Colours (the attributes of the screen are checked).
 * T22: Boot Melody: off, the length of tune 1, the user's melody.
 * T23: Card Mode: the card restarts and the menu waits for it.
+* T24: Boot Order: the hard disk image boots with a floppy image in A:.
 
 `tools/emu/README.md` has the full list.
 

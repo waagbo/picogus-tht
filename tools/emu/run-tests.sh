@@ -16,7 +16,7 @@ set -u
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
 WORK=$EMU_CACHE/work
-TESTS=${*:-T0 S1 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18 T19 T20 T21 T22 T23}
+TESTS=${*:-T0 S1 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18 T19 T20 T21 T22 T23 T24}
 TIMEOUT=${TIMEOUT:-90}
 ROM=$ROMDIR/PGBOOT.ROM
 ROM88=$ROMDIR/PGBOOT88.ROM
@@ -482,8 +482,8 @@ menu_fail() {  # menu_fail TEST MESSAGE: report, show the last screens
     finish
 }
 
-# The main menu's entries, from the top: Floppy Image, HDD Image, Boot
-# Melody, Card Mode, Colours, Save Settings, Boot. The lists of images start
+# The main menu's entries, from the top: Floppy Image, HDD Image, Boot Order,
+# Boot Melody, Card Mode, Colours, Save Settings, Boot. The lists of images start
 # with "(none)".
 
 # T12: the menu at every boot, nothing configured: the main menu, the floppy
@@ -496,8 +496,8 @@ t_T12() {
     start_sim "$W" --stick "$W/stick.img" --menu 2 || { report T12 FAIL "sim did not start"; return; }
     start_qemu "$W" -option-rom "$ROM" -boot menu=off $(bridge_args)
     wait_screen "$W" menu1 'Save Settings' 30 || { menu_fail T12 "the menu did not come up"; return; }
-    m=$(on_screen menu1 'PicoGUS Boot +PGBOOT 0\.[0-9]+$' '^ +Main Menu$' 'Floppy Image$' 'HDD Image$' 'Boot Melody$' \
-        'Card Mode$' 'Colours$' ' Boot$' ' 1/7$' ' Drives$' ' A: +-$' ' C: +-$' 'Enter=Select +Esc=Boot') ||
+    m=$(on_screen menu1 'PicoGUS Boot +PGBOOT 0\.[0-9]+$' '^ +Main Menu$' 'Floppy Image$' 'HDD Image$' 'Boot Order$' 'Boot Melody$' \
+        'Card Mode$' 'Colours$' ' Boot$' ' 1/8$' ' Drives$' ' A: +-$' ' C: +-$' 'Enter=Select +Esc=Boot') ||
         { menu_fail T12 "main menu: missing$m"; return; }
     # the layout asked for: a free row under the title bar and above the status line
     [ -z "$(sed -n 2p "$W/menu1.txt")" ] && [ -z "$(sed -n 24p "$W/menu1.txt")" ] ||
@@ -518,7 +518,7 @@ t_T12() {
     wait_screen "$W" menu5 '\(none\)$' 10 || { menu_fail T12 "'..' did not lead back to the root"; return; }
     send_keys down ret down ret     # into the folder again, the image: into A:, back to the main menu
     wait_screen "$W" menu6 ' A: +\\BOOTDI~1\\DOSBOO~1\.IMG$' 10 || { menu_fail T12 "the image did not go into A:"; return; }
-    m=$(on_screen menu6 '^ +Main Menu$' ' 1/7$') || { menu_fail T12 "not back in the main menu: missing$m"; return; }
+    m=$(on_screen menu6 '^ +Main Menu$' ' 1/8$') || { menu_fail T12 "not back in the main menu: missing$m"; return; }
     send_keys esc                   # boot
     if wait_marker "$W" PGBOOT-SUB-OK "$TIMEOUT"; then
         sleep 1; screen_dump "$W" screen
@@ -553,7 +553,7 @@ t_T13() {
         { menu_fail T13 "a floppy image is among the hard disk images"; return; }
     send_keys down down ret         # HD.IMG
     wait_screen "$W" menu4 ' C: +\\HD\.IMG$' 10 || { menu_fail T13 "HD.IMG did not go into C:"; return; }
-    send_keys down down down down ret   # Save Settings
+    send_keys down down down down down ret  # Save Settings
     wait_screen "$W" menu5 'Saved' 10 || { menu_fail T13 "Save Settings did not save"; return; }
     send_keys down ret              # Boot
     wait_screen "$W" screen-early "$ROM_DONE_RE" 30
@@ -801,13 +801,15 @@ t_T21() {
     wait_screen "$W" menu1 'Save Settings' 30 || { menu_fail T21 "the menu did not come up"; return; }
     c=$(theme_cells menu1 0)
     [ "$c" = "70 1f 4f 10 70 71" ] || { menu_fail T21 "Setup colours are '$c', not '70 1f 4f 10 70 71'"; return; }
-    send_keys down down down down ret   # Colours
+    [ "$(char_at "$W" menu1 2 18)" = c9 ] || { menu_fail T21 "the Setup frame is not double-lined (corner $(char_at "$W" menu1 2 18))"; return; }
+    send_keys down down down down down ret  # Colours
     wait_screen "$W" menu2 'Commander$' 10 || { menu_fail T21 "Colours did not open"; return; }
     m=$(on_screen menu2 '^ +Colours$' 'Setup$' 'Mono$' ' 1/3$') || { menu_fail T21 "colours: missing$m"; return; }
     send_keys down ret              # Commander
     wait_attr "$W" menu3 0 40 30 10 || { menu_fail T21 "Commander did not bring its title bar"; return; }
     c=$(theme_cells menu3 1)
     [ "$c" = "30 30 0f 07 70 0f" ] || { menu_fail T21 "Commander colours are '$c', not '30 30 0f 07 70 0f'"; return; }
+    [ "$(char_at "$W" menu3 2 18)" = da ] || { menu_fail T21 "the Commander frame is not single-lined (corner $(char_at "$W" menu3 2 18))"; return; }
     send_keys esc down ret          # back (on Colours), Save Settings
     wait_screen "$W" menu4 'Saved' 10 || { menu_fail T21 "Save Settings did not save"; return; }
     send_keys up ret end ret        # Colours: Mono
@@ -820,7 +822,7 @@ t_T21() {
     wait_screen "$W" screen-early "$ROM_DONE_RE" 30
     finish
     if grep -q 'CMD_SAVE: settings saved .*theme=1 ' "$W/sim.log" && [ "$(attr_at "$W" screen-early 0 40)" = "07" ]; then
-        report T21 PASS "Colours: Setup, Commander (saved), Mono, Setup; plain screen after the menu"
+        report T21 PASS "Colours: Setup (double frame), Commander (saved), Mono, Setup; plain screen after the menu"
     else
         report T21 FAIL "the saved theme is not 1, or the screen kept the menu's colours; see $W"
     fi
@@ -852,7 +854,7 @@ t_T22() {
     QEMU_EXTRA="-trace pcspk_io_write -msg timestamp=on -D $W/trace.log" \
         start_qemu "$W" -option-rom "$ROM" -boot menu=off $(bridge_args)
     wait_screen "$W" menu1 'Save Settings' 30 || { menu_fail T22 "the menu did not come up"; return; }
-    send_keys down down ret         # Boot Melody
+    send_keys down down down ret    # Boot Melody
     wait_screen "$W" menu2 'Rising$' 10 || { menu_fail T22 "Boot Melody did not open"; return; }
     m=$(on_screen menu2 '^ +Boot Melody$' ' Off$' 'Fanfare$' 'Doom$' ' Beep$' ' 1/10$') || { menu_fail T22 "tunes: missing$m"; return; }
     [ -s "$W/trace.log" ] && { menu_fail T22 "the speaker was touched although the tune is off"; return; }
@@ -887,7 +889,7 @@ t_T23() {
     start_sim "$W" --stick "$W/stick.img" --menu 2 --tune 0 --restart-ms 2500 || { report T23 FAIL "sim did not start"; return; }
     start_qemu "$W" -option-rom "$ROM" -boot menu=off $(bridge_args)
     wait_screen "$W" menu1 'Save Settings' 30 || { menu_fail T23 "the menu did not come up"; return; }
-    send_keys down down down ret    # Card Mode
+    send_keys down down down down ret   # Card Mode
     wait_screen "$W" menu2 'Sound Blaster$' 10 || { menu_fail T23 "Card Mode did not open"; return; }
     m=$(on_screen menu2 '^ +Card Mode$' 'Gravis UltraSound$' 'AdLib$' 'MPU-401$' 'Tandy / CMS$' 'USB only$' ' 1/6$') ||
         { menu_fail T23 "modes: missing$m"; return; }
@@ -910,9 +912,37 @@ t_T23() {
     fi
 }
 
+# T24: Boot Order: both drives hold an image, the hard disk is put first
+t_T24() {
+    local src m
+    need_rom T24 "$ROM" || return
+    newwork T24
+    menu_stick || { report T24 FAIL "no hard disk image"; return; }
+    start_sim "$W" --stick "$W/stick.img" --fd FD.IMG --hd HD.IMG --menu 2 --tune 0 || { report T24 FAIL "sim did not start"; return; }
+    start_qemu "$W" -option-rom "$ROM" -boot menu=off $(bridge_args)
+    wait_screen "$W" menu1 'Save Settings' 30 || { menu_fail T24 "the menu did not come up"; return; }
+    send_keys down down ret         # Boot Order
+    wait_screen "$W" menu2 'Hard disk C: first$' 10 || { menu_fail T24 "Boot Order did not open"; return; }
+    m=$(on_screen menu2 '^ +Boot Order$' 'Floppy A: first$' ' 1/2$') || { menu_fail T24 "boot order: missing$m"; return; }
+    send_keys down ret esc esc      # the hard disk first, back, boot
+    wait_screen "$W" screen-early "$ROM_DONE_RE" 30
+    if wait_marker "$W" PGBOOT-HD-OK "$TIMEOUT"; then
+        finish
+        m=$(on_screen screen-early 'PGBOOT: A: \\?FD\.IMG, 1440K' 'PGBOOT: C: \\?HD\.IMG, 31M' 'PGBOOT: booting C:') ||
+            { report T24 FAIL "boot messages: missing$m; see $W"; return; }
+        if grep -q 'BDOPTS <- 08' "$W/sim.log"; then
+            report T24 PASS "Boot Order: 'Hard disk C: first' chosen, C: booted with A: present"
+        else
+            report T24 FAIL "booted C:, but the card trace lacks the option write; see $W"
+        fi
+    else
+        menu_fail T24 "the hard disk did not boot first"
+    fi
+}
+
 for t in $TESTS; do
     case $t in
-        S1|T0|T1|T2|T3|T4|T5|T6|T7|T8|T9|T10|T11|T12|T13|T14|T15|T16|T17|T18|T19|T20|T21|T22|T23) "t_$t" ;;
+        S1|T0|T1|T2|T3|T4|T5|T6|T7|T8|T9|T10|T11|T12|T13|T14|T15|T16|T17|T18|T19|T20|T21|T22|T23|T24) "t_$t" ;;
         P4) rm -f "$WORK/hd-native.img"
             if prep_hd_native; then report P4 PASS "native FDISK /MBR + SYS C: reference image ($WORK/hd-native.img)"
             else report P4 FAIL "see $WORK/P4"; fi ;;

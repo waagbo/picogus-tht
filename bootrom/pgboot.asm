@@ -405,6 +405,10 @@ int19_entry:
 .menu:
         call    boot_menu
         mov     byte [r_menu], 0                ; once
+        mov     al, CMD_BDOPTS                  ; the boot order may be another now
+        call    rd8
+        and     al, 0Fh
+        mov     [r_opts], al
         call    cfg_check                       ; what the menu left configured
         jz      .nomenu
         jmp     .configured                     ; its drive, should it not be there yet

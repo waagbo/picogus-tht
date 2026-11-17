@@ -109,6 +109,7 @@ extern "C" {
 #define BD_LIST_TUNES       0x11    /* the start-up tunes */
 #define BD_LIST_MODES       0x12    /* the card's modes */
 #define BD_LIST_THEMES      0x13    /* the colours of the menu */
+#define BD_LIST_ORDER       0x14    /* which image boots when both drives hold one */
 
 /* Largest file the boot menu offers as a floppy: 2.88 MB */
 #define BD_FLOPPY_MAX_BYTES 2949120UL

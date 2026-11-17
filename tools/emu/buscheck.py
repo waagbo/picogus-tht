@@ -350,9 +350,9 @@ def main():
         return ax, [(pl[4 + 48 * i], pl[5 + 48 * i], pl[6 + 48 * i], pl[7 + 48 * i],
                      pl[25 + 48 * i:25 + 48 * i + pl[10 + 48 * i]].decode('latin-1')) for i in range(n)]
     ax, ents = mlist(0x10)
-    check(ax == 0 and [e[4] for e in ents] == ['Floppy Image', 'HDD Image', 'Boot Melody', 'Card Mode', 'Colours', 'Save Settings', 'Boot'],
+    check(ax == 0 and [e[4] for e in ents] == ['Floppy Image', 'HDD Image', 'Boot Order', 'Boot Melody', 'Card Mode', 'Colours', 'Save Settings', 'Boot'],
           'main menu: %s' % [e[4] for e in ents])
-    check(ax == 0 and ents[0][:4] == (3, 0, 0x01, 0) and ents[5][:4] == (4, 0, 0xE1, 1) and ents[6][0] == 5,
+    check(ax == 0 and ents[0][:4] == (3, 0, 0x01, 0) and ents[6][:4] == (4, 0, 0xE1, 1) and ents[7][0] == 5,
           'its entries open list 01h, write 1 to CMD_SAVE, boot')
     ax, ents = mlist(0x01)
     check(ax == 0 and ents[0][:4] == (4, 0, 0x88, 0) and ents[0][4] == '(none)' and [e[4] for e in ents[1:]] == ['FD.IMG'] and
@@ -363,6 +363,9 @@ def main():
     check(ax == 0 and len(ents) == 6 and ents[5][:5] == (4, 2, 0x03, 6, 'USB only'), 'modes: six, USB only running (%s)' % ents[-1:])
     ax, ents = mlist(0x13)
     check(ax == 0 and [e[4] for e in ents] == ['Setup', 'Commander', 'Mono'] and [e[3] for e in ents] == [0, 1, 2], 'colours: three choices')
+    ax, ents = mlist(0x14)
+    check(ax == 0 and [e[4] for e in ents] == ['Floppy A: first', 'Hard disk C: first'] and [e[2] for e in ents] == [0x8A, 0x8A] and
+          ents[1][3] == ents[0][3] | 8, 'boot order: two values for CMD_BDOPTS that differ in bit 3 (%s)' % [e[3] for e in ents])
     ax, ents = mlist(0x77)
     check(ax == 0x01, 'an unknown list answers 01h (AX=%04X)' % ax)
 

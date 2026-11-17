@@ -141,6 +141,7 @@ Request payload: `SS SS NN LL` + path
   | 11h | the start-up tunes | no |
   | 12h | the card's modes | no |
   | 13h | the colours of the menu | no |
+  | 14h | the boot order | no |
 
   Firmware before the lists ignored this byte (the ROM sent 0) and answers
   every value with list 00h. Any other value: 01h.
@@ -190,8 +191,8 @@ path with this entry's 8.3 name, which is how the ROM writes it.
 
 The menu's own lists:
 
-* 10h, main menu: Floppy Image (menu 01h), HDD Image (menu 02h), Boot Melody
-  (menu 11h), Card Mode (menu 12h; left out when the firmware has one mode),
+* 10h, main menu: Floppy Image (menu 01h), HDD Image (menu 02h), Boot Order
+  (menu 14h), Boot Melody (menu 11h), Card Mode (menu 12h; left out when the firmware has one mode),
   Colours (menu 13h), Save Settings (choice: `CMD_SAVE` <- 1), Boot.
 * 11h, tunes: Off, the firmware's tunes by name, then the user's melody when
   there is one; choices `CMD_BDTUNE` <- the tune's number.
@@ -199,6 +200,9 @@ The menu's own lists:
   choices `CMD_BOOTMODE` <- the mode. The card is off the bus for a second
   or two when it restarts; its USB drive takes longer to come back.
 * 13h, colours: Setup, Commander, Mono; choices `CMD_BDTHEME` <- 0, 1, 2.
+* 14h, boot order: Floppy A: first, Hard disk C: first; choices `CMD_BDOPTS`
+  <- the options as they are with bit 3 clear, or set. The ROM reads
+  `CMD_BDOPTS` again when the menu ends.
 
 Other answers, without a payload: 01h request shorter than 4 bytes, path
 longer than 127 characters or no such list, 02h no such folder, 20h FatFs

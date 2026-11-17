@@ -963,13 +963,14 @@ static bool menu_entry(uint8_t list, unsigned i, uint8_t *e) {
         static const struct { const char *name; uint8_t kind, a, b; } item[] = {
             { "Floppy Image",  BD_KIND_MENU,   BD_LIST_FLOPPY,   0 },
             { "HDD Image",     BD_KIND_MENU,   BD_LIST_HARDDISK, 0 },
+            { "Boot Order",    BD_KIND_MENU,   BD_LIST_ORDER,    0 },
             { "Boot Melody",   BD_KIND_MENU,   BD_LIST_TUNES,    0 },
             { "Card Mode",     BD_KIND_MENU,   BD_LIST_MODES,    0 },
             { "Colours",       BD_KIND_MENU,   BD_LIST_THEMES,   0 },
             { "Save Settings", BD_KIND_CHOICE, CMD_SAVE,         1 },
             { "Boot",          BD_KIND_BOOT,   0,                0 },
         };
-        if (mode_count() < 2 && i >= 3) i++;        /* nothing to switch to: no "Card Mode" */
+        if (mode_count() < 2 && i >= 4) i++;        /* nothing to switch to: no "Card Mode" */
         if (i >= sizeof(item) / sizeof(item[0])) return false;
         disp = item[i].name;
         kind = item[i].kind;
@@ -994,6 +995,16 @@ static bool menu_entry(uint8_t list, unsigned i, uint8_t *e) {
         a = CMD_BOOTMODE;
         b = (uint8_t)m;
         if (m == mode_current) flags = BD_LIST_FLAG_CURRENT;
+        break;
+    }
+    case BD_LIST_ORDER: {
+        /* option bit 3, the other options as they are */
+        uint8_t opts = opts_now();
+        if (i > 1) return false;
+        disp = i ? "Hard disk C: first" : "Floppy A: first";
+        a = CMD_BDOPTS;
+        b = i ? (uint8_t)(opts | BD_OPT_BOOT_HD) : (uint8_t)(opts & ~BD_OPT_BOOT_HD);
+        if (b == opts) flags = BD_LIST_FLAG_CURRENT;
         break;
     }
     case BD_LIST_THEMES:

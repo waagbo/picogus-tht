@@ -209,6 +209,8 @@ while lines and not lines[-1]: lines.pop()
 open(txt, 'w').write('\n'.join(lines) + '\n')
 # the attribute of every cell: 25 lines of 80 two-digit hex numbers (attr_at)
 open(txt[:-4] + '.attr', 'w').write(''.join(d[r*160+1:(r+1)*160:2].hex() + '\n' for r in range(25)))
+# and its character code, the same way (char_at): frames are not ASCII
+open(txt[:-4] + '.chr', 'w').write(''.join(d[r*160:(r+1)*160:2].hex() + '\n' for r in range(25)))
 os.remove(binf)
 PY
 }
@@ -217,6 +219,11 @@ PY
 # the dump NAME (rows and columns from 0)
 attr_at() {
     sed -n "$(( $3 + 1 ))p" "$1/$2.attr" 2>/dev/null | cut -c$(( $4 * 2 + 1 ))-$(( $4 * 2 + 2 ))
+}
+
+# char_at WORKDIR NAME ROW COL: the character code (two hex digits) of a cell
+char_at() {
+    sed -n "$(( $3 + 1 ))p" "$1/$2.chr" 2>/dev/null | cut -c$(( $4 * 2 + 1 ))-$(( $4 * 2 + 2 ))
 }
 
 # wait_attr WORKDIR NAME ROW COL HEX SECONDS: dump the screen until that cell

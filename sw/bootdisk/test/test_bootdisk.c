@@ -1654,15 +1654,16 @@ static void test_menu_lists(void) {
     bd_init_modes(0x7E, 5);
     unmount_drive();                                    /* they need no drive */
     list_id = BD_LIST_MAIN;
-    CHECK(bdlist("", 0, 255) == 0 && list_total == 7 && list_count == 7, "main menu: %u entries", list_total);
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 8 && list_count == 8, "main menu: %u entries", list_total);
     CHECK(ment_is(0, BD_KIND_MENU, BD_LIST_FLOPPY, 0, 0, "Floppy Image") && ment_is(1, BD_KIND_MENU, BD_LIST_HARDDISK, 0, 0, "HDD Image") &&
-          ment_is(2, BD_KIND_MENU, BD_LIST_TUNES, 0, 0, "Boot Melody") && ment_is(3, BD_KIND_MENU, BD_LIST_MODES, 0, 0, "Card Mode") &&
-          ment_is(4, BD_KIND_MENU, BD_LIST_THEMES, 0, 0, "Colours"), "the lists it opens");
-    CHECK(ment_is(5, BD_KIND_CHOICE, 0xE1, 1, 0, "Save Settings") && ment_is(6, BD_KIND_BOOT, 0, 0, 0, "Boot"), "save and boot");
-    CHECK(bdlist("\\ignored", 5, 1) == 0 && list_total == 7 && list_count == 1 && ment_is(0, BD_KIND_CHOICE, 0xE1, 1, 0, "Save Settings"),
+          ment_is(2, BD_KIND_MENU, BD_LIST_ORDER, 0, 0, "Boot Order") && ment_is(3, BD_KIND_MENU, BD_LIST_TUNES, 0, 0, "Boot Melody") &&
+          ment_is(4, BD_KIND_MENU, BD_LIST_MODES, 0, 0, "Card Mode") && ment_is(5, BD_KIND_MENU, BD_LIST_THEMES, 0, 0, "Colours"),
+          "the lists it opens");
+    CHECK(ment_is(6, BD_KIND_CHOICE, 0xE1, 1, 0, "Save Settings") && ment_is(7, BD_KIND_BOOT, 0, 0, 0, "Boot"), "save and boot");
+    CHECK(bdlist("\\ignored", 6, 1) == 0 && list_total == 8 && list_count == 1 && ment_is(0, BD_KIND_CHOICE, 0xE1, 1, 0, "Save Settings"),
           "paged like any list; a path does not matter");
     bd_init_modes(1u << 5, 5);
-    CHECK(bdlist("", 0, 255) == 0 && list_total == 6 && ment_is(3, BD_KIND_MENU, BD_LIST_THEMES, 0, 0, "Colours"),
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 7 && ment_is(4, BD_KIND_MENU, BD_LIST_THEMES, 0, 0, "Colours"),
           "a single-mode firmware has no Card Mode entry (%u entries)", list_total);
     bd_init_modes(0x7E, 5);
 
@@ -1705,8 +1706,18 @@ static void test_menu_lists(void) {
     CHECK(bdlist("", 0, 255) == 0 && list_total == 2 && ment_is(0, BD_KIND_CHOICE, 0x03, 1, 0, "Gravis UltraSound") &&
           ment_is(1, BD_KIND_CHOICE, 0x03, 6, BD_LIST_FLAG_CURRENT, "USB only"), "only the modes the firmware has");
 
-    list_id = 0x14;
-    CHECK(bdlist("", 0, 16) == BD_ST_BADCMD, "no list 14h -> 01h");
+    /* the boot order: option bit 3, the other option bits kept */
+    list_id = BD_LIST_ORDER;
+    bd_ctl_opts_write(BD_OPT_FD_RO);
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 2 && ment_is(0, BD_KIND_CHOICE, 0x8A, BD_OPT_FD_RO, BD_LIST_FLAG_CURRENT, "Floppy A: first") &&
+          ment_is(1, BD_KIND_CHOICE, 0x8A, BD_OPT_FD_RO | BD_OPT_BOOT_HD, 0, "Hard disk C: first"), "boot order: the floppy first, in effect");
+    bd_ctl_opts_write(BD_OPT_FD_RO | BD_OPT_BOOT_HD);
+    CHECK(bdlist("", 0, 255) == 0 && ment_is(0, BD_KIND_CHOICE, 0x8A, BD_OPT_FD_RO, 0, "Floppy A: first") &&
+          ment_is(1, BD_KIND_CHOICE, 0x8A, BD_OPT_FD_RO | BD_OPT_BOOT_HD, BD_LIST_FLAG_CURRENT, "Hard disk C: first"),
+          "after the choice: the hard disk first");
+    bd_ctl_opts_write(0);
+    list_id = 0x15;
+    CHECK(bdlist("", 0, 16) == BD_ST_BADCMD, "no list 15h -> 01h");
     list_id = BD_LIST_ALL;
     CHECK(bdlist("", 0, 16) == BD_ST_NOTREADY, "a folder list still needs the drive");
     mount_drive();

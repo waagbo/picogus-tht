@@ -67,7 +67,7 @@ fast seek), copied next to `ff.h` in the build directory as that Makefile does.
 ## Run
 
 ```
-tools/emu/run-tests.sh                 # T0 S1 T1 ... T23 (about 7 minutes)
+tools/emu/run-tests.sh                 # T0 S1 T1 ... T24 (about 7 minutes)
 tools/emu/run-tests.sh T0 T3 T4        # a selection
 KEEP=1 SIM_LOG=3 tools/emu/run-tests.sh T1
 SIM_EXTRA='--busy-polls 300' tools/emu/run-tests.sh    # a slow card: long BUSY phases
@@ -102,7 +102,7 @@ output; the evidence stays in `$EMU_CACHE/work/<test>/`:
 | T9 | ROM, FreeDOS on FD.IMG runs `PGUSINIT /fdimage FD2.IMG` | Floppy swap under a running DOS: the card reopens unit 0 and flags a media change, the ROM reports it through INT 13h, DOS re-reads FAT and directory (new label, a file only FD2.IMG has). FreeCOM re-reads AUTOEXEC.BAT by name and offset, so the checks after the swap only exist on FD2.IMG. |
 | T10 | ROM boot, then `PGDFS D:` | PGDFS and PGBOOT together: the stick as D:, a D: -> A: copy, and DEL/REN of the open `FD.IMG` refused by the card (DELETE/RENAME answer AX=05h in the trace, the file is still on the stick). |
 | T11 | ROM, card `--dfsport 0x2a0`, bridge `dataport=0x2a0` | The ROM takes the data window from `CMD_DFSPORT` instead of assuming 1D4h. |
-| T12 | ROM, `--menu 2`, nothing configured; keys Enter, End, Up, Enter, Enter, Down, Enter, Down, Enter, Esc | The main menu (its seven entries, the free rows under the title bar and above the status line), Floppy Image (`(none)`, the folder, `FD.IMG`; no hard disk image), into the folder "Boot Disks" and back with `..`, "DOS Boot Disk.img" into A: (the card gets `\BOOTDI~1\DOSBOO~1.IMG`, the menu returns to the main menu), Esc boots it. |
+| T12 | ROM, `--menu 2`, nothing configured; keys Enter, End, Up, Enter, Enter, Down, Enter, Down, Enter, Esc | The main menu (its eight entries, the free rows under the title bar and above the status line), Floppy Image (`(none)`, the folder, `FD.IMG`; no hard disk image), into the folder "Boot Disks" and back with `..`, "DOS Boot Disk.img" into A: (the card gets `\BOOTDI~1\DOSBOO~1.IMG`, the menu returns to the main menu), Esc boots it. |
 | T13 | ROM, `--menu 2`; Floppy Image: `FD.IMG`, HDD Image: `HD.IMG`, Save Settings, Boot | Both drives set from their lists, `CMD_SAVE` in the trace with both names, Boot boots A: with C: present. |
 | T14 | ROM, `--fd FD.IMG`, 8 s prompt, native floppy; keys M, Enter, Enter, Esc, Esc | M at the prompt opens the menu with `FD.IMG` in A:, `(none)` in Floppy Image empties it, Esc twice leaves: nothing configured, the BIOS boots the native floppy. |
 | T15 | ROM, default settings, nothing configured, native floppy, QEMU `-trace pcspk_io_write` | The start-up tune (tune 1, read from the card): four writes to port 61h with the timer gate and speaker bit on, a last one with both off. The prompt runs out, "no disk image configured", BIOS boot. |
@@ -111,9 +111,10 @@ output; the evidence stays in `$EMU_CACHE/work/<test>/`:
 | T18 | ROM boot, then `PGUSINIT /bdmenu`, `/bdwait`, `/bdtheme`, `/bdtune` (a number, `custom`, `off`), `/bdmelody` (text and `@file`) | pgusinit's switches write the card's registers (values in the trace) and its status output shows the menu mode, the colours and the tune by name. |
 | T19 | ROM, `--menu 2`, an image seven folders down | The path grows a folder at a time, the list window's frame shows `...` and the end of a path too long for it, R lists the folder again, and the 74-character image path reaches the card. |
 | T20 | ROM, `--menu 2 --mount-delay-ms 12000`, nothing configured | The menu opens before the USB drive is mounted; Floppy Image says "Cannot read the USB drive"; R lists it once the stick is there; the image boots. |
-| T21 | ROM, `--menu 2`; Colours: Commander, Save Settings, Mono, Setup | The colours of the three themes: the attributes of six cells (title bar, list frame, selected entry, screen, drives window, a status key) for each, the theme saved, a plain screen after the menu. |
+| T21 | ROM, `--menu 2`; Colours: Commander, Save Settings, Mono, Setup | The colours of the three themes: the attributes of six cells (title bar, list frame, selected entry, screen, drives window, a status key) for each, the double-line frame of Setup and the single-line one of Commander (the character in the corner), the theme saved, a plain screen after the menu. |
 | T22 | ROM, `--menu 2 --tune 0 --melody ...`, QEMU `-trace pcspk_io_write -msg timestamp=on`; Boot Melody: Rising, the last entry, Off, Save Settings | Tune off: the speaker is not touched. Rising plays when chosen and takes 550 ms (the trace's times); the user's melody is the last entry; Off again is saved. |
 | T23 | ROM, `--menu 2 --restart-ms 2500`; Card Mode: Gravis UltraSound | The mode list; the choice writes `CMD_BOOTMODE`, `CMD_SAVE` and `CMD_REBOOT`, the simulated card is off the bus for 2.5 s, the menu waits for it and lists the modes again. |
+| T24 | ROM, `--fd FD.IMG --hd HD.IMG --menu 2`; Boot Order: Hard disk C: first | The choice writes `CMD_BDOPTS` with bit 3; the ROM boots C: with A: present. |
 
 The markers the tests wait for are written by `AUTOEXEC.BAT` with
 `ECHO PGBOOT-... > COM1`; there is no power-off, the harness kills QEMU after
@@ -123,8 +124,9 @@ The menu tests type on the guest's keyboard through the QEMU monitor
 (`send_keys` in `lib.sh`: HMP `sendkey`) and wait for what they expect on the
 text screen (`wait_screen`: a screen dump every 0.3 s until a line matches).
 A screen dump is `NAME.txt` (the characters; frame and shading characters
-read as blanks) and `NAME.attr` (the colour attribute of every cell, for
-`attr_at` and `wait_attr`).
+read as blanks), `NAME.attr` (the colour attribute of every cell, for
+`attr_at` and `wait_attr`) and `NAME.chr` (the character code of every cell,
+for `char_at`).
 The early screen dump of the other tests waits the same way for the ROM's
 last line (`PGBOOT: booting A:`, `continuing with the BIOS boot`, ...).
 
