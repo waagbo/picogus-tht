@@ -72,7 +72,7 @@ pgusinit /bdopts n               bit 0 floppy read-only, bit 1 hard disk read-on
 pgusinit /bdmenu n               boot menu: 0 off, 1 offered at boot with M (default), 2 opens at every boot
 pgusinit /bdwait n               seconds the ROM waits for M: 1-15 (default 3)
 pgusinit /bdtheme x              colours of the boot menu: setup (default), commander or mono
-pgusinit /bdtune n               start-up tune: off, 1-13 (default 1), or custom
+pgusinit /bdtune n               start-up tune: off, 1-14 (default 1), or custom
 pgusinit /bdmelody x             your own tune as RTTTL text, or @file; then /bdtune custom
 pgusinit /save                   make it permanent
 pgusinit /fdimage -              remove the floppy image (same for /hdimage)
@@ -104,7 +104,7 @@ wrong kind can still be set with `pgusinit /fdimage` or `/hdimage`.
 | S | save: the images now in A: and C: become the ones used at every boot (`pgusinit /save` from the menu; it stores all of the card's settings) |
 | R | read the folder again, after changing the USB drive (Enter does the same while nothing is listed) |
 | T | the next set of colours: Setup, Commander, Mono |
-| M | the next start-up tune, played at once with its name on the status line: off, 1 to 13, then your own if there is one |
+| M | the next start-up tune, played at once with its name on the status line: off, 1 to 14, then your own if there is one |
 | Esc | leave the menu and boot what is in A: and C:, the floppy first unless option bit 3 says otherwise |
 
 The Drives window shows what is in A: and C:. Images, colours and tune that
@@ -150,11 +150,13 @@ hands it, so new firmware brings new tunes without touching the EEPROM.
 | 11 | Demon Riff | a metal riff |
 | 12 | Rabbit Run | a bouncy platform-game tune |
 | 13 | Tycoon Swing | an easy swing |
-| `custom` (15) | your own | the melody set with `/bdmelody` |
+| 14 | Doom | the opening riff of that game's theme |
+| `custom` (62) | your own | the melody set with `/bdmelody` |
 
 1-4 and 11-13 were written for PGBOOT; 11-13 are in the manner of the game
 soundtracks that made the Gravis UltraSound worth having, not taken from
-them. Any tune you like can be your own:
+them. 14 is the opening of the Doom theme as the maintainer put it in. Any
+tune you like can be your own:
 
 ```
 pgusinit /bdmelody Mine:d=4,o=5,b=120:c,e,g,2c6     the melody, as RTTTL text
@@ -591,5 +593,5 @@ LBA of 80h. The last line is `INT13TST DONE, n failures`.
   channel 0, which must be running when the BIOS issues INT 19h.
 * The colours, the larger set of tunes and your own melody need the card's
   firmware to match (settings version 9). With older firmware this ROM shows
-  the Setup colours and plays no tune; an older ROM with this firmware plays
-  tunes 1-3 only.
+  the Setup colours and plays no tune; an older ROM (0.2) with this firmware
+  plays its own tunes 1-3 and is silent for the others.

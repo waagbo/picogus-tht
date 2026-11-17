@@ -831,7 +831,7 @@ t_T22() {
     { [ "$n" = 4 ] && [ "$ms" -ge 480 ] && [ "$ms" -le 700 ]; } ||
         { menu_fail T22 "tune 1 took $ms ms with $n notes; 550 ms and 4 expected"; return; }
     # on to the user's melody: each M ends the tune before it
-    send_keys m m m m m m m m m m m m m
+    send_keys m m m m m m m m m m m m m m
     wait_screen "$W" menu3 'Start-up tune: Beep$' 20 || { menu_fail T22 "M did not reach the user's melody"; return; }
     : > "$W/trace.log"
     sleep 1
@@ -840,10 +840,10 @@ t_T22() {
     send_keys s esc
     wait_screen "$W" screen-early "$ROM_DONE_RE" 30
     finish
-    if grep -q 'tune is now 15' "$W/sim.log" && grep -q 'CMD_SAVE: settings saved .*tune=0 ' "$W/sim.log"; then
+    if grep -q 'tune is now 62' "$W/sim.log" && grep -q 'CMD_SAVE: settings saved .*tune=0 ' "$W/sim.log"; then
         report T22 PASS "tunes: off at boot, M played Rising in $ms ms, reached the user's melody, off again and saved"
     else
-        report T22 FAIL "the card trace lacks tune 15 or the save with tune 0; see $W"
+        report T22 FAIL "the card trace lacks tune 62 (the user's) or the save with tune 0; see $W"
     fi
 }
 

@@ -201,7 +201,7 @@ firmware with PGBOOT support; with older firmware pgusinit says so and changes n
 * `/bdtheme x` - colours of the boot menu, named like the themes of the web
   page: `setup`, `commander` or `mono` (or 0, 1, 2). Default: setup.
 * `/bdtune n` - start-up tune the ROM plays on the PC speaker when it has
-  found the card: `off` (or 0), 1 to 13 for the tunes that come with the
+  found the card: `off` (or 0), 1 to 14 for the tunes that come with the
   firmware, `custom` for your own. Default: 1. The status output names the
   tune (`PGBOOT start-up tune: 7 (Mountain King)`).
 * `/bdmelody x` - your own start-up tune as RTTTL text, the ringtone format

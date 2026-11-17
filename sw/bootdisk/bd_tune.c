@@ -16,6 +16,7 @@
  * PGBOOT: 11-13 in the manner of the soundtracks that made the Gravis
  * UltraSound worth having (a metal riff, a bouncy platform tune, an easy
  * swing), not taken from them. 5-10 are themes old enough to be anybody's.
+ * 14 is the opening of a game's theme, as the maintainer supplied it.
  * Add one by adding a line at the end and raising BD_TUNE_BUILTIN; the
  * numbers of the others then stay what users have saved. */
 const char *const bd_tune_builtin[BD_TUNE_BUILTIN] = {
@@ -32,6 +33,8 @@ const char *const bd_tune_builtin[BD_TUNE_BUILTIN] = {
     "Demon Riff:d=16,o=4,b=160:8a,a,a,8c5,8a,a,a,8d#5,8a,a,a,8d5,8c5,8a#,4a",
     "Rabbit Run:d=16,o=5,b=170:c,p,e,g,8a,g,e,8c6,a,g,8e,8g,4c6",
     "Tycoon Swing:d=8,o=5,b=132:f.,16a,c6.,16d6,c6.,16a,g.,16a#,d6.,16c6,4a.,f",
+    "Doom:d=4,o=5,b=200:8e4,8e4,8e5,8e4,8e4,8d5,8e4,8e4,8c5,8e4,8e4,8a#4,8e4,8e4,8b4,8c5,"
+        "8e4,8e4,8e5,8e4,8e4,8d5,8e4,8e4,8c5,8e4,8e4,2a#4",
 };
 
 /* Timer divisors of C1..B1 (1193182 Hz / frequency, equal temperament,

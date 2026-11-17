@@ -105,8 +105,8 @@ extern "C" {
 #define BD_MENU_WAIT_DEFAULT 3
 #define BD_MENU_DEFAULT     ((BD_MENU_WAIT_DEFAULT << BD_MENU_WAIT_SHIFT) | BD_MENU_KEY)
 #define BD_MENU_MASK        0x3F
-#define BD_TUNE_CUSTOM      15  /* CMD_BDTUNE: 0 = silent, 1..BD_TUNE_BUILTIN = the firmware's
-                                 * melodies (bd_tune.c), 15 = the user's (CMD_BDMELODY) */
+#define BD_TUNE_CUSTOM      62  /* CMD_BDTUNE: 0 = silent, 1..BD_TUNE_BUILTIN = the firmware's
+                                 * melodies (bd_tune.c), 62 = the user's (CMD_BDMELODY) */
 #define BD_TUNE_DEFAULT     1
 #define BD_THEME_SETUP      0   /* CMD_BDTHEME: the colours of the boot menu, */
 #define BD_THEME_COMMANDER  1   /* named as on the web page */

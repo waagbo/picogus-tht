@@ -107,7 +107,7 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /bdmenu n     - boot menu of the ROM: 0 off, 1 offered at boot (press M),\n");
     pageprintf("                   2 opens at every boot. Default: 1\n");
     pageprintf("   /bdwait n     - seconds the ROM waits for M (1-15). Default: 3\n");
-    pageprintf("   /bdtune n     - start-up tune on the PC speaker: off (or 0), 1-13, or custom\n");
+    pageprintf("   /bdtune n     - start-up tune on the PC speaker: off (or 0), 1-14, or custom\n");
     pageprintf("                   for the melody set with /bdmelody. Default: 1\n");
     pageprintf("   /bdmelody x   - your own start-up melody as RTTTL text (name:d=4,o=5,b=120:\n");
     pageprintf("                   c,e,g), or @file to read it from a file. - to remove\n");
@@ -1233,7 +1233,7 @@ static bool cmdBDMenu(const char* arg, const int cmd, const int cmd2, const int 
     char* endptr;
     unsigned long val = strtoul(arg, &endptr, 10);
     unsigned long min = (cmd == CMD_BDMENU && cmd2) ? 1 : 0;
-    unsigned long max = (cmd == CMD_BDTUNE) ? 15 : (cmd == CMD_BDTHEME) ? 2 : (cmd2 ? 15 : 2);
+    unsigned long max = (cmd == CMD_BDTUNE) ? 62 : (cmd == CMD_BDTHEME) ? 2 : (cmd2 ? 15 : 2);
     bool named = false;
     int i;
 
@@ -1245,7 +1245,7 @@ static bool cmdBDMenu(const char* arg, const int cmd, const int cmd2, const int 
         val = 0;
         named = true;
     } else if (cmd == CMD_BDTUNE && !stricmp(arg, "custom")) {
-        val = 15;
+        val = 62;
         named = true;
     } else if (cmd == CMD_BDTHEME) {
         for (i = 0; i < 3; i++) {
@@ -1267,7 +1267,7 @@ static bool cmdBDMenu(const char* arg, const int cmd, const int cmd2, const int 
     if (cmd == CMD_BDTUNE) {
         // the card does not store a tune it does not have
         if (!bd_ui_read(CMD_BDTUNE, &old) || old != val) {
-            if (val == 15) {
+            if (val == 62) {
                 fprintf(stderr, "Error: there is no melody of your own yet (set one with /bdmelody).\n");
             } else {
                 fprintf(stderr, "Error: this firmware has no start-up tune %lu.\n", val);
@@ -1733,7 +1733,7 @@ static void printBootDiskStatus()
         printf("PGBOOT start-up tune: ");
         if (!tune) {
             printf("off\n");
-        } else if (tune == 15) {
+        } else if (tune == 62) {
             printf("custom (%s)\n", name);
         } else {
             printf("%u (%s)\n", tune, name);

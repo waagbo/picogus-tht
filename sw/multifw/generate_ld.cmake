@@ -6,7 +6,11 @@ set(FW_ORIGIN "32768")
 
 macro(generate_ld_file FW_FILE FW_LD_FILE)
     file(SIZE ${FW_FILE} FW_SIZE)
-    math(EXPR FW_SIZE_ALIGNED "(${FW_SIZE} / 1024) * 1024 + 1024")
+    # The size of the .bin plus what the link needs beside it: a section that
+    # is not in the .bin still takes its bytes of the FLASH region
+    # (.uninitialized_data: pico_rand's state, 32 bytes). With less room than
+    # that between the .bin's size and the next kilobyte the link failed.
+    math(EXPR FW_SIZE_ALIGNED "((${FW_SIZE} + 256) / 1024) * 1024 + 1024")
     # file(REMOVE ${FW_LD_FILE})
     configure_file(${FW_LD_IN} ${FW_LD_FILE})
     list(APPEND FW_ORIGINS "${FW_ORIGIN}")

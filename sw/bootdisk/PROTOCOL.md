@@ -188,7 +188,7 @@ instead of a different image. A USB replug reopens the units that were open.
 | 8Ah | `CMD_BDOPTS` | byte, `DATA_PORT_HIGH` | bit 0 floppy image read-only, bit 1 hard disk image read-only, bit 2 ROM disabled (the ROM installs nothing), bit 3 boot the hard disk image even when a floppy image is configured. Reads return the value with bit 7 set and bit 6 clear (signature: firmware without PGBOOT reads FFh). |
 
 | 8Bh | `CMD_BDMENU` | byte, `DATA_PORT_HIGH` | The ROM's boot menu. Bits 0-1: 0 off, 1 offered at boot (the ROM waits for M), 2 opened at every boot. Bits 2-5: the seconds it waits in mode 1, 1-15. The card stores mode 3 as 1 and 0 seconds as 3. Reads return the value with bit 6 set and bit 7 clear (firmware without the boot menu reads FFh: the ROM then shows no menu). Default 0Dh: mode 1, 3 s. |
-| 8Ch | `CMD_BDTUNE` | byte, `DATA_PORT_HIGH` | Start-up tune the ROM plays on the PC speaker: 0 none, 1-13 the melodies that come with the firmware (`bd_tune.c`), 15 the user's (`CMD_BDMELODY`; only while there is one). Other values are not stored. 3Fh written: the card moves on to the next tune it has (0, 1 .. 13, 15, 0). Reads return the value with bit 6 set and bit 7 clear. Default 1. |
+| 8Ch | `CMD_BDTUNE` | byte, `DATA_PORT_HIGH` | Start-up tune the ROM plays on the PC speaker: 0 none, 1-14 the melodies that come with the firmware (`bd_tune.c`; later firmware may have more), 62 the user's (`CMD_BDMELODY`; only while there is one). Other values are not stored. 3Fh written: the card moves on to the next tune it has (0, 1 .. 14, 62, 0). Reads return the value with bit 6 set and bit 7 clear. Default 1. |
 | 8Dh | `CMD_BDTHEME` | byte, `DATA_PORT_HIGH` | Colours of the ROM's boot menu, as the themes of the web page: 0 Setup, 1 Commander, 2 Mono. Other values are not stored; 3Fh written: the next one. Reads return the value with bit 6 set and bit 7 clear. Default 0. |
 | 8Eh | `CMD_BDMELODY` | string, `DATA_PORT_HIGH` | The user's melody as RTTTL text (`name:d=4,o=5,b=120:c,e,g`; the name and the defaults may be left out), at most 255 characters. Same rules as the image names: select rewinds, writes append, a 0 byte commits, reads return the text then 0. |
 | 8Fh | `CMD_BDTUNEDATA` | read stream, `DATA_PORT_HIGH` | The selected tune, compiled for the ROM. Selecting the register rewinds; reads return the stream below, then FFh. |
@@ -223,7 +223,7 @@ writing its flash for a moment). `CMD_DEFAULTS` clears them; the floppy image
 is ejected at once, an open hard disk image stays until the next boot.
 `pgusinit` commands: `/fdimage <path|->`, `/hdimage <path|->`,
 `/bdopts <0-15>`, `/bdmenu <0-2>`, `/bdwait <1-15>`, `/bdtheme <setup|commander|mono>`,
-`/bdtune <off|1-13|custom>`, `/bdmelody <text|@file|->`, and a status block
+`/bdtune <off|1-14|custom>`, `/bdmelody <text|@file|->`, and a status block
 after the PGDFS one.
 
 ## Card behaviour
