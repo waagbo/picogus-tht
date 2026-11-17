@@ -169,7 +169,7 @@ number in this answer.
 | 1 | floppy image | writes its path (the folder, `\`, the 8.3 name) to `CMD_BDFDNAME`, returns to the main menu |
 | 2 | hard disk image | the same to `CMD_BDHDNAME` |
 | 3 | menu | opens list a; the entry's display name is that list's title |
-| 4 | choice | writes the value b to control register a (`DATA_PORT_HIGH`), waits a quarter of a second and until the card answers again, then draws everything anew and reads the list again. After a write to `CMD_BDTUNE` it plays the tune; after one to `CMD_SAVE` it only says so |
+| 4 | choice | writes the value b to control register a (`DATA_PORT_HIGH`), waits a quarter of a second and until the card answers again, then draws everything anew and reads the list again. After a write to `CMD_BDTUNE` it plays the tune; after one to `CMD_SAVE` it only says so; after one to `CMD_BOOTMODE` (a card mode) it goes on as `pgusinit /mode` does: a write to `CMD_SAVE`, then one to `CMD_REBOOT`, and the card restarts in that mode |
 | 5 | boot | leaves the menu |
 
 A ROM leaves the menu on any kind it does not know.
@@ -196,7 +196,8 @@ The menu's own lists:
 * 11h, tunes: Off, the firmware's tunes by name, then the user's melody when
   there is one; choices `CMD_BDTUNE` <- the tune's number.
 * 12h, modes: the modes the firmware can restart in, by `card_mode_t`;
-  choices `CMD_BDMODE` <- the mode.
+  choices `CMD_BOOTMODE` <- the mode. The card is off the bus for a second
+  or two when it restarts; its USB drive takes longer to come back.
 * 13h, colours: Setup, Commander, Mono; choices `CMD_BDTHEME` <- 0, 1, 2.
 
 Other answers, without a payload: 01h request shorter than 4 bytes, path
@@ -233,7 +234,6 @@ instead of a different image. A USB replug reopens the units that were open.
 | 8Dh | `CMD_BDTHEME` | byte, `DATA_PORT_HIGH` | Colours of the ROM's boot menu, as the themes of the web page: 0 Setup, 1 Commander, 2 Mono. Other values are not stored; 3Fh written: the next one. Reads return the value with bit 6 set and bit 7 clear. Default 0. |
 | 8Eh | `CMD_BDMELODY` | string, `DATA_PORT_HIGH` | The user's melody as RTTTL text (`name:d=4,o=5,b=120:c,e,g`; the name and the defaults may be left out), at most 255 characters. Same rules as the image names: select rewinds, writes append, a 0 byte commits, reads return the text then 0. |
 | 8Fh | `CMD_BDTUNEDATA` | read stream, `DATA_PORT_HIGH` | The selected tune, compiled for the ROM. Selecting the register rewinds; reads return the stream below, then FFh. |
-| 90h | `CMD_BDMODE` | write, `DATA_PORT_HIGH` | The boot menu's mode switch: a mode (`card_mode_t`) the firmware can restart in is stored with all the settings (as `CMD_SAVE`), and the card restarts in it (as `CMD_BOOTMODE` and `CMD_REBOOT`). The card is off the bus for a second or two; its USB drive takes longer to come back. Other values do nothing. |
 
 ### The tune stream (`CMD_BDTUNEDATA`)
 

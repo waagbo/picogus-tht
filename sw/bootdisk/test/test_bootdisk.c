@@ -1698,14 +1698,12 @@ static void test_menu_lists(void) {
           "colours: three, Commander in effect");
 
     list_id = BD_LIST_MODES;
-    CHECK(bdlist("", 0, 255) == 0 && list_total == 6 && ment_is(0, BD_KIND_CHOICE, 0x90, 1, 0, "Gravis UltraSound") &&
-          ment_is(4, BD_KIND_CHOICE, 0x90, 5, BD_LIST_FLAG_CURRENT, "Sound Blaster") && ment_is(5, BD_KIND_CHOICE, 0x90, 6, 0, "USB only"),
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 6 && ment_is(0, BD_KIND_CHOICE, 0x03, 1, 0, "Gravis UltraSound") &&
+          ment_is(4, BD_KIND_CHOICE, 0x03, 5, BD_LIST_FLAG_CURRENT, "Sound Blaster") && ment_is(5, BD_KIND_CHOICE, 0x03, 6, 0, "USB only"),
           "modes: six, Sound Blaster running");
     bd_init_modes((1u << 1) | (1u << 6), 6);
-    CHECK(bdlist("", 0, 255) == 0 && list_total == 2 && ment_is(0, BD_KIND_CHOICE, 0x90, 1, 0, "Gravis UltraSound") &&
-          ment_is(1, BD_KIND_CHOICE, 0x90, 6, BD_LIST_FLAG_CURRENT, "USB only"), "only the modes the firmware has");
-    CHECK(bd_mode_available(1) && bd_mode_available(6) && !bd_mode_available(2) && !bd_mode_available(0) && !bd_mode_available(7) &&
-          !bd_mode_available(200), "bd_mode_available");
+    CHECK(bdlist("", 0, 255) == 0 && list_total == 2 && ment_is(0, BD_KIND_CHOICE, 0x03, 1, 0, "Gravis UltraSound") &&
+          ment_is(1, BD_KIND_CHOICE, 0x03, 6, BD_LIST_FLAG_CURRENT, "USB only"), "only the modes the firmware has");
 
     list_id = 0x14;
     CHECK(bdlist("", 0, 16) == BD_ST_BADCMD, "no list 14h -> 01h");

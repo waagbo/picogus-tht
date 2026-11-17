@@ -93,7 +93,8 @@ extern "C" {
 #define BD_KIND_FLOPPY      1   /* image the size of a floppy disk: goes to A: */
 #define BD_KIND_HARDDISK    2   /* any larger image, and every .VHD/.HDD: goes to C: */
 #define BD_KIND_MENU        3   /* opens another list: a = its id; the entry's name is its title */
-#define BD_KIND_CHOICE      4   /* a setting: the value b is written to control register a */
+#define BD_KIND_CHOICE      4   /* a setting: the value b is written to control register a
+                                 * (a = CMD_BOOTMODE: and the card is told to save and restart) */
 #define BD_KIND_BOOT        5   /* leaves the menu and boots */
 
 #define BD_LIST_FLAG_RO      0x01   /* the image file is read-only */
@@ -164,9 +165,9 @@ void bd_init_ui(uint8_t *menu, uint8_t *tune, uint8_t *theme, char *melody);
 
 /* The modes the card can be switched to from the boot menu (bit n: mode n of
  * card_mode_t; one bit or none: no "Card Mode" in the menu) and the one that
- * is running. The switch itself is the firmware's (CMD_BDMODE). */
+ * is running. The ROM switches like pgusinit /mode does: CMD_BOOTMODE,
+ * CMD_SAVE, CMD_REBOOT. */
 void bd_init_modes(uint8_t available, uint8_t current);
-bool bd_mode_available(uint8_t mode);       /* ISR-safe */
 
 /* ---- core 0: control register handlers (O(1), no FatFs, ISR-safe) ----- */
 void    bd_ctl_name_select(uint8_t unit);           /* register selected: rewind */

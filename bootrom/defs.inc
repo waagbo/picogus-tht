@@ -32,7 +32,9 @@ CMD_BDTUNE      equ 8Ch             ; start-up tune | 40h
 CMD_BDTHEME     equ 8Dh             ; colours of the boot menu | 40h
 CMD_BDTUNEDATA  equ 8Fh             ; the selected tune as a stream of notes
 BD_UI_NEXT      equ 3Fh             ; written to CMD_BDTUNE / CMD_BDTHEME: the next one
+CMD_BOOTMODE    equ 03h             ; the mode the card starts in (card_mode_t)
 CMD_SAVE        equ 0E1h            ; any write stores the card's settings
+CMD_REBOOT      equ 0E2h            ; any write restarts the card, in that mode
 
 DFS_READY       equ 03h
 DFS_ABORTED     equ 0FEh

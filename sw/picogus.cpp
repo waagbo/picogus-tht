@@ -326,8 +326,6 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_BDTUNE:
     case CMD_BDTHEME:
         break;
-    case CMD_BDMODE: // PGBOOT boot menu: mode switch
-        break;
     case CMD_BDMELODY: // PGBOOT user melody text: rewind
         bd_ctl_melody_select();
         break;
@@ -635,11 +633,7 @@ __force_inline void write_picogus_high(uint8_t value) {
     case CMD_BDTHEME: // PGBOOT boot menu colours
         bd_ctl_theme_write(value);
         break;
-    case CMD_BDMODE: // PGBOOT boot menu: the mode to save and restart in (handle_iow does both)
-        if (bd_mode_available(value)) {
-            settings.startupMode = value;
-        }
-        break;
+
     case CMD_BDMELODY: // PGBOOT user melody text: append, 0 commits
         bd_ctl_melody_write(value);
         break;
@@ -1204,22 +1198,10 @@ __force_inline void handle_iow(void) {
         pio_sm_put(pio0, IOW_PIO_SM, IO_WAIT);
         if (control_active) {
             write_picogus_high(iow_read & 0xFF);
-            if (sel_reg == CMD_SAVE
-#ifdef PGDFS
-                // PGBOOT's mode switch: the mode, stored like pgusinit /mode x /save does
-                || (sel_reg == CMD_BDMODE && settings.startupMode == (iow_read & 0xFF))
-#endif
-                ) {
+            if (sel_reg == CMD_SAVE) {
                 // Release IOCHRDY then save settings to flash
                 pio_sm_put(pio0, IOW_PIO_SM, IO_END);
                 saveSettings(&settings);
-#ifdef PGDFS
-                if (sel_reg == CMD_BDMODE) {
-                    // ... and the restart into it, as CMD_REBOOT
-                    watchdog_hw->scratch[3] = settings.startupMode;
-                    watchdog_reboot(0, 0, 0);
-                }
-#endif
                 return;
             }
         }

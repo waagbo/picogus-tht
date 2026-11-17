@@ -32,7 +32,6 @@ uint8_t bd_ctl_opts_read(void) { return (uint8_t)((*opts_p & BD_OPT_MASK) | BD_O
 void bd_ctl_opts_write(uint8_t v) { *opts_p = v & BD_OPT_MASK; }
 void bd_init_ui(uint8_t *menu, uint8_t *tune, uint8_t *theme, char *melody) { (void)menu; (void)tune; (void)theme; (void)melody; }
 void bd_init_modes(uint8_t available, uint8_t current) { (void)available; (void)current; }
-bool bd_mode_available(uint8_t mode) { (void)mode; return false; }
 uint8_t bd_ctl_theme_read(void) { return 0xFF; }
 void bd_ctl_theme_write(uint8_t v) { (void)v; }
 void bd_ctl_melody_select(void) {}

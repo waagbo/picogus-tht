@@ -113,7 +113,7 @@ output; the evidence stays in `$EMU_CACHE/work/<test>/`:
 | T20 | ROM, `--menu 2 --mount-delay-ms 12000`, nothing configured | The menu opens before the USB drive is mounted; Floppy Image says "Cannot read the USB drive"; R lists it once the stick is there; the image boots. |
 | T21 | ROM, `--menu 2`; Colours: Commander, Save Settings, Mono, Setup | The colours of the three themes: the attributes of six cells (title bar, list frame, selected entry, screen, drives window, a status key) for each, the theme saved, a plain screen after the menu. |
 | T22 | ROM, `--menu 2 --tune 0 --melody ...`, QEMU `-trace pcspk_io_write -msg timestamp=on`; Boot Melody: Rising, the last entry, Off, Save Settings | Tune off: the speaker is not touched. Rising plays when chosen and takes 550 ms (the trace's times); the user's melody is the last entry; Off again is saved. |
-| T23 | ROM, `--menu 2 --restart-ms 2500`; Card Mode: Gravis UltraSound | The mode list; the choice writes `CMD_BDMODE`, the simulated card is off the bus for 2.5 s, the menu waits for it and lists the modes again. |
+| T23 | ROM, `--menu 2 --restart-ms 2500`; Card Mode: Gravis UltraSound | The mode list; the choice writes `CMD_BOOTMODE`, `CMD_SAVE` and `CMD_REBOOT`, the simulated card is off the bus for 2.5 s, the menu waits for it and lists the modes again. |
 
 The markers the tests wait for are written by `AUTOEXEC.BAT` with
 `ECHO PGBOOT-... > COM1`; there is no power-off, the harness kills QEMU after
@@ -158,7 +158,7 @@ pgcard-sim --stick IMAGE [--fd NAME] [--hd NAME] [--opts N] [--menu N] [--tune N
   pending request, and when the status is polled: a request stays BUSY for
   `--busy-polls` status reads (default 1), so the ROM sees `02 03`, not just
   `03`.
-* A mode switch from the boot menu (`CMD_BDMODE`) takes the card off the bus
+* `CMD_REBOOT` (a mode switch from the boot menu) takes the card off the bus
   for `--restart-ms` (default 1500): reads float (FFh), writes are lost, then
   it answers again in the new mode. The simulator is a multi-mode firmware
   running in USB mode.

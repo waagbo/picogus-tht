@@ -648,10 +648,6 @@ void bd_init_modes(uint8_t available, uint8_t current) {
     mode_current = current;
 }
 
-bool bd_mode_available(uint8_t mode) {
-    return mode >= 1 && mode < 7 && ((modes_available >> mode) & 1);
-}
-
 void bd_set_boot_nonce(uint32_t nonce) {
     boot_nonce = nonce;
 }
@@ -995,7 +991,7 @@ static bool menu_entry(uint8_t list, unsigned i, uint8_t *e) {
         }
         if (m >= 7) return false;
         disp = mode_name[m];
-        a = CMD_BDMODE;
+        a = CMD_BOOTMODE;
         b = (uint8_t)m;
         if (m == mode_current) flags = BD_LIST_FLAG_CURRENT;
         break;

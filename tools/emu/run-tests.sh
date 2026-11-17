@@ -901,11 +901,12 @@ t_T23() {
     send_keys esc esc
     wait_screen "$W" screen-early "$ROM_DONE_RE" 30
     finish
-    if grep -q 'CMD_BDMODE: settings saved, card restarts in mode 1' "$W/sim.log" && grep -q 'card is back on the bus' "$W/sim.log" &&
+    if grep -q 'CMD_SAVE: settings saved' "$W/sim.log" && grep -q 'CMD_REBOOT: card restarts in mode 1 ' "$W/sim.log" &&
+       grep -q 'card is back on the bus' "$W/sim.log" &&
        [ "$(grep -c 'BDLIST .*list=12' "$W/sim.log")" -ge 3 ]; then
         report T23 PASS "Card Mode: Gravis UltraSound chosen, the card restarted, the menu waited and listed again"
     else
-        report T23 FAIL "the card trace lacks the mode switch, the return or the listing after it; see $W"
+        report T23 FAIL "the card trace lacks the save, the restart in mode 1, the return or the listing after it; see $W"
     fi
 }
 

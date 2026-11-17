@@ -16,8 +16,9 @@
 ;                   write), and the menu returns to the main menu
 ;   a menu          the list it names, with the entry's name as its title
 ;   a choice        the value it carries is written to the control register
-;                   it names (the tune, the colours, the mode, "no image",
-;                   save); the list is then read again
+;                   it names (the tune, the colours, "no image", save; the
+;                   mode, followed by save and restart as pgusinit /mode
+;                   does); the list is then read again
 ;   boot            the menu ends
 ; The late init then opens and boots what the image name registers hold. New
 ; firmware can add lists and choices without a new ROM.
@@ -394,18 +395,22 @@ boot_menu:
         mov     [m_sel], cx             ; 0
         jmp     .list
 .choice:
-        ; the value goes to the register the entry names
+        ; the value goes to the register the entry names. The card may be
+        ; storing its settings or compiling a tune after it: give it time
         mov     bp, [es:di+BD_LIST_OFF_ARG]
         mov     ax, bp
-        call    select
-        mov     dx, DATA_PORT_HIGH
-        mov     al, ah
-        out     dx, al
-        ; the card stores its settings, compiles a tune, or restarts in
-        ; another mode: wait, then until it answers again
-        mov     cx, 5
-        call    wait_ticks
-        mov     di, 10 * TICKS_PER_SEC
+        call    .put
+        mov     ax, bp
+        cmp     al, CMD_BOOTMODE
+        jne     .settle
+        ; the mode: as pgusinit /mode does, store it and restart the card.
+        ; The card forgets what is not stored when it restarts.
+        mov     al, CMD_SAVE
+        call    .put
+        mov     al, CMD_REBOOT
+        call    .put
+.settle:
+        mov     di, 10 * TICKS_PER_SEC  ; until the card answers (again)
 .card:
         call    detect_card
         jnc     .answers
@@ -429,6 +434,14 @@ boot_menu:
         call    tune_play               ; the tune that was chosen
 .chosen:
         jmp     .restyle                ; the colours may be new, the list's mark has moved
+; control register AL gets the value AH, and the card a quarter of a second
+.put:
+        call    select
+        mov     dx, DATA_PORT_HIGH
+        mov     al, ah
+        out     dx, al
+        mov     cx, 5
+        jmp     wait_ticks
 .esc:
         cmp     byte [m_list], BD_LIST_MAIN
         jne     .back

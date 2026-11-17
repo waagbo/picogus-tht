@@ -360,7 +360,7 @@ def main():
     ax, ents = mlist(0x02)
     check(ax == 0 and [e[4] for e in ents] == ['(none)', 'HD.IMG'] and ents[1][0] == 2, 'hard disk images: (none), HD.IMG')
     ax, ents = mlist(0x12)
-    check(ax == 0 and len(ents) == 6 and ents[5][:5] == (4, 2, 0x90, 6, 'USB only'), 'modes: six, USB only running (%s)' % ents[-1:])
+    check(ax == 0 and len(ents) == 6 and ents[5][:5] == (4, 2, 0x03, 6, 'USB only'), 'modes: six, USB only running (%s)' % ents[-1:])
     ax, ents = mlist(0x13)
     check(ax == 0 and [e[4] for e in ents] == ['Setup', 'Commander', 'Mono'] and [e[3] for e in ents] == [0, 1, 2], 'colours: three choices')
     ax, ents = mlist(0x77)
