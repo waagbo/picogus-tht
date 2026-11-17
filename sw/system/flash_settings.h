@@ -26,7 +26,7 @@ extern "C" {
 #include "../bootdisk/bootdisk.h"   // BD_NAME_BUF
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 8
+#define SETTINGS_VERSION 9
 
 // When adding new fields to Settings struct:
 // 1. Increment SETTINGS_VERSION
@@ -118,6 +118,8 @@ typedef struct Settings {
         uint8_t options;            // BD_OPT_* (CMD_BDOPTS)
         uint8_t menu;               // boot menu mode and wait (CMD_BDMENU)
         uint8_t tune;               // start-up tune on the PC speaker, 0 = silent (CMD_BDTUNE)
+        uint8_t theme;              // colours of the boot menu (CMD_BDTHEME)
+        char melody[BD_MELODY_BUF]; // the user's start-up melody as RTTTL text, "" = none (CMD_BDMELODY)
     } BootDisk;
 } Settings;
 

@@ -107,7 +107,11 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /bdmenu n     - boot menu of the ROM: 0 off, 1 offered at boot (press M),\n");
     pageprintf("                   2 opens at every boot. Default: 1\n");
     pageprintf("   /bdwait n     - seconds the ROM waits for M (1-15). Default: 3\n");
-    pageprintf("   /bdtune n     - start-up tune on the PC speaker: 0 off, 1-3. Default: 1\n");
+    pageprintf("   /bdtune n     - start-up tune on the PC speaker: off (or 0), 1-13, or custom\n");
+    pageprintf("                   for the melody set with /bdmelody. Default: 1\n");
+    pageprintf("   /bdmelody x   - your own start-up melody as RTTTL text (name:d=4,o=5,b=120:\n");
+    pageprintf("                   c,e,g), or @file to read it from a file. - to remove\n");
+    pageprintf("   /bdtheme x    - colours of the boot menu: setup, commander or mono\n");
     if (mode == GUS_MODE || print_all) {
         //         "...............................................................................\n"
         pageprintf("GUS settings:\n");
@@ -1203,21 +1207,55 @@ static bool bd_ui_read(uint8_t cmd, uint8_t *value)
     return (v & 0xC0) == 0x40;
 }
 
+// The name of the tune the card has selected: the stream the ROM plays
+// (CMD_BDTUNEDATA) starts with its length and its characters
+static void bd_tune_name(char *buf)
+{
+    uint8_t n, i;
+    outp(CONTROL_PORT, 0xCC); // Knock on the door...
+    outp(CONTROL_PORT, CMD_BDTUNEDATA);   // selecting rewinds the stream
+    n = inp(DATA_PORT_HIGH);
+    if (n > 24) {
+        n = 0;                // the card is still compiling the tune
+    }
+    for (i = 0; i < n; i++) {
+        buf[i] = inp(DATA_PORT_HIGH);
+    }
+    buf[n] = 0;
+}
+
 // /bdmenu (cmd2 = 0: the mode, bits 0-1 of CMD_BDMENU) and /bdwait (cmd2 = 1:
-// the seconds, bits 2-5), /bdtune (CMD_BDTUNE)
+// the seconds, bits 2-5), /bdtune (CMD_BDTUNE), /bdtheme (CMD_BDTHEME)
 static bool cmdBDMenu(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
+    static const char *themes[] = {"setup", "commander", "mono"};
     uint8_t old;
     char* endptr;
     unsigned long val = strtoul(arg, &endptr, 10);
     unsigned long min = (cmd == CMD_BDMENU && cmd2) ? 1 : 0;
-    unsigned long max = (cmd == CMD_BDTUNE) ? 3 : (cmd2 ? 15 : 2);
+    unsigned long max = (cmd == CMD_BDTUNE) ? 15 : (cmd == CMD_BDTHEME) ? 2 : (cmd2 ? 15 : 2);
+    bool named = false;
+    int i;
 
     if (!bd_ui_read((uint8_t)cmd, &old)) {
         fprintf(stderr, "Error: this firmware has no PGBOOT boot menu (update the firmware).\n");
         return false;
     }
-    if (*endptr != '\0' || val < min || val > max) {
+    if (cmd == CMD_BDTUNE && !stricmp(arg, "off")) {
+        val = 0;
+        named = true;
+    } else if (cmd == CMD_BDTUNE && !stricmp(arg, "custom")) {
+        val = 15;
+        named = true;
+    } else if (cmd == CMD_BDTHEME) {
+        for (i = 0; i < 3; i++) {
+            if (!stricmp(arg, themes[i])) {
+                val = i;
+                named = true;
+            }
+        }
+    }
+    if ((!named && (*endptr != '\0' || endptr == arg)) || val < min || val > max) {
         usage(gMode, false);
         return false;
     }
@@ -1226,6 +1264,70 @@ static bool cmdBDMenu(const char* arg, const int cmd, const int cmd2, const int 
     }
     outp(CONTROL_PORT, cmd);
     outp(DATA_PORT_HIGH, (uint8_t)val);
+    if (cmd == CMD_BDTUNE) {
+        // the card does not store a tune it does not have
+        if (!bd_ui_read(CMD_BDTUNE, &old) || old != val) {
+            if (val == 15) {
+                fprintf(stderr, "Error: there is no melody of your own yet (set one with /bdmelody).\n");
+            } else {
+                fprintf(stderr, "Error: this firmware has no start-up tune %lu.\n", val);
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+// /bdmelody: the user's start-up melody as RTTTL text, or @file with the text
+// in it (line ends and what follows them are dropped), or - for none
+static bool cmdBDMelody(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{
+    static char text[256];
+    static char readback[256];
+    uint8_t old;
+    size_t n = 0;
+    int c;
+
+    if (!bd_ui_read(CMD_BDTHEME, &old)) {
+        fprintf(stderr, "Error: this firmware has no PGBOOT melodies (update the firmware).\n");
+        return false;
+    }
+    if (arg[0] == '@') {
+        FILE *f = fopen(arg + 1, "rb");
+        if (!f) {
+            fprintf(stderr, "Error: cannot open %s\n", arg + 1);
+            return false;
+        }
+        while ((c = fgetc(f)) != EOF && c != '\r' && c != '\n' && c != 0x1A) {
+            if (n >= sizeof(text) - 1) {
+                fclose(f);
+                fprintf(stderr, "Error: the melody is longer than 255 characters.\n");
+                return false;
+            }
+            text[n++] = (char)c;
+        }
+        fclose(f);
+        text[n] = 0;
+    } else if (!strcmp(arg, "-")) {
+        text[0] = 0;
+    } else {
+        if (strlen(arg) > sizeof(text) - 1) {
+            fprintf(stderr, "Error: the melody is longer than 255 characters.\n");
+            return false;
+        }
+        strcpy(text, arg);
+    }
+    send_string(cmd, text, 255);
+    bd_read_name(cmd, readback, sizeof(readback));
+    if (strcmp(readback, text)) {
+        fprintf(stderr, "Error: the PicoGUS did not store the melody.\n");
+        return false;
+    }
+    if (text[0]) {
+        printf("Start-up melody stored. /bdtune custom selects it, /save keeps it.\n");
+    } else {
+        printf("Start-up melody removed.\n");
+    }
     return true;
 }
 
@@ -1338,6 +1440,8 @@ ParseCommand parseCommands[] = {
     {"/bdmenu", cmdBDMenu, CMD_BDMENU, ARG_REQUIRE, "1"},
     {"/bdwait", cmdBDMenu, CMD_BDMENU, ARG_REQUIRE, "3", 1},
     {"/bdtune", cmdBDMenu, CMD_BDTUNE, ARG_REQUIRE, "1"},
+    {"/bdtheme", cmdBDMenu, CMD_BDTHEME, ARG_REQUIRE, "setup"},
+    {"/bdmelody", cmdBDMelody, CMD_BDMELODY, ARG_REQUIRE, "-"},
     {"/mainvol", cmdSetVol, CMD_MAINVOL, ARG_REQUIRE, "100"},
     {"/oplvol", cmdSetVol, CMD_OPLVOL, ARG_REQUIRE, "100"},
     {"/sbvol", cmdSetVol, CMD_SBVOL, ARG_REQUIRE, "100"},
@@ -1600,7 +1704,7 @@ static void printPGDFSStatus()
 
 static void printBootDiskStatus()
 {
-    uint8_t opts, menu, tune;
+    uint8_t opts, menu, tune, theme;
     char name[128];
 
     if (!bd_supported(&opts)) {
@@ -1616,15 +1720,23 @@ static void printBootDiskStatus()
            (opts & 8) ? ", boots the hard disk image" : "");
     if (bd_ui_read(CMD_BDMENU, &menu) && bd_ui_read(CMD_BDTUNE, &tune)) {
         static const char *modes[] = {"off", "offered at boot (press M)", "opens at every boot", "?"};
+        static const char *themes[] = {"Setup", "Commander", "Mono", "?"};
         printf("PGBOOT boot menu: %s", modes[menu & 3]);
         if ((menu & 3) == 1) {
             printf(", for %u s", menu >> 2);
         }
-        printf("; start-up tune: ");
-        if (tune) {
-            printf("%u\n", tune);
-        } else {
+        if (bd_ui_read(CMD_BDTHEME, &theme)) {
+            printf("; colours: %s", themes[theme & 3]);
+        }
+        printf("\n");
+        bd_tune_name(name);
+        printf("PGBOOT start-up tune: ");
+        if (!tune) {
             printf("off\n");
+        } else if (tune == 15) {
+            printf("custom (%s)\n", name);
+        } else {
+            printf("%u (%s)\n", tune, name);
         }
     }
     outp(CONTROL_PORT, CMD_DFSPORT);

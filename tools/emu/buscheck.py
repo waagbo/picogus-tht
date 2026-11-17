@@ -22,6 +22,7 @@ CMD_DFSSTAT, CMD_DFSREQ, CMD_DFSEXEC, CMD_DFSRESP = 0x80, 0x81, 0x82, 0x83
 CMD_DFSMAXLEN, CMD_DFSPORT = 0x85, 0x87
 CMD_BDFDNAME, CMD_BDHDNAME, CMD_BDOPTS = 0x88, 0x89, 0x8A
 CMD_BDMENU, CMD_BDTUNE = 0x8B, 0x8C
+CMD_BDTHEME, CMD_BDMELODY, CMD_BDTUNEDATA = 0x8D, 0x8E, 0x8F
 
 
 class Bus:
@@ -263,6 +264,54 @@ def main():
           'CMD_BDMENU mode 2 / 5 s and CMD_BDTUNE 2 read back')
     card.b.select(CMD_BDMENU)
     card.b.out(DHIGH, menu & 0x3F)
+    card.b.select(CMD_BDTUNE)
+    card.b.out(DHIGH, tune & 0x3F)
+
+    # theme: 0..2, "next" wraps
+    theme = card.reg8(CMD_BDTHEME)
+    check(theme & 0xC0 == 0x40, 'CMD_BDTHEME signature (%02Xh)' % theme)
+    seen = []
+    for _ in range(3):
+        card.b.select(CMD_BDTHEME)
+        card.b.out(DHIGH, 0x3F)
+        seen.append(card.reg8(CMD_BDTHEME) & 0x3F)
+    check(sorted(seen) == [0, 1, 2] and seen[2] == theme & 0x3F, 'CMD_BDTHEME: three times "next" comes round (%s)' % seen)
+
+    # tunes: the stream the ROM plays (name, divisor/length pairs, FFFFh)
+    def tune_stream():
+        card.b.select(CMD_BDTUNEDATA)
+        n = card.b.inp(DHIGH)
+        if n > 24:
+            return None, []
+        name = bytes(card.b.inp(DHIGH) for _ in range(n)).decode('latin-1')
+        notes = []
+        while len(notes) < 400:
+            div = card.b.inp(DHIGH) | card.b.inp(DHIGH) << 8
+            if div == 0xFFFF:
+                break
+            notes.append((div, card.b.inp(DHIGH) | card.b.inp(DHIGH) << 8))
+        return name, notes
+    card.b.select(CMD_BDTUNE)
+    card.b.out(DHIGH, 1)
+    name, notes = tune_stream()
+    units = sum(u for _, u in notes)
+    check(name == 'Rising' and len(notes) == 8 and abs(units * 1.716419 - 551) < 6 and abs(1193182 / notes[0][0] - 523.25) < 2,
+          'tune 1 stream: "%s", %d entries, %.0f ms, first note %.0f Hz' % (name, len(notes), units * 1.716419, 1193182 / notes[0][0]))
+    card.set_string(CMD_BDMELODY, 'Bus:d=4,o=4,b=60:a')
+    check(card.string(CMD_BDMELODY) == 'Bus:d=4,o=4,b=60:a', 'CMD_BDMELODY reads back')
+    card.b.select(CMD_BDTUNE)
+    card.b.out(DHIGH, 15)
+    name, notes = tune_stream()
+    check(name == 'Bus' and len(notes) == 2 and abs(1193182 / notes[0][0] - 440) < 1 and abs(sum(u for _, u in notes) * 1.716419 - 1000) < 3,
+          'the user\'s melody: "%s", %s' % (name, notes))
+    card.b.select(CMD_BDTUNE)
+    card.b.out(DHIGH, 14)
+    check(card.reg8(CMD_BDTUNE) == 0x4F, 'a tune the card does not have is not stored')
+    card.b.select(CMD_BDTUNE)
+    card.b.out(DHIGH, 0)
+    name, notes = tune_stream()
+    check(name == 'Off' and notes == [], 'tune 0: "%s", no notes' % name)
+    card.set_string(CMD_BDMELODY, '')
     card.b.select(CMD_BDTUNE)
     card.b.out(DHIGH, tune & 0x3F)
 

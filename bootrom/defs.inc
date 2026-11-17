@@ -3,7 +3,7 @@
 ; See sw/bootdisk/PROTOCOL.md, sw/dfs/PROTOCOL.md, common/picogus.h.
 ; ---------------------------------------------------------------------------
 
-%define PGBOOT_VERSION  "0.2"
+%define PGBOOT_VERSION  "0.3"
 
 ROM_SIZE        equ 8192
 ROM_BLOCKS      equ ROM_SIZE / 512
@@ -29,6 +29,9 @@ CMD_BDHDNAME    equ 89h
 CMD_BDOPTS      equ 8Ah
 CMD_BDMENU      equ 8Bh             ; boot menu mode and wait | 40h
 CMD_BDTUNE      equ 8Ch             ; start-up tune | 40h
+CMD_BDTHEME     equ 8Dh             ; colours of the boot menu | 40h
+CMD_BDTUNEDATA  equ 8Fh             ; the selected tune as a stream of notes
+BD_UI_NEXT      equ 3Fh             ; written to CMD_BDTUNE / CMD_BDTHEME: the next one
 CMD_SAVE        equ 0E1h            ; any write stores the card's settings
 
 DFS_READY       equ 03h
@@ -211,6 +214,9 @@ m_sel           resw 1          ; index of the selected entry
 m_total         resw 1          ; entries in the folder
 m_plen          resw 1          ; length of m_path
 m_seg           resw 1          ; segment the page is loaded to (below this block)
+m_theme         resw 1          ; the theme in use: offset of its table in the ROM
+m_mode          resb 1          ; video mode the menu found (7: monochrome adapter)
+m_msgon         resb 1          ; the status line shows a message, not the key hints
 m_path          resb MENU_PATH_MAX + 2  ; folder shown in the boot menu, "" = the root
 ram_vars_end:
 endstruc

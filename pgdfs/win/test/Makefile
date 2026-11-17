@@ -29,7 +29,7 @@ LINKS := $(B)/ffconf.h $(B)/ff.c $(B)/ff.h $(B)/diskio.h $(B)/ffunicode.c
 OBJS  := $(B)/dfs_server.o $(B)/dfs_fs.o $(B)/dfs_transport.o $(B)/ff.o $(B)/ffunicode.o \
          $(B)/ramdisk_diskio.o $(B)/pgc.o $(B)/pgcard.o $(B)/emuctl.o $(B)/test_pgc.o
 ifneq ($(wildcard $(BD)/bootdisk.c),)
-OBJS  += $(B)/bootdisk.o $(B)/bd_geometry.o
+OBJS  += $(B)/bootdisk.o $(B)/bd_geometry.o $(B)/bd_tune.o
 endif
 HDRS  := $(CORE)/pgc.h $(CORE)/pgctl.h $(TRAY)/pgcard.h emuctl.h $(DFS)/dfs.h $(DFS)/dfs_fs.h $(DFS)/dfs_server.h \
          $(SW)/../common/picogus.h

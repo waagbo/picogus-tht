@@ -1,114 +1,133 @@
 ; ---------------------------------------------------------------------------
 ; PGBOOT start-up tune on the PC speaker (timer channel 2, port 61h).
 ;
-; The card's CMD_BDTUNE register selects it: 0 silent, 1..TUNES one of the
-; tunes below. Played once in the late init, when the card has answered.
-; Note lengths are counted in BIOS timer ticks (55 ms), so the tempo is the
-; same on every machine. A key ends the tune; the key stays in the buffer.
+; The tunes live on the card (sw/bootdisk/bd_tune.c: a set that comes with
+; the firmware, and one of the user's own). The card's CMD_BDTUNE setting
+; selects one, and CMD_BDTUNEDATA reads it as a stream:
+;     n, n name characters, then per note: timer divisor (word, 0 = silence)
+;     and length (word), and FFFFh at the end.
+; A tune set to "off" has a name and no notes; firmware without tunes reads
+; FFh, which is no name length.
+;
+; A length counts units of 1/32 of a BIOS timer tick (1.7 ms). The ROM takes
+; the time from timer channel 0, which the tick comes from: its counter's high
+; byte, latched. A BIOS runs that counter in mode 3 (it counts down by two,
+; twice per tick: 512 high-byte steps a tick) or in mode 2 (once: 256), so
+; the ROM first counts the steps of one tick. A key ends the tune; the key
+; stays in the buffer.
 ; ---------------------------------------------------------------------------
 
-PIT_HZ          equ 1193182
+TUNE_NAME_MAX   equ 24
 
-; note Hz, ticks        rest ticks        tune_end
-%macro note 2
-        dw      PIT_HZ / (%1)
-        db      %2
-%endmacro
-%macro rest 1
-        dw      0
-        db      %1
-%endmacro
-%define tune_end dw 0FFFFh
-
-; tune_play: clobbers AX, BX, CX, DX, SI, DI, ES.
+; tune_play: AL != 0: the tune's name is printed at the cursor first.
+; Clobbers AX, BX, CX, DX, SI, DI, ES.
 tune_play:
-        mov     al, CMD_BDTUNE
-        call    rd_ui
-        or      al, al
-        jz      .ret
-        cmp     al, TUNES
+        mov     ch, al
+        mov     al, CMD_BDTUNEDATA
+        call    select                  ; rewinds the stream
+        call    .byte
+        cmp     al, TUNE_NAME_MAX
         ja      .ret
-        xor     ah, ah
-        mov     bx, ax
-        shl     bx, 1
-        mov     si, [cs:tune_tab+bx-2]
-        mov     cx, 1                   ; start on a tick: the first note is full length
-        call    wait_ticks
+        mov     cl, al
+        or      cl, cl
+        jz      .named
+.name:
+        call    .byte
+        or      ch, ch
+        jz      .quiet
+        call    putc
+.quiet:
+        dec     cl
+        jnz     .name
+.named:
+        call    .word                   ; the first note, or the end
+        cmp     ax, 0FFFFh
+        je      .ret                    ; off: no time spent
+        push    ax
+        ; ---- timer steps in one tick: 256 or 512 --------------------------
         xor     ax, ax
         mov     es, ax
+        mov     di, [es:046Ch]
+.edge:
+        cmp     di, [es:046Ch]
+        je      .edge
+        mov     di, [es:046Ch]
+        call    .timer
+        mov     bl, al
+        xor     si, si
+.count:
+        call    .steps
+        add     si, ax
+        cmp     di, [es:046Ch]
+        je      .count
+        mov     bh, 3                   ; a unit is 8 steps,
+        cmp     si, 384
+        jb      .mode
+        inc     bh                      ; or 16
+.mode:
+        pop     ax
 .note:
-        cs lodsw
-        cmp     ax, 0FFFFh
-        je      .off
-        mov     cx, ax                  ; timer divisor, 0 = rest
-        cs lodsb
-        mov     bl, al                  ; length in ticks
+        mov     di, ax                  ; divisor
+        call    .word
+        mov     cl, bh
+        shl     ax, cl
+        mov     si, ax                  ; steps this note lasts
         in      al, 61h
-        and     al, 0FCh
-        jcxz    .gate                   ; a rest: speaker off
+        and     al, 0FCh                ; silence: speaker off
+        or      di, di
+        jz      .gate
         push    ax
         mov     al, 0B6h                ; channel 2, low/high byte, square wave
         out     43h, al
-        mov     al, cl
+        mov     ax, di
         out     42h, al
-        mov     al, ch
+        mov     al, ah
         out     42h, al
         pop     ax
         or      al, 03h                 ; timer gate and speaker data on
 .gate:
         out     61h, al
-.tick:
-        mov     di, [es:046Ch]
 .hold:
         mov     ah, 1
         int     16h
         jnz     .off                    ; a key: enough
-        cmp     di, [es:046Ch]
-        je      .hold
-        dec     bl
-        jnz     .tick
-        jmp     short .note
+        call    .steps
+        sub     si, ax
+        ja      .hold
+        call    .word
+        cmp     ax, 0FFFFh
+        jne     .note
 .off:
         in      al, 61h
         and     al, 0FCh
         out     61h, al
 .ret:
         ret
-
-; ---- the tunes -----------------------------------------------------------
-TUNES           equ 3
-
-tune_tab:
-        dw      tune_1, tune_2, tune_3
-
-; 1: four rising notes, half a second
-tune_1:
-        note    523, 2                  ; C5
-        note    659, 2                  ; E5
-        note    784, 2                  ; G5
-        note    1047, 4                 ; C6
-        tune_end
-
-; 2: a short fanfare, about a second
-tune_2:
-        note    523, 2                  ; C5
-        note    392, 2                  ; G4
-        note    523, 2                  ; C5
-        note    659, 2                  ; E5
-        note    784, 3                  ; G5
-        rest    1
-        note    784, 1                  ; G5
-        note    1047, 6                 ; C6
-        tune_end
-
-; 3: a quick sweep down and up
-tune_3:
-        note    1319, 1                 ; E6
-        note    1047, 1                 ; C6
-        note    784, 1                  ; G5
-        note    659, 1                  ; E5
-        note    784, 1                  ; G5
-        note    1047, 1                 ; C6
-        note    1319, 1                 ; E6
-        note    1568, 4                 ; G6
-        tune_end
+; AL = the next byte of the stream
+.byte:
+        mov     dx, DATA_PORT_HIGH
+        in      al, dx
+        ret
+; AX = its next word
+.word:
+        call    .byte
+        mov     ah, al
+        call    .byte
+        xchg    al, ah
+        ret
+; AL = high byte of timer channel 0, counting down
+.timer:
+        xor     al, al                  ; latch channel 0
+        out     43h, al
+        in      al, 40h
+        in      al, 40h
+        ret
+; AX = timer steps since the last call (BL keeps the last value seen)
+.steps:
+        call    .timer
+        mov     ah, bl
+        sub     ah, al
+        mov     bl, al
+        mov     al, ah
+        xor     ah, ah
+        ret

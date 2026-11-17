@@ -11,6 +11,7 @@ extern "C" {
 #endif
 #include <stdint.h>
 #include <stdbool.h>
+#include "bd_tune.h"
 
 #define BD_UNITS        2       /* 0 = floppy (BIOS 00h), 1 = hard disk (BIOS 80h) */
 #define BD_UNIT_FD      0
@@ -104,9 +105,18 @@ extern "C" {
 #define BD_MENU_WAIT_DEFAULT 3
 #define BD_MENU_DEFAULT     ((BD_MENU_WAIT_DEFAULT << BD_MENU_WAIT_SHIFT) | BD_MENU_KEY)
 #define BD_MENU_MASK        0x3F
-#define BD_TUNE_MAX         3   /* 0 = silent, 1..3 = the ROM's tunes */
+#define BD_TUNE_CUSTOM      15  /* CMD_BDTUNE: 0 = silent, 1..BD_TUNE_BUILTIN = the firmware's
+                                 * melodies (bd_tune.c), 15 = the user's (CMD_BDMELODY) */
 #define BD_TUNE_DEFAULT     1
+#define BD_THEME_SETUP      0   /* CMD_BDTHEME: the colours of the boot menu, */
+#define BD_THEME_COMMANDER  1   /* named as on the web page */
+#define BD_THEME_MONO       2
+#define BD_THEME_MAX        2
+#define BD_THEME_DEFAULT    BD_THEME_SETUP
+#define BD_UI_NEXT          0x3F    /* written to CMD_BDTUNE / CMD_BDTHEME: the next one */
 #define BD_UI_SIGNATURE     0x40
+#define BD_MELODY_MAX       255     /* RTTTL text of the user's melody, excluding the terminator */
+#define BD_MELODY_BUF       (BD_MELODY_MAX + 1)
 
 /* INT 13h style status codes returned in AX */
 #define BD_ST_OK            0x00
@@ -127,9 +137,11 @@ void bd_init(char *fd_name, char *hd_name, uint8_t *opts);
  * matches an image opened after it. Call after bd_init(); 0 if never called. */
 void bd_set_boot_nonce(uint32_t nonce);
 
-/* Binds the boot menu and start-up tune settings (one byte each; NULL: the
- * registers read their defaults and ignore writes). Call after bd_init(). */
-void bd_init_ui(uint8_t *menu, uint8_t *tune);
+/* Binds the boot menu, start-up tune and colour settings (one byte each) and
+ * the text of the user's melody (BD_MELODY_BUF bytes, zero-terminated). NULL:
+ * that register reads its default and ignores writes. Call after bd_init();
+ * compiles the selected tune. */
+void bd_init_ui(uint8_t *menu, uint8_t *tune, uint8_t *theme, char *melody);
 
 /* ---- core 0: control register handlers (O(1), no FatFs, ISR-safe) ----- */
 void    bd_ctl_name_select(uint8_t unit);           /* register selected: rewind */
@@ -140,7 +152,15 @@ void    bd_ctl_opts_write(uint8_t v);
 uint8_t bd_ctl_menu_read(void);                     /* menu | BD_UI_SIGNATURE */
 void    bd_ctl_menu_write(uint8_t v);
 uint8_t bd_ctl_tune_read(void);                     /* tune | BD_UI_SIGNATURE */
-void    bd_ctl_tune_write(uint8_t v);
+void    bd_ctl_tune_write(uint8_t v);               /* BD_UI_NEXT: the next tune there is */
+uint8_t bd_ctl_theme_read(void);                    /* theme | BD_UI_SIGNATURE */
+void    bd_ctl_theme_write(uint8_t v);              /* BD_UI_NEXT: the next theme */
+void    bd_ctl_melody_select(void);                 /* register selected: rewind */
+void    bd_ctl_melody_write(uint8_t c);             /* append; 0 commits */
+uint8_t bd_ctl_melody_read(void);                   /* next char; 0 at the end, then rewinds */
+void    bd_ctl_tunedata_select(void);               /* register selected: rewind */
+uint8_t bd_ctl_tunedata_read(void);                 /* next byte of the tune's stream; FFh past
+                                                     * its end and while it is being compiled */
 
 /* ---- core 1 ------------------------------------------------------------- */
 void bd_tasks(void);                /* from dfs_tasks(): applies committed names */

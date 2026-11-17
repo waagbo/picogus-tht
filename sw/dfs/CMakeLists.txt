@@ -11,6 +11,7 @@ target_sources(dfs INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/dfs_fs.c
     ${CMAKE_CURRENT_LIST_DIR}/../bootdisk/bootdisk.c
     ${CMAKE_CURRENT_LIST_DIR}/../bootdisk/bd_geometry.c
+    ${CMAKE_CURRENT_LIST_DIR}/../bootdisk/bd_tune.c
 )
 
 target_include_directories(dfs INTERFACE

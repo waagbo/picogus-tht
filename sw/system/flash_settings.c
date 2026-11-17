@@ -104,7 +104,9 @@ static const Settings defaultSettings = {
         .hdImage = {0},
         .options = 0,
         .menu = BD_MENU_DEFAULT,
-        .tune = BD_TUNE_DEFAULT
+        .tune = BD_TUNE_DEFAULT,
+        .theme = BD_THEME_DEFAULT,
+        .melody = {0}
     }
 };
 
@@ -161,9 +163,17 @@ static const VersionFields versionFieldsTable[] = {
     }, 1},
 
     // version 8 - added PGBOOT settings (disk image names, options, boot menu and tune)
+    // The fields that version 9 added to the struct are listed again there: the
+    // defaults are copied twice for settings older than 8, which does no harm.
     {(const FieldInfo[]){
         FIELD(BootDisk),
     }, 1},
+
+    // version 9 - added the PGBOOT boot menu colours and the user's start-up melody
+    {(const FieldInfo[]){
+        FIELD(BootDisk.theme),
+        FIELD(BootDisk.melody),
+    }, 2},
 };
 
 // Apply default values only to fields introduced after the given version
@@ -222,7 +232,7 @@ void loadSettings(Settings* settings, bool migrate)
 
 
 // Settings are programmed as whole flash pages; since version 8 (PGBOOT image
-// names) they take two. Older firmware reads only the first page's worth.
+// names) they take more than one. Older firmware reads only the first page's worth.
 #define SETTINGS_FLASH_BYTES (((sizeof(Settings) + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE) * FLASH_PAGE_SIZE)
 static_assert(SETTINGS_FLASH_BYTES <= FLASH_SECTOR_SIZE, "Settings struct doesn't fit inside the settings flash sector");
 static_assert(sizeof(versionFieldsTable) / sizeof(VersionFields) == SETTINGS_VERSION,

@@ -318,6 +318,7 @@ int19_entry:
         xor     al, al
 .menuok:
         mov     [r_menu], al
+        xor     al, al                          ; the tune, without its name
         call    tune_play
 
         ; ---- anything configured? ------------------------------------------
@@ -898,13 +899,23 @@ msg_rderr       db ": boot sector read error ", 0
 msg_nosig       db ": not bootable (no 55AAh signature)", 0
 msg_booting     db "booting ", 0
 msg_mprompt     db "press M for the boot menu (Esc skips)... ", 0
-msg_mtitle      db " PGBOOT ", PGBOOT_VERSION, " - PicoGUS boot menu", 0
-msg_mhelp       db " Enter boot/open   Space insert   A,C eject   S save   R reread   Esc done", 0
-msg_mfolder     db " Folder: ", 0
+msg_mtitle      db "PicoGUS Boot", 0
+MENU_TITLE_LEN  equ $ - msg_mtitle - 1
+msg_mver        db "PGBOOT ", PGBOOT_VERSION, 0
+MENU_VER_LEN    equ $ - msg_mver - 1
+msg_mdrives     db " Drives ", 0
+MENU_DRV_LEN    equ $ - msg_mdrives - 1
 msg_mdir        db "<DIR>", 0
-msg_mempty      db " No disk images or folders here (R reads the drive again)", 0
-msg_mlisterr    db " Cannot read the USB drive (R tries again)", 0
-msg_msaved      db " Saved: these images are used from now on", 0
+; status line: TH_SKEY / TH_STAT switch between the colour of a key and of
+; the text (menu.inc, m_puts)
+msg_mhelp       db TH_STAT, " ", TH_SKEY, 18h, 19h, TH_STAT, "=Move ", TH_SKEY, "Enter", TH_STAT, "=Boot "
+                db TH_SKEY, "Space", TH_STAT, "=Insert ", TH_SKEY, "A,C", TH_STAT, "=Eject "
+                db TH_SKEY, "S", TH_STAT, "=Save ", TH_SKEY, "T", TH_STAT, "=Theme "
+                db TH_SKEY, "M", TH_STAT, "=Tune ", TH_SKEY, "Esc", TH_STAT, "=Done", 0
+msg_mempty      db TH_STAT, " No disk images or folders here. ", TH_SKEY, "R", TH_STAT, "=Read the drive again", 0
+msg_mlisterr    db TH_STAT, " Cannot read the USB drive. ", TH_SKEY, "R", TH_STAT, "=Try again", 0
+msg_msaved      db TH_STAT, " Saved: these images and settings are used from now on.", 0
+msg_mtune       db TH_STAT, " Start-up tune: ", 0
 
 code_end:
 

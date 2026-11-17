@@ -198,8 +198,16 @@ firmware with PGBOOT support; with older firmware pgusinit says so and changes n
   M), 2 opens at every boot. Default: 1.
 * `/bdwait n` - the seconds the ROM waits for M when the menu is offered,
   1 to 15. Default: 3.
+* `/bdtheme x` - colours of the boot menu, named like the themes of the web
+  page: `setup`, `commander` or `mono` (or 0, 1, 2). Default: setup.
 * `/bdtune n` - start-up tune the ROM plays on the PC speaker when it has
-  found the card: 0 off, 1 to 3. Default: 1.
+  found the card: `off` (or 0), 1 to 13 for the tunes that come with the
+  firmware, `custom` for your own. Default: 1. The status output names the
+  tune (`PGBOOT start-up tune: 7 (Mountain King)`).
+* `/bdmelody x` - your own start-up tune as RTTTL text, the ringtone format
+  (`Mine:d=4,o=5,b=120:c,e,g,2c6`), up to 255 characters; `@file` reads the
+  first line of a file, which is the way for melodies longer than a command
+  line; `-` removes it. Select it with `/bdtune custom`.
 
 All of them are stored with the other settings: use `/save` to keep them
 across power cycles. pgusinit shows the configured images and options in its

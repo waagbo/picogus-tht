@@ -53,6 +53,11 @@
 #ifndef CMD_BDTUNE
 #define CMD_BDTUNE 0x8C
 #endif
+#ifndef CMD_BDTHEME
+#define CMD_BDTHEME 0x8D
+#define CMD_BDMELODY 0x8E
+#define CMD_BDTUNEDATA 0x8F
+#endif
 
 #define SIM_FWSTRING "pgcard-sim v1.0 (PicoGUS card simulator)"
 
@@ -99,6 +104,8 @@ static char bd_hd_name[BD_NAME_BUF];
 static uint8_t bd_opts;
 static uint8_t bd_menu = BD_MENU_DEFAULT;
 static uint8_t bd_tune = BD_TUNE_DEFAULT;
+static uint8_t bd_theme = BD_THEME_DEFAULT;
+static char bd_melody[BD_MELODY_BUF];
 
 /* ---- core 0 state (mirrors sw/picogus.cpp) ---------------------------------- */
 
@@ -143,6 +150,7 @@ static bool is_known_reg(uint8_t r) {
     case CMD_DFSSTAT: case CMD_DFSREQ: case CMD_DFSEXEC: case CMD_DFSRESP:
     case CMD_DFSINFO: case CMD_DFSMAXLEN: case CMD_DFSTIME: case CMD_DFSPORT:
     case CMD_BDFDNAME: case CMD_BDHDNAME: case CMD_BDOPTS: case CMD_BDMENU: case CMD_BDTUNE:
+    case CMD_BDTHEME: case CMD_BDMELODY: case CMD_BDTUNEDATA:
         return true;
     }
     return false;
@@ -171,6 +179,9 @@ static const char *reg_name(uint8_t r) {
     case CMD_BDOPTS: return "BDOPTS";
     case CMD_BDMENU: return "BDMENU";
     case CMD_BDTUNE: return "BDTUNE";
+    case CMD_BDTHEME: return "BDTHEME";
+    case CMD_BDMELODY: return "BDMELODY";
+    case CMD_BDTUNEDATA: return "BDTUNEDATA";
     }
     return is_known_reg(r) ? "other" : "UNKNOWN";
 }
@@ -306,6 +317,8 @@ static void select_reg(uint8_t v) {
     case CMD_DFSPORT: basePort_low = 0; break;
     case CMD_BDFDNAME: bd_ctl_name_select(BD_UNIT_FD); break;
     case CMD_BDHDNAME: bd_ctl_name_select(BD_UNIT_HD); break;
+    case CMD_BDMELODY: bd_ctl_melody_select(); break;
+    case CMD_BDTUNEDATA: bd_ctl_tunedata_select(); break;
     case CMD_FLASH:
         logmsg("CMD_FLASH selected: firmware flashing is not simulated");
         break;
@@ -321,7 +334,7 @@ static void write_low(uint8_t v) {
 
 static void write_high(uint8_t v) {
     if (sim_log_level >= 2 || (sim_log_level >= 1 && sel_reg != CMD_DFSEXEC && sel_reg != CMD_DFSTIME &&
-                               sel_reg != CMD_BDFDNAME && sel_reg != CMD_BDHDNAME))
+                               sel_reg != CMD_BDFDNAME && sel_reg != CMD_BDHDNAME && sel_reg != CMD_BDMELODY))
         logmsg("write %02x %s <- %02x", sel_reg, reg_name(sel_reg), v);
     if (is_port_reg(sel_reg)) {
         base_ports[sel_reg] = (v || basePort_low) ? (uint16_t)((v << 8) | basePort_low) : 0xFFFF;
@@ -329,8 +342,8 @@ static void write_high(uint8_t v) {
     }
     switch (sel_reg) {
     case CMD_BOOTMODE: startup_mode = v; break;
-    case CMD_SAVE: logmsg("CMD_SAVE: settings saved (fd=\"%s\" hd=\"%s\" opts=%02x menu=%02x tune=%u dfsport=%03x)",
-                          bd_fd_name, bd_hd_name, bd_opts, bd_menu, bd_tune, dfs_base); break;
+    case CMD_SAVE: logmsg("CMD_SAVE: settings saved (fd=\"%s\" hd=\"%s\" opts=%02x menu=%02x tune=%u theme=%u dfsport=%03x)",
+                          bd_fd_name, bd_hd_name, bd_opts, bd_menu, bd_tune, bd_theme, dfs_base); break;
     case CMD_REBOOT: logmsg("CMD_REBOOT: card reboot is not simulated"); break;
     case CMD_DEFAULTS:              /* getDefaultSettings() + the floppy eject of picogus.cpp */
         logmsg("CMD_DEFAULTS: settings reset");
@@ -339,9 +352,13 @@ static void write_high(uint8_t v) {
         bd_opts = 0;
         bd_menu = BD_MENU_DEFAULT;
         bd_tune = BD_TUNE_DEFAULT;
+        bd_theme = BD_THEME_DEFAULT;
+        memset(bd_melody, 0, sizeof(bd_melody));
         dfs_base = DFS_DEFAULT_DATA_PORT;
         bd_ctl_name_select(BD_UNIT_FD);
         bd_ctl_name_write(BD_UNIT_FD, 0);
+        bd_ctl_melody_select();
+        bd_ctl_melody_write(0);
         break;
     case CMD_FLASH: break;
     case CMD_DFSSTAT: dfs_ctl_abort(); logmsg("DFSSTAT write: abort"); break;
@@ -362,7 +379,9 @@ static void write_high(uint8_t v) {
     case CMD_BDHDNAME: bd_ctl_name_write(BD_UNIT_HD, v); if (!v && sim_log_level >= 1) logmsg("BDHDNAME commit \"%s\"", bd_hd_name); break;
     case CMD_BDOPTS: bd_ctl_opts_write(v); break;
     case CMD_BDMENU: bd_ctl_menu_write(v); break;
-    case CMD_BDTUNE: bd_ctl_tune_write(v); break;
+    case CMD_BDTUNE: bd_ctl_tune_write(v); if (sim_log_level >= 1) logmsg("tune is now %u", bd_tune); break;
+    case CMD_BDTHEME: bd_ctl_theme_write(v); if (sim_log_level >= 1) logmsg("theme is now %u", bd_theme); break;
+    case CMD_BDMELODY: bd_ctl_melody_write(v); if (!v && sim_log_level >= 1) logmsg("BDMELODY commit \"%s\"", bd_melody); break;
     default: plain_regs[sel_reg] = v; break;
     }
 }
@@ -414,6 +433,9 @@ static uint8_t read_high(void) {
     case CMD_BDOPTS: return bd_ctl_opts_read();
     case CMD_BDMENU: return bd_ctl_menu_read();
     case CMD_BDTUNE: return bd_ctl_tune_read();
+    case CMD_BDTHEME: return bd_ctl_theme_read();
+    case CMD_BDMELODY: return bd_ctl_melody_read();
+    case CMD_BDTUNEDATA: return bd_ctl_tunedata_read();
     case CMD_DFSREQ: case CMD_DFSEXEC: case CMD_DFSRESP: case CMD_DFSTIME:
         return 0xFF;
     }
@@ -533,7 +555,9 @@ static void usage(void) {
         "  --hd NAME            hard disk image path on the stick\n"
         "  --opts N             CMD_BDOPTS value (bit0 fd ro, bit1 hd ro, bit2 rom off, bit3 boot hd)\n"
         "  --menu N             CMD_BDMENU value: mode (0 off, 1 on a key, 2 always) + 4 * seconds (default 13)\n"
-        "  --tune N             CMD_BDTUNE value: start-up tune 0-3 (default 1)\n"
+        "  --tune N             CMD_BDTUNE value: start-up tune 0-13, 15 = --melody (default 1)\n"
+        "  --theme N            CMD_BDTHEME value: 0 Setup, 1 Commander, 2 Mono (default 0)\n"
+        "  --melody RTTTL       the user's melody (CMD_BDMELODY)\n"
         "  --mount-delay-ms N   report NODRIVE for N ms after the bridge connects\n"
         "  --dfsport N          PGDFS data window base (default 0x1d4, 0 = disabled)\n"
         "  --busy-polls N       status polls that see BUSY before a request is served (default 1)\n"
@@ -551,6 +575,8 @@ int main(int argc, char **argv) {
         { "opts", required_argument, 0, 'o' },
         { "menu", required_argument, 0, 'm' },
         { "tune", required_argument, 0, 't' },
+        { "theme", required_argument, 0, 'T' },
+        { "melody", required_argument, 0, 'M' },
         { "mount-delay-ms", required_argument, 0, 'd' },
         { "dfsport", required_argument, 0, 'p' },
         { "busy-polls", required_argument, 0, 'b' },
@@ -571,6 +597,8 @@ int main(int argc, char **argv) {
         case 'o': bd_opts = (uint8_t)strtoul(optarg, NULL, 0); break;
         case 'm': bd_menu = (uint8_t)strtoul(optarg, NULL, 0); break;
         case 't': bd_tune = (uint8_t)strtoul(optarg, NULL, 0); break;
+        case 'T': bd_theme = (uint8_t)strtoul(optarg, NULL, 0); break;
+        case 'M': snprintf(bd_melody, sizeof(bd_melody), "%s", optarg); break;
         case 'd': opt_mount_delay_ms = strtol(optarg, NULL, 0); break;
         case 'p': dfs_base = (uint16_t)strtoul(optarg, NULL, 0); break;
         case 'b': opt_busy_polls = atoi(optarg); break;
@@ -597,7 +625,7 @@ int main(int argc, char **argv) {
 
     /* card boot, core 0: settings, then the servers (before core 1 starts) */
     bd_init(bd_fd_name, bd_hd_name, &bd_opts);
-    bd_init_ui(&bd_menu, &bd_tune);
+    bd_init_ui(&bd_menu, &bd_tune, &bd_theme, bd_melody);
     /* per-boot nonce for the image tokens: a new sim process is a new card boot */
     bd_set_boot_nonce((uint32_t)time(NULL) ^ ((uint32_t)getpid() << 16) ^ (uint32_t)now_ms());
     dfs_init();

@@ -188,17 +188,43 @@ instead of a different image. A USB replug reopens the units that were open.
 | 8Ah | `CMD_BDOPTS` | byte, `DATA_PORT_HIGH` | bit 0 floppy image read-only, bit 1 hard disk image read-only, bit 2 ROM disabled (the ROM installs nothing), bit 3 boot the hard disk image even when a floppy image is configured. Reads return the value with bit 7 set and bit 6 clear (signature: firmware without PGBOOT reads FFh). |
 
 | 8Bh | `CMD_BDMENU` | byte, `DATA_PORT_HIGH` | The ROM's boot menu. Bits 0-1: 0 off, 1 offered at boot (the ROM waits for M), 2 opened at every boot. Bits 2-5: the seconds it waits in mode 1, 1-15. The card stores mode 3 as 1 and 0 seconds as 3. Reads return the value with bit 6 set and bit 7 clear (firmware without the boot menu reads FFh: the ROM then shows no menu). Default 0Dh: mode 1, 3 s. |
-| 8Ch | `CMD_BDTUNE` | byte, `DATA_PORT_HIGH` | Start-up tune the ROM plays on the PC speaker: 0 none, 1-3. Other values are not stored. Reads return the value with bit 6 set and bit 7 clear. Default 1. |
+| 8Ch | `CMD_BDTUNE` | byte, `DATA_PORT_HIGH` | Start-up tune the ROM plays on the PC speaker: 0 none, 1-13 the melodies that come with the firmware (`bd_tune.c`), 15 the user's (`CMD_BDMELODY`; only while there is one). Other values are not stored. 3Fh written: the card moves on to the next tune it has (0, 1 .. 13, 15, 0). Reads return the value with bit 6 set and bit 7 clear. Default 1. |
+| 8Dh | `CMD_BDTHEME` | byte, `DATA_PORT_HIGH` | Colours of the ROM's boot menu, as the themes of the web page: 0 Setup, 1 Commander, 2 Mono. Other values are not stored; 3Fh written: the next one. Reads return the value with bit 6 set and bit 7 clear. Default 0. |
+| 8Eh | `CMD_BDMELODY` | string, `DATA_PORT_HIGH` | The user's melody as RTTTL text (`name:d=4,o=5,b=120:c,e,g`; the name and the defaults may be left out), at most 255 characters. Same rules as the image names: select rewinds, writes append, a 0 byte commits, reads return the text then 0. |
+| 8Fh | `CMD_BDTUNEDATA` | read stream, `DATA_PORT_HIGH` | The selected tune, compiled for the ROM. Selecting the register rewinds; reads return the stream below, then FFh. |
 
-All of them live in the persisted settings (`Settings.BootDisk`, settings
-version 8, which makes the settings two flash pages long) and are saved by
+### The tune stream (`CMD_BDTUNEDATA`)
+
+```
+n                 length of the tune's name, 0-24
+n bytes           the name ("Off" for tune 0, "Custom" for a melody without one)
+per entry:
+  u16 divisor     timer channel 2 divisor: 1193182 Hz / frequency; 0 = silence
+  u16 length      in units of 1/32 BIOS timer tick (1716.42 us), 1-4000
+FFh FFh           end
+```
+
+The card compiles the RTTTL text of the selected tune on core 1 whenever the
+setting or the user's melody changes (and before core 1 starts, at power-on).
+While it does, and with firmware that has no tunes, the register reads FFh,
+which is no name length: the ROM then plays nothing. Octave 4 holds the A of
+440 Hz; lengths are exact to the unit over the whole tune, so rounding does
+not add up. A note gives up its last eighth, 20 ms at most, to a silent
+entry, so that two notes of one pitch are heard as two. A tune has at most
+160 entries and is cut after about 20 s. The ROM takes the time from timer
+channel 0 (see `bootrom/tune.inc`).
+
+All of them live in the persisted settings (`Settings.BootDisk`: settings
+version 8, and version 9 for the colours and the user's melody; the settings
+are three flash pages long) and are saved by
 `CMD_SAVE` (`pgusinit /save`, or S in the boot menu: a write of any value to
 `DATA_PORT_HIGH` with `CMD_SAVE` selected, after which the card is busy
 writing its flash for a moment). `CMD_DEFAULTS` clears them; the floppy image
 is ejected at once, an open hard disk image stays until the next boot.
 `pgusinit` commands: `/fdimage <path|->`, `/hdimage <path|->`,
-`/bdopts <0-15>`, `/bdmenu <0-2>`, `/bdwait <1-15>`, `/bdtune <0-3>`, and a
-status block after the PGDFS one.
+`/bdopts <0-15>`, `/bdmenu <0-2>`, `/bdwait <1-15>`, `/bdtheme <setup|commander|mono>`,
+`/bdtune <off|1-13|custom>`, `/bdmelody <text|@file|->`, and a status block
+after the PGDFS one.
 
 ## Card behaviour
 
@@ -254,7 +280,7 @@ status block after the PGDFS one.
   byte-pair loops on 8086/8088). At POST it only detects the card and hooks
   INT 19h; everything else happens in its INT 19h handler (late init) so the
   USB drive has time to enumerate: reserve 1 KB at the top of conventional
-  memory for state, play the start-up tune (`CMD_BDTUNE`), wait for the
+  memory for state, play the start-up tune (`CMD_BDTUNEDATA`), wait for the
   drive (Esc skips), offer or open the boot menu (`CMD_BDMENU`; BDLIST, the
   image name registers, `CMD_SAVE`), BDINFO with OPEN for both
   units, hook INT 13h, adjust the BIOS data area (hard disk count 40:75h,

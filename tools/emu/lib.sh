@@ -207,8 +207,29 @@ for r in range(25):
     lines.append(''.join(chr(c) if 32 <= c < 127 else ' ' for c in row).rstrip())
 while lines and not lines[-1]: lines.pop()
 open(txt, 'w').write('\n'.join(lines) + '\n')
+# the attribute of every cell: 25 lines of 80 two-digit hex numbers (attr_at)
+open(txt[:-4] + '.attr', 'w').write(''.join(d[r*160+1:(r+1)*160:2].hex() + '\n' for r in range(25)))
 os.remove(binf)
 PY
+}
+
+# attr_at WORKDIR NAME ROW COL: the attribute (two hex digits) of a cell in
+# the dump NAME (rows and columns from 0)
+attr_at() {
+    sed -n "$(( $3 + 1 ))p" "$1/$2.attr" 2>/dev/null | cut -c$(( $4 * 2 + 1 ))-$(( $4 * 2 + 2 ))
+}
+
+# wait_attr WORKDIR NAME ROW COL HEX SECONDS: dump the screen until that cell
+# has that attribute
+wait_attr() {
+    local end
+    end=$(( $(date +%s) + $6 ))
+    while :; do
+        screen_dump "$1" "$2"
+        [ "$(attr_at "$1" "$2" "$3" "$4")" = "$5" ] && return 0
+        [ "$(date +%s)" -lt "$end" ] || return 1
+        sleep 0.3
+    done
 }
 
 # wait_marker WORKDIR MARKER TIMEOUT_S: 0 when MARKER shows up on COM1

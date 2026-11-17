@@ -496,20 +496,34 @@ static void unmount_drive(void) {
 }
 
 static void test_ui_registers(void) {
-    static uint8_t menu, tune;
-    SECTION("boot menu and tune registers (core 0)");
-    bd_init_ui(NULL, NULL);
+    static uint8_t menu, tune, theme;
+    static char melody[BD_MELODY_BUF];
+    char back[BD_MELODY_BUF + 8];
+    size_t i;
+    uint8_t c;
+
+    SECTION("boot menu, tune and theme registers (core 0)");
+    bd_init_ui(NULL, NULL, NULL, NULL);
     CHECK(bd_ctl_menu_read() == (BD_UI_SIGNATURE | BD_MENU_DEFAULT), "unbound menu reads the default: %02X", bd_ctl_menu_read());
     CHECK(bd_ctl_tune_read() == (BD_UI_SIGNATURE | BD_TUNE_DEFAULT), "unbound tune reads the default: %02X", bd_ctl_tune_read());
+    CHECK(bd_ctl_theme_read() == (BD_UI_SIGNATURE | BD_THEME_DEFAULT), "unbound theme reads the default: %02X", bd_ctl_theme_read());
     bd_ctl_menu_write(2);
     bd_ctl_tune_write(0);
-    CHECK(bd_ctl_menu_read() == (BD_UI_SIGNATURE | BD_MENU_DEFAULT), "unbound writes are ignored");
+    bd_ctl_theme_write(2);
+    bd_ctl_melody_select();
+    bd_ctl_melody_write('c');
+    bd_ctl_melody_write(0);
+    CHECK(bd_ctl_menu_read() == (BD_UI_SIGNATURE | BD_MENU_DEFAULT) && bd_ctl_theme_read() == BD_UI_SIGNATURE &&
+          bd_ctl_melody_read() == 0, "unbound writes are ignored");
 
     menu = 0xFF;                                        /* erased flash */
     tune = 0xFF;
-    bd_init_ui(&menu, &tune);
-    CHECK(menu == ((15 << 2) | BD_MENU_KEY) && tune == 0, "erased flash: menu %02X tune %u", menu, tune);
-    CHECK((bd_ctl_menu_read() & 0xC0) == 0x40 && (bd_ctl_tune_read() & 0xC0) == 0x40,
+    theme = 0xFF;
+    memset(melody, 0xFF, sizeof(melody));
+    bd_init_ui(&menu, &tune, &theme, melody);
+    CHECK(menu == ((15 << 2) | BD_MENU_KEY) && tune == 0 && theme == BD_THEME_DEFAULT && melody[0] == 0,
+          "erased flash: menu %02X tune %u theme %u", menu, tune, theme);
+    CHECK((bd_ctl_menu_read() & 0xC0) == 0x40 && (bd_ctl_tune_read() & 0xC0) == 0x40 && (bd_ctl_theme_read() & 0xC0) == 0x40,
           "signature: bit 6 set, bit 7 clear (old firmware reads FFh)");
     bd_ctl_menu_write(BD_MENU_OFF);
     CHECK(menu == ((BD_MENU_WAIT_DEFAULT << 2) | BD_MENU_OFF), "mode alone gets the default wait: %02X", menu);
@@ -517,13 +531,206 @@ static void test_ui_registers(void) {
     CHECK(bd_ctl_menu_read() == (0x40 | (7 << 2) | 2), "mode 2, 7 s: %02X", bd_ctl_menu_read());
     bd_ctl_menu_write(0xFF);
     CHECK(menu == ((15 << 2) | BD_MENU_KEY), "mode 3 is stored as 1, high bits dropped: %02X", menu);
-    bd_ctl_tune_write(3);
-    CHECK(bd_ctl_tune_read() == 0x43, "tune 3: %02X", bd_ctl_tune_read());
-    bd_ctl_tune_write(4);
-    CHECK(tune == 3, "unknown tune ignored: %u", tune);
+
+    /* tunes: 0, the built-in ones, the user's only when there is one */
+    bd_ctl_tune_write(BD_TUNE_BUILTIN);
+    CHECK(bd_ctl_tune_read() == (0x40 | BD_TUNE_BUILTIN), "last built-in tune: %02X", bd_ctl_tune_read());
+    bd_ctl_tune_write(BD_TUNE_BUILTIN + 1);
+    CHECK(tune == BD_TUNE_BUILTIN, "unknown tune ignored: %u", tune);
+    bd_ctl_tune_write(BD_UI_NEXT);
+    CHECK(tune == 0, "next after the last built-in, no user melody: off (%u)", tune);
+    bd_ctl_tune_write(BD_UI_NEXT);
+    CHECK(tune == 1, "next after off: 1 (%u)", tune);
+    bd_ctl_melody_select();
+    for (const char *p = "Mine:d=4,o=5,b=120:c,e"; *p; p++) bd_ctl_melody_write((uint8_t)*p);
+    bd_ctl_melody_write(0);
+    CHECK(strcmp(melody, "Mine:d=4,o=5,b=120:c,e") == 0, "melody stored: '%s'", melody);
+    bd_ctl_melody_select();
+    for (i = 0; (c = bd_ctl_melody_read()) != 0 && i < sizeof(back) - 1; i++) back[i] = (char)c;
+    back[i] = 0;
+    CHECK(strcmp(back, melody) == 0 && bd_ctl_melody_read() == 'M', "melody reads back and rewinds: '%s'", back);
+    bd_ctl_tune_write(BD_TUNE_CUSTOM);
+    CHECK(bd_ctl_tune_read() == (0x40 | BD_TUNE_CUSTOM), "the user's tune: %02X", bd_ctl_tune_read());
+    bd_ctl_tune_write(BD_UI_NEXT);
+    CHECK(tune == 0, "next after the user's: off");
+    for (i = 0; i < BD_TUNE_BUILTIN; i++) bd_ctl_tune_write(BD_UI_NEXT);
+    bd_ctl_tune_write(BD_UI_NEXT);
+    CHECK(tune == BD_TUNE_CUSTOM, "next after the last built-in: the user's (%u)", tune);
+    /* a melody longer than the buffer is cut, and stays terminated */
+    bd_ctl_melody_select();
+    for (i = 0; i < 400; i++) bd_ctl_melody_write('c');
+    bd_ctl_melody_write(0);
+    CHECK(strlen(melody) == BD_MELODY_MAX, "long melody cut to %u", (unsigned)strlen(melody));
+    bd_ctl_melody_select();
+    bd_ctl_melody_write(0);
+    CHECK(melody[0] == 0, "empty melody");
+
+    bd_ctl_theme_write(BD_THEME_MONO);
+    CHECK(bd_ctl_theme_read() == 0x42, "theme 2: %02X", bd_ctl_theme_read());
+    bd_ctl_theme_write(3);
+    CHECK(theme == BD_THEME_MONO, "unknown theme ignored");
+    bd_ctl_theme_write(BD_UI_NEXT);
+    CHECK(theme == BD_THEME_SETUP, "next after Mono: Setup");
+    bd_ctl_theme_write(BD_UI_NEXT);
+    CHECK(theme == BD_THEME_COMMANDER, "next after Setup: Commander");
+    bd_init_ui(NULL, NULL, NULL, NULL);
+}
+
+/* ---- tunes -------------------------------------------------------------------- */
+
+typedef struct { uint16_t div, units; } tnote_t;
+static uint8_t  tstream[BD_TUNE_STREAM_MAX + 16];
+static tnote_t  tnotes[BD_TUNE_ENTRIES + 4];
+static unsigned tcount;
+static char     tname[BD_TUNE_NAME_MAX + 1];
+static uint32_t ttotal;
+
+/* Take a stream apart; false when it is not well formed */
+static bool tune_parse(const uint8_t *st, size_t len) {
+    size_t n = st[0], i;
+    tcount = 0;
+    ttotal = 0;
+    if (n > BD_TUNE_NAME_MAX || len < 1 + n + 2 || ((len - 1 - n - 2) % 4) != 0) return false;
+    memcpy(tname, st + 1, n);
+    tname[n] = 0;
+    for (i = 1 + n; i + 2 < len; i += 4) {
+        tnotes[tcount].div = rd16(st + i);
+        tnotes[tcount].units = rd16(st + i + 2);
+        if (tnotes[tcount].div == 0xFFFF || tnotes[tcount].units == 0 || tnotes[tcount].units > BD_TUNE_ENTRY_UNITS) return false;
+        ttotal += tnotes[tcount].units;
+        tcount++;
+    }
+    return st[len - 2] == 0xFF && st[len - 1] == 0xFF && tcount <= BD_TUNE_ENTRIES;
+}
+
+static bool tune(const char *rtttl) {
+    size_t len;
+    memset(tstream, 0xEE, sizeof(tstream));
+    len = bd_tune_compile(rtttl, "Fallback", tstream);
+    CHECK(len <= BD_TUNE_STREAM_MAX && tstream[BD_TUNE_STREAM_MAX] == 0xEE, "stream of %u bytes stays in its buffer", (unsigned)len);
+    return tune_parse(tstream, len);
+}
+
+/* units for a time in milliseconds */
+static uint32_t ms_units(uint32_t ms) { return (uint32_t)((uint64_t)ms * 1000000u / BD_TUNE_UNIT_NS); }
+static bool near(uint32_t a, uint32_t b, uint32_t tol) { return (a > b ? a - b : b - a) <= tol; }
+/* the timer divisor of a frequency in Hz */
+static uint16_t hz(double f) { return (uint16_t)(BD_TUNE_PIT_HZ / f + 0.5); }
+
+static void test_tunes(void) {
+    static uint8_t menu, tunereg, theme;
+    static char melody[BD_MELODY_BUF];
+    static char longtune[2200];
+    unsigned i;
+    size_t n;
+
+    SECTION("tunes: RTTTL to the ROM's note stream");
+    /* one note: its pitch, its length, the gap that ends it */
+    CHECK(tune("T:d=4,o=4,b=120:a") && strcmp(tname, "T") == 0 && tcount == 2, "one quarter note: %u entries, name '%s'", tcount, tname);
+    CHECK(near(tnotes[0].div, hz(440.0), 1) && tnotes[1].div == 0, "A4 is 440 Hz: divisor %u, then silence", tnotes[0].div);
+    CHECK(ttotal == ms_units(500) && tnotes[1].units == 12, "500 ms in all (%u units), the last 20 ms silent (%u)", ttotal, tnotes[1].units);
+    /* the scale, sharps, octaves */
+    CHECK(tune("d=4,o=4,b=120:c,c#,d,d#,e,f,f#,g,g#,a,a#,b,h,c5,a6,c7") && tcount == 32, "scale: %u entries", tcount);
+    {
+        static const double f[] = { 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00,
+                                    466.16, 493.88, 493.88, 523.25, 1760.00, 2093.00 };
+        bool ok = true;
+        for (i = 0; i < 16; i++) {
+            if (!near(tnotes[2 * i].div, hz(f[i]), 1)) { ok = false; printf("  note %u: divisor %u, expected %u\n", i, tnotes[2 * i].div, hz(f[i])); }
+        }
+        CHECK(ok, "the twelve notes, h = b, octaves 5 to 7");
+        CHECK(strcmp(tname, "Fallback") == 0, "no name in the text: the caller's ('%s')", tname);
+    }
+    /* lengths: explicit, default, dotted (before or after the octave), pauses */
+    CHECK(tune("x:d=8,o=5,b=60:c,4c,2c.,16c6.,16c.6,p,1p") && tcount == 12, "lengths: %u entries", tcount);
+    CHECK(near(tnotes[0].units + tnotes[1].units, ms_units(500), 1), "default eighth at 60: 500 ms (%u)", tnotes[0].units + tnotes[1].units);
+    CHECK(near(tnotes[2].units + tnotes[3].units, ms_units(1000), 1), "quarter: 1 s");
+    CHECK(near(tnotes[4].units + tnotes[5].units, ms_units(3000), 1), "dotted half: 3 s");
+    CHECK(near(tnotes[6].units + tnotes[7].units, ms_units(375), 1) && near(tnotes[8].units + tnotes[9].units, ms_units(375), 1) &&
+          tnotes[6].div == tnotes[8].div, "dotted sixteenth, dot on either side of the octave");
+    CHECK(tnotes[10].div == 0 && near(tnotes[10].units, ms_units(500), 1) && tnotes[11].div == 0 &&
+          near(tnotes[11].units, ms_units(4000), 1), "pauses have no gap (%u, %u units)", tnotes[10].units, tnotes[11].units);
+    CHECK(tune("d=1,o=5,b=20:p") && tcount == 2 && tnotes[0].units == BD_TUNE_ENTRY_UNITS && near(ttotal, ms_units(12000), 1),
+          "an entry longer than the ROM can count is cut into pieces (%u + %u)", tnotes[0].units, tnotes[1].units);
+    /* rounding does not add up: 64 sixteenths at 150 are 6.4 s */
+    {
+        static char many[300];
+        strcpy(many, "r:d=16,o=5,b=150:");
+        for (i = 0; i < 64; i++) strcat(many, "c,");
+        CHECK(tune(many) && tcount == 128 && near(ttotal, ms_units(6400), 1), "64 sixteenths: %u units for 6.4 s (%u)", ttotal, ms_units(6400));
+    }
+    /* what a person types: spaces, upper case, a stray character */
+    CHECK(tune(" My Tune : D=4, O=5, B=120 : C , E# , x, 8G ") && strcmp(tname, "My Tune") == 0 && tcount == 6,
+          "spaces and capitals: '%s', %u entries", tname, tcount);
+    CHECK(near(tnotes[2].div, hz(698.46), 1), "e# is f");
+    CHECK(tune("c,e,g") && tcount == 6 && strcmp(tname, "Fallback") == 0, "notes alone, with the RTTTL defaults");
+    CHECK(tune("Name:c,e") && strcmp(tname, "Name") == 0 && tcount == 4, "name and notes, no defaults");
+    CHECK(tune("d=8,o=5,b=200:c") && tcount == 2 && strcmp(tname, "Fallback") == 0, "defaults and notes, no name");
+    /* nothing to play */
+    CHECK(tune("") && tcount == 0 && strcmp(tname, "Fallback") == 0, "empty text: no entries");
+    CHECK(tune("Quiet:d=4,o=5,b=120:") && tcount == 0 && strcmp(tname, "Quiet") == 0, "no notes: no entries");
+    CHECK(tune("!!:d=0,o=99,b=1:?,;") && tcount == 0, "nonsense: no entries, no crash");
+    /* limits: the name, the entries, the time */
+    CHECK(tune("A name that is longer than twenty-four characters:c") && strlen(tname) == BD_TUNE_NAME_MAX, "name cut to %u", (unsigned)strlen(tname));
+    strcpy(longtune, "L:d=32,o=5,b=300:");
+    for (i = 0; i < 500; i++) strcat(longtune, "c,");
+    CHECK(tune(longtune) && tcount == BD_TUNE_ENTRIES, "500 notes: cut at %u entries", tcount);
+    CHECK(tune("S:d=1,o=5,b=20:c,c,c,c") && ttotal <= BD_TUNE_TOTAL_UNITS && ttotal > BD_TUNE_TOTAL_UNITS - 2 * BD_TUNE_ENTRY_UNITS,
+          "four whole notes at 20: cut after about 20 s (%u units)", ttotal);
+
+    /* the melodies that come with the firmware */
+    for (i = 0; i < BD_TUNE_BUILTIN; i++) {
+        bool ok = tune(bd_tune_builtin[i]);
+        bool pitch = true;
+        for (unsigned k = 0; k < tcount; k++) {
+            uint16_t d = tnotes[k].div;         /* 200 Hz .. 2.2 kHz: what a PC speaker carries */
+            if (d && (d < BD_TUNE_PIT_HZ / 2200 || d > BD_TUNE_PIT_HZ / 200)) pitch = false;
+        }
+        CHECK(ok && tcount >= 6 && tname[0] && strcmp(tname, "Fallback") != 0 && pitch && ttotal >= ms_units(300) && ttotal <= ms_units(9000),
+              "tune %u '%s': %u entries, %u ms", i + 1, tname, tcount, (unsigned)((uint64_t)ttotal * BD_TUNE_UNIT_NS / 1000000u));
+    }
+
+    /* the register the ROM reads: the selected tune, compiled by core 1 */
+    menu = BD_MENU_DEFAULT;
+    tunereg = 5;
+    theme = 0;
+    melody[0] = 0;
+    bd_init_ui(&menu, &tunereg, &theme, melody);
+    bd_ctl_tunedata_select();
+    for (n = 0; n < sizeof(tstream); n++) {
+        tstream[n] = bd_ctl_tunedata_read();
+        if (n > 0 && tstream[n] == 0xFF && tstream[n - 1] == 0xFF) break;
+    }
+    CHECK(tune_parse(tstream, n + 1) && strcmp(tname, "Ode to Joy") == 0 && tcount == 30, "tune 5 after init: '%s', %u entries", tname, tcount);
+    CHECK(bd_ctl_tunedata_read() == 0xFF && bd_ctl_tunedata_read() == 0xFF, "past the end: FFh");
+    bd_ctl_tunedata_select();
+    CHECK(bd_ctl_tunedata_read() == 10 && bd_ctl_tunedata_read() == 'O', "select rewinds");
+    /* a change shows after core 1 has run */
     bd_ctl_tune_write(0);
-    CHECK(bd_ctl_tune_read() == 0x40, "tune off: %02X", bd_ctl_tune_read());
-    bd_init_ui(NULL, NULL);
+    bd_tasks();
+    bd_ctl_tunedata_select();
+    CHECK(bd_ctl_tunedata_read() == 3 && bd_ctl_tunedata_read() == 'O' && bd_ctl_tunedata_read() == 'f' && bd_ctl_tunedata_read() == 'f' &&
+          bd_ctl_tunedata_read() == 0xFF && bd_ctl_tunedata_read() == 0xFF, "tune 0: 'Off' and no notes");
+    bd_ctl_melody_select();
+    for (const char *p = "Mine:d=4,o=4,b=120:a,p"; *p; p++) bd_ctl_melody_write((uint8_t)*p);
+    bd_ctl_melody_write(0);
+    bd_ctl_tune_write(BD_TUNE_CUSTOM);
+    bd_tasks();
+    bd_ctl_tunedata_select();
+    for (n = 0; n < sizeof(tstream); n++) {
+        tstream[n] = bd_ctl_tunedata_read();
+        if (n > 0 && tstream[n] == 0xFF && tstream[n - 1] == 0xFF) break;
+    }
+    CHECK(tune_parse(tstream, n + 1) && strcmp(tname, "Mine") == 0 && tcount == 3 && near(tnotes[0].div, hz(440.0), 1),
+          "the user's melody: '%s', %u entries", tname, tcount);
+    /* the melody changed while it is selected: compiled again */
+    bd_ctl_melody_select();
+    for (const char *p = "c,e,g"; *p; p++) bd_ctl_melody_write((uint8_t)*p);
+    bd_ctl_melody_write(0);
+    bd_tasks();
+    bd_ctl_tunedata_select();
+    CHECK(bd_ctl_tunedata_read() == 6 && bd_ctl_tunedata_read() == 'C', "new text: named 'Custom'");
+    bd_init_ui(NULL, NULL, NULL, NULL);
 }
 
 static void test_setup(void) {
@@ -1375,6 +1582,7 @@ int main(void) {
     test_harddisk_geometry();
     test_registers();
     test_ui_registers();
+    test_tunes();
     test_setup();
     if (n_fails == 0) {
         test_no_drive();

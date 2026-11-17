@@ -13,7 +13,12 @@ on the PC speaker if you like, and offers a [boot menu](#the-boot-menu) that
 lists the disk images on the drive: pick one and it boots, as a floppy or as
 a hard disk.
 
-![The boot menu](menu.png)
+![The boot menu, Setup colours](menu.png)
+
+The menu looks like the PicoGUS web page and comes in its three sets of
+colours, Setup (above), Commander and Mono:
+
+![Commander colours](menu-commander.png) ![Mono colours](menu-mono.png)
 
 The card side (`sw/bootdisk/`) serves 512-byte sectors of the image files
 over the PGDFS transport. The wire protocol is described in
@@ -44,7 +49,7 @@ an error. Only two routines are exceptions: `out186` (`rep outsw`) and
 `in186` (`rep insw`). They are assembled with `cpu 186` and only run after the
 CPU check has found an 80186 or later. `mkrom.py` pads the image, sets the
 checksum byte and verifies it. The header word at 14h holds the number of
-bytes in use: about 6.5 KB of the 8 KB.
+bytes in use: about 7.3 KB of the 8 KB.
 
 ## Setting up the card
 
@@ -66,7 +71,9 @@ pgusinit /bdopts n               bit 0 floppy read-only, bit 1 hard disk read-on
                                  bit 2 ROM disabled, bit 3 boot the hard disk even with a floppy image
 pgusinit /bdmenu n               boot menu: 0 off, 1 offered at boot with M (default), 2 opens at every boot
 pgusinit /bdwait n               seconds the ROM waits for M: 1-15 (default 3)
-pgusinit /bdtune n               start-up tune: 0 off, 1-3 (default 1)
+pgusinit /bdtheme x              colours of the boot menu: setup (default), commander or mono
+pgusinit /bdtune n               start-up tune: off, 1-13 (default 1), or custom
+pgusinit /bdmelody x             your own tune as RTTTL text, or @file; then /bdtune custom
 pgusinit /save                   make it permanent
 pgusinit /fdimage -              remove the floppy image (same for /hdimage)
 ```
@@ -96,19 +103,26 @@ wrong kind can still be set with `pgusinit /fdimage` or `/hdimage`.
 | A, C | take the image out of A: or C: |
 | S | save: the images now in A: and C: become the ones used at every boot (`pgusinit /save` from the menu; it stores all of the card's settings) |
 | R | read the folder again, after changing the USB drive (Enter does the same while nothing is listed) |
+| T | the next set of colours: Setup, Commander, Mono |
+| M | the next start-up tune, played at once with its name on the status line: off, 1 to 13, then your own if there is one |
 | Esc | leave the menu and boot what is in A: and C:, the floppy first unless option bit 3 says otherwise |
 
-The two lines under the title show what is in A: and C:. A selection that is
-not saved lasts until the card is switched off, so the next cold boot uses
-the saved images again. The menu passes the images to the card by their 8.3
+The Drives window shows what is in A: and C:. Images, colours and tune that
+are not saved (S) last until the card is switched off, so the next cold boot
+uses the saved ones again. The menu passes the images to the card by their 8.3
 names (`\BOOTDI~1\DOSBOO~1.IMG`), which is what the boot messages and
 `pgusinit` then show; the list itself shows the long names, cut to 27
 characters.
 
-The menu needs an 80-column text screen (from a 40-column or a graphics mode
-it switches to 80x25 text) and uses only normal and reverse video, so it
-works on MDA and Hercules cards too. A folder path too long for its row is
-shown as `...` and its end.
+The folder is named in the top of the list window's frame (`...` and its
+end when it is too long), the position in the list in the bottom of it. The
+menu needs an 80-column text screen: from a 40-column or a graphics mode it
+switches to 80x25 text. On a monochrome adapter (MDA, Hercules) it uses
+normal, bright and reverse video whatever colours are set.
+
+The look follows the web page of the web server feature (`sw/web/www/textmode`
+on its branch): the title bar, the framed windows with their shadows, the
+`Key=Action` status line, and the colour of every part from its three themes.
 
 With no image configured the ROM waits 5 seconds for the USB drive before it
 gives up on the menu, and 15 seconds when the menu is set to open at every
@@ -116,11 +130,50 @@ boot (`/bdmenu 2`), as it does for a configured image.
 
 ## The start-up tune
 
-When the late init has found the card it plays a tune on the PC speaker:
-1 is four rising notes (half a second), 2 a short fanfare (a second), 3 a
-quick sweep. `pgusinit /bdtune 0` turns it off. A key ends the tune, and the
-key still counts: M opens the menu, Esc skips PGBOOT, and any other key also
-ends the wait for M and is left for the system that boots.
+When the late init has found the card it plays a tune on the PC speaker.
+The tunes are on the card, not in the ROM: the ROM plays the notes the card
+hands it, so new firmware brings new tunes without touching the EEPROM.
+
+| `/bdtune` | Tune | |
+|---|---|---|
+| `off` (0) | none | the ROM stays silent |
+| 1 | Rising | four rising notes, half a second (the default) |
+| 2 | Fanfare | a short fanfare |
+| 3 | Sweep | a quick sweep down and up |
+| 4 | Power Up | a climbing arpeggio |
+| 5 | Ode to Joy | Beethoven |
+| 6 | Fur Elise | Beethoven |
+| 7 | Mountain King | Grieg, In the Hall of the Mountain King |
+| 8 | Nachtmusik | Mozart, Eine kleine Nachtmusik |
+| 9 | Toccata | Bach, Toccata and Fugue in D minor |
+| 10 | Greensleeves | traditional |
+| 11 | Demon Riff | a metal riff |
+| 12 | Rabbit Run | a bouncy platform-game tune |
+| 13 | Tycoon Swing | an easy swing |
+| `custom` (15) | your own | the melody set with `/bdmelody` |
+
+1-4 and 11-13 were written for PGBOOT; 11-13 are in the manner of the game
+soundtracks that made the Gravis UltraSound worth having, not taken from
+them. Any tune you like can be your own:
+
+```
+pgusinit /bdmelody Mine:d=4,o=5,b=120:c,e,g,2c6     the melody, as RTTTL text
+pgusinit /bdmelody @TUNE.TXT                        or the first line of a file (up to 255 characters)
+pgusinit /bdtune custom /save
+```
+
+RTTTL is the ringtone format of old phones, and collections of tunes in it
+are easy to find: `name:d=4,o=5,b=120:` (default note length, default octave,
+quarter notes per minute) and then the notes, each `[length]note[#][.][octave]`
+with `p` for a pause. A tune is cut after about 20 seconds or 80 notes. The
+tunes that come with the firmware are one line each in
+`sw/bootdisk/bd_tune.c`, for those who build their own.
+
+A key ends the tune, and the key still counts: M opens the menu, Esc skips
+PGBOOT, and any other key also ends the wait for M and is left for the
+system that boots. In the menu, M steps through the tunes and plays them.
+The notes are timed with the system timer's counter (1.7 ms steps), so a
+tune has the same tempo on an XT and a Pentium.
 
 ## Installing the ROM
 
@@ -303,7 +356,7 @@ The loader fixes the checksum byte after it patches these fields.
 2. **INT 19h (late init).** The ROM checks the card again and takes 1 KB at
    the top of conventional memory (40:13h - 1) for all its state. It then
    runs on its own stack at the top of that block, reads `CMD_BDMENU` and
-   plays the tune `CMD_BDTUNE` names. If no image name is configured and
+   plays the tune the card has selected (`CMD_BDTUNEDATA`). If no image name is configured and
    the boot menu is off (or the firmware has none), it continues with the
    BIOS boot at once. Otherwise it waits for the USB drive: up to 15 s with
    an image configured or the menu in mode 2, else 5 s (`CMD_DFSSTAT` = FFh, BDINFO state 4,
@@ -418,8 +471,8 @@ an INT 13h call), the ROM waits for it to finish, within the same timeout.
 | 70h | INT 13h trampoline: `push cs / push cs / jmp far ROM:int13_entry`. The INT 13h vector points here. The handler reads its RAM segment from the pushed words and puts the caller's DS back before it returns or chains. |
 | 78h-B3h | transaction and transfer parameters |
 | C0h-13Fh | BDINFO answer buffer |
-| 140h-14Dh | boot menu setting, the image picked to boot from, the menu's page and selection |
-| 14Eh-1C1h | folder shown in the boot menu |
+| 140h-151h | boot menu setting, the image picked to boot from, the menu's page, selection and theme |
+| 152h-1C5h | folder shown in the boot menu |
 | up to 400h | stack for the late init (the INT 13h handler runs on the caller's stack, about 50 bytes) |
 
 Everything up to 13Fh is where version 0.1 had it. While the boot menu is open, the kilobyte below the block holds the page of
@@ -434,14 +487,14 @@ block.
 
 No card (or firmware without PGDFS/PGBOOT):
 ```
-PGBOOT 0.2: PicoGUS not found, will look again at boot   [then at INT 19h: PGBOOT: PicoGUS not found]
-PGBOOT 0.2: PicoGUS firmware without PGBOOT support
-PGBOOT 0.2: PGDFS disabled or unsupported on the card
-PGBOOT 0.2: disabled (pgusinit /bdopts bit 2)
+PGBOOT 0.3: PicoGUS not found, will look again at boot   [then at INT 19h: PGBOOT: PicoGUS not found]
+PGBOOT 0.3: PicoGUS firmware without PGBOOT support
+PGBOOT 0.3: PGDFS disabled or unsupported on the card
+PGBOOT 0.3: disabled (pgusinit /bdopts bit 2)
 ```
 Card found, floppy and hard disk image, the stick mounts a few seconds late:
 ```
-PGBOOT 0.2: PicoGUS found, data port 1D4h (186+)       [(8088) on an XT, (8088 forced) for PGBOOT88.ROM]
+PGBOOT 0.3: PicoGUS found, data port 1D4h (186+)       [(8088) on an XT, (8088 forced) for PGBOOT88.ROM]
 PGBOOT: waiting for the USB drive (Esc skips)... 12    [only while not mounted; counts down from 15, or from 5 with no image configured and menu mode 1]
 PGBOOT: press M for the boot menu (Esc skips)... 03    [menu mode 1; the screen is cleared when the menu closes]
 PGBOOT: A: \FD.IMG, 1440K
@@ -483,6 +536,8 @@ simulator) covers these cases:
   `PGBT256.BIN` shows it behind a 32 KB window.
 * T18: `pgusinit /bdmenu /bdwait /bdtune`.
 * T19, T20: a folder seven levels deep and R; a stick without images.
+* T21: the three sets of colours (the attributes of the screen are checked).
+* T22: the tunes: off, the length of tune 1, the user's melody.
 
 `tools/emu/README.md` has the full list.
 
@@ -532,5 +587,9 @@ LBA of 80h. The last line is `INT13TST DONE, n failures`.
   default is 4 KB) and is left out below that.
 * With the default settings every boot waits three seconds for M. `pgusinit
   /bdmenu 0` (and `/save`) takes the prompt away; `/bdwait` shortens it.
-* The tune and the countdowns are timed by the BIOS timer tick, which must
-  be running when the BIOS issues INT 19h.
+* The tune and the countdowns are timed by the BIOS timer tick and timer
+  channel 0, which must be running when the BIOS issues INT 19h.
+* The colours, the larger set of tunes and your own melody need the card's
+  firmware to match (settings version 9). With older firmware this ROM shows
+  the Setup colours and plays no tune; an older ROM with this firmware plays
+  tunes 1-3 only.

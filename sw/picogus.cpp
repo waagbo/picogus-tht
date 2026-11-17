@@ -324,6 +324,13 @@ __force_inline void select_picogus(uint8_t value) {
     case CMD_BDOPTS:
     case CMD_BDMENU:
     case CMD_BDTUNE:
+    case CMD_BDTHEME:
+        break;
+    case CMD_BDMELODY: // PGBOOT user melody text: rewind
+        bd_ctl_melody_select();
+        break;
+    case CMD_BDTUNEDATA: // PGBOOT tune stream for the ROM: rewind
+        bd_ctl_tunedata_select();
         break;
 #endif // PGDFS
     default:
@@ -582,6 +589,9 @@ __force_inline void write_picogus_high(uint8_t value) {
         // the image in use (a hard disk image stays until the next boot)
         bd_ctl_name_select(BD_UNIT_FD);
         bd_ctl_name_write(BD_UNIT_FD, 0);
+        // likewise the (empty) melody, so core 1 compiles the default tune
+        bd_ctl_melody_select();
+        bd_ctl_melody_write(0);
 #endif
         break;
     case CMD_FLASH: // Firmware write
@@ -619,6 +629,12 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
     case CMD_BDTUNE: // PGBOOT start-up tune
         bd_ctl_tune_write(value);
+        break;
+    case CMD_BDTHEME: // PGBOOT boot menu colours
+        bd_ctl_theme_write(value);
+        break;
+    case CMD_BDMELODY: // PGBOOT user melody text: append, 0 commits
+        bd_ctl_melody_write(value);
         break;
 #endif // PGDFS
     }
@@ -801,6 +817,12 @@ __force_inline uint8_t read_picogus_high(void) {
         return bd_ctl_menu_read();
     case CMD_BDTUNE: // PGBOOT start-up tune | 40h signature
         return bd_ctl_tune_read();
+    case CMD_BDTHEME: // PGBOOT boot menu colours | 40h signature
+        return bd_ctl_theme_read();
+    case CMD_BDMELODY: // PGBOOT user melody text, 0 terminated
+        return bd_ctl_melody_read();
+    case CMD_BDTUNEDATA: // PGBOOT tune stream for the ROM
+        return bd_ctl_tunedata_read();
 #endif // PGDFS
     case CMD_HWTYPE: // Hardware version
         return BOARD_TYPE;
@@ -1532,7 +1554,7 @@ int main()
     // PGBOOT: bind the image names and options in the settings (core 1 opens
     // the images when the USB drive mounts)
     bd_init(settings.BootDisk.fdImage, settings.BootDisk.hdImage, &settings.BootDisk.options);
-    bd_init_ui(&settings.BootDisk.menu, &settings.BootDisk.tune);
+    bd_init_ui(&settings.BootDisk.menu, &settings.BootDisk.tune, &settings.BootDisk.theme, settings.BootDisk.melody);
     // a different value on every card boot: image tokens from before a card
     // reboot (mode switch, firmware update) never match the images after it
     bd_set_boot_nonce(get_rand_32());

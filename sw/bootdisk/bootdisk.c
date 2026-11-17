@@ -88,6 +88,19 @@ static char    *cfg_name[BD_UNITS];         /* settings storage, BD_NAME_BUF eac
 static uint8_t *cfg_opts;
 static uint8_t *cfg_menu;                   /* CMD_BDMENU, CMD_BDTUNE storage */
 static uint8_t *cfg_tune;
+static uint8_t *cfg_theme;
+static char    *cfg_melody;                 /* BD_MELODY_BUF, the user's melody as RTTTL */
+static uint16_t melody_wr, melody_rd;       /* core 0 only */
+static uint16_t tunedata_rd;                /* core 0 only */
+static volatile uint32_t tune_seq;          /* written by core 0 only: tune or melody changed */
+
+/* The selected tune compiled for the ROM (bd_tune.h). Core 1 writes it (and
+ * the main thread before core 1 starts), core 0 reads it byte by byte: while
+ * it is not ready, and past its end, CMD_BDTUNEDATA reads FFh. */
+static uint8_t  tune_stream[BD_TUNE_STREAM_MAX];
+static volatile uint16_t tune_len;
+static volatile bool     tune_ready;
+static uint32_t tune_applied_seq;           /* core 1 */
 static uint8_t  wr_pos[BD_UNITS];           /* core 0 only */
 static uint8_t  rd_pos[BD_UNITS];           /* core 0 only */
 static volatile uint32_t commit_seq[BD_UNITS];  /* written by core 0 only */
@@ -195,14 +208,99 @@ void bd_ctl_menu_write(uint8_t v) {
     if (cfg_menu) *cfg_menu = menu_clean(v);
 }
 
+static bool tune_valid(uint8_t t) {
+    return t <= BD_TUNE_BUILTIN || (t == BD_TUNE_CUSTOM && cfg_melody && cfg_melody[0]);
+}
+
 uint8_t bd_ctl_tune_read(void) {
     uint8_t t = cfg_tune ? *cfg_tune : BD_TUNE_DEFAULT;
-    if (t > BD_TUNE_MAX) t = 0;
+    if (t > BD_TUNE_BUILTIN && t != BD_TUNE_CUSTOM) t = 0;
     return (uint8_t)(t | BD_UI_SIGNATURE);
 }
 
 void bd_ctl_tune_write(uint8_t v) {
-    if (cfg_tune && v <= BD_TUNE_MAX) *cfg_tune = v;
+    if (!cfg_tune) return;
+    if (v == BD_UI_NEXT) {                  /* off, 1 .. the last built-in, the user's if there is one */
+        v = *cfg_tune;
+        v = (v == BD_TUNE_CUSTOM) ? 0 : (v < BD_TUNE_BUILTIN) ? (uint8_t)(v + 1) : BD_TUNE_CUSTOM;
+        if (!tune_valid(v)) v = 0;
+    } else if (v > BD_TUNE_BUILTIN && v != BD_TUNE_CUSTOM) {
+        return;                             /* no such tune: not stored */
+    }
+    *cfg_tune = v;
+    BD_FENCE();
+    tune_seq = tune_seq + 1;
+}
+
+uint8_t bd_ctl_theme_read(void) {
+    uint8_t t = cfg_theme ? *cfg_theme : BD_THEME_DEFAULT;
+    if (t > BD_THEME_MAX) t = BD_THEME_DEFAULT;
+    return (uint8_t)(t | BD_UI_SIGNATURE);
+}
+
+void bd_ctl_theme_write(uint8_t v) {
+    if (!cfg_theme) return;
+    if (v == BD_UI_NEXT) v = (*cfg_theme >= BD_THEME_MAX) ? 0 : (uint8_t)(*cfg_theme + 1);
+    if (v <= BD_THEME_MAX) *cfg_theme = v;
+}
+
+void bd_ctl_melody_select(void) {
+    melody_wr = 0;
+    melody_rd = 0;
+}
+
+void bd_ctl_melody_write(uint8_t c) {
+    if (!cfg_melody) return;
+    if (c == 0) {
+        cfg_melody[melody_wr] = 0;          /* melody_wr <= BD_MELODY_MAX */
+        melody_wr = 0;
+        BD_FENCE();                         /* the text is complete before core 1 compiles it */
+        tune_seq = tune_seq + 1;
+        return;
+    }
+    if (melody_wr < BD_MELODY_MAX) {
+        cfg_melody[melody_wr++] = (char)c;
+        cfg_melody[melody_wr] = 0;
+    }
+}
+
+uint8_t bd_ctl_melody_read(void) {
+    uint8_t c;
+    if (!cfg_melody) return 0;
+    c = (melody_rd < BD_MELODY_MAX) ? (uint8_t)cfg_melody[melody_rd] : 0;
+    melody_rd = c ? (uint16_t)(melody_rd + 1) : 0;
+    return c;
+}
+
+void bd_ctl_tunedata_select(void) {
+    tunedata_rd = 0;
+}
+
+uint8_t bd_ctl_tunedata_read(void) {
+    if (!tune_ready || tunedata_rd >= tune_len) return 0xFF;
+    return tune_stream[tunedata_rd++];
+}
+
+/* The stream of the tune the setting names. Runs on core 1 (bd_tasks) and,
+ * before core 1 exists, in bd_init_ui(). */
+static void tune_compile(void) {
+    uint8_t t;
+    size_t n;
+    tune_ready = false;
+    BD_FENCE();
+    tune_applied_seq = tune_seq;
+    BD_FENCE();
+    t = cfg_tune ? *(volatile uint8_t *)cfg_tune : BD_TUNE_DEFAULT;
+    if (t >= 1 && t <= BD_TUNE_BUILTIN) {
+        n = bd_tune_compile(bd_tune_builtin[t - 1], NULL, tune_stream);
+    } else if (t == BD_TUNE_CUSTOM && cfg_melody) {
+        n = bd_tune_compile(cfg_melody, "Custom", tune_stream);
+    } else {
+        n = bd_tune_compile("", "Off", tune_stream);
+    }
+    tune_len = (uint16_t)n;
+    BD_FENCE();
+    tune_ready = true;
 }
 
 /* ================= core 1 ==================================================== */
@@ -519,11 +617,21 @@ void bd_init(char *fd_name, char *hd_name, uint8_t *opts) {
     mounted = false;
 }
 
-void bd_init_ui(uint8_t *menu, uint8_t *tune) {
+void bd_init_ui(uint8_t *menu, uint8_t *tune, uint8_t *theme, char *melody) {
     cfg_menu = menu;
     cfg_tune = tune;
+    cfg_theme = theme;
+    cfg_melody = melody;
     if (menu) *menu = menu_clean(*menu);            /* erased flash included */
-    if (tune && *tune > BD_TUNE_MAX) *tune = 0;
+    if (melody) {
+        melody[BD_MELODY_MAX] = 0;                  /* whatever flash held */
+        if ((uint8_t)melody[0] == 0xFF) melody[0] = 0;
+    }
+    if (tune && !tune_valid(*tune)) *tune = 0;
+    if (theme && *theme > BD_THEME_MAX) *theme = BD_THEME_DEFAULT;
+    melody_wr = melody_rd = 0;
+    tunedata_rd = 0;
+    tune_compile();
 }
 
 void bd_set_boot_nonce(uint32_t nonce) {
@@ -533,6 +641,7 @@ void bd_set_boot_nonce(uint32_t nonce) {
 /* ---- core 1 hooks ------------------------------------------------------------- */
 
 void bd_tasks(void) {
+    if (tune_seq != tune_applied_seq) tune_compile();   /* another tune, or the user's melody changed */
     /* A floppy name commit swaps the disk at once; a hard disk name waits
      * for the next BDINFO with OPEN (the next boot). */
     if (commit_seq[BD_UNIT_FD] != units[BD_UNIT_FD].applied_seq) {

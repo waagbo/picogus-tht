@@ -30,10 +30,10 @@ endif
 
 LINKS := $(B)/ffconf.h $(B)/ff.c $(B)/ff.h $(B)/diskio.h $(B)/ffunicode.c
 OBJS  := $(B)/dfs_server.o $(B)/dfs_fs.o $(B)/ff.o $(B)/ffunicode.o \
-         $(B)/bootdisk.o $(B)/bd_geometry.o \
+         $(B)/bootdisk.o $(B)/bd_geometry.o $(B)/bd_tune.o \
          $(B)/ramdisk_diskio.o $(B)/test_server.o
 HDRS  := $(DFS)/dfs_fs.h $(DFS)/dfs_server.h $(SW)/../common/picogus.h $(SW)/usb_msc/msc_app.h ramdisk_diskio.h \
-         $(BD)/bootdisk.h $(BD)/bd_geometry.h
+         $(BD)/bootdisk.h $(BD)/bd_geometry.h $(BD)/bd_tune.h
 
 .PHONY: all test clean arm-size
 
@@ -75,7 +75,7 @@ ARMCC    ?= arm-none-eabi-gcc
 ARMSIZE  ?= arm-none-eabi-size
 ARMFLAGS := -DPGDFS=1 -mcpu=cortex-m0plus -mthumb -Os -Wall
 ARMINC   := -I$(FATFS) -I$(DFS) -I$(SW) -I$(SW)/../common
-ARMOBJS  := $(B)/arm/dfs_server.o $(B)/arm/dfs_fs.o $(B)/arm/bootdisk.o $(B)/arm/bd_geometry.o $(B)/arm/ff.o
+ARMOBJS  := $(B)/arm/dfs_server.o $(B)/arm/dfs_fs.o $(B)/arm/bootdisk.o $(B)/arm/bd_geometry.o $(B)/arm/bd_tune.o $(B)/arm/ff.o
 
 arm-size: $(ARMOBJS)
 	$(ARMSIZE) $(ARMOBJS)

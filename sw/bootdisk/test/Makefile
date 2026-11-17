@@ -1,4 +1,4 @@
-# Host tests for PGBOOT (../bootdisk.c, ../bd_geometry.c), served through the
+# Host tests for PGBOOT (../bootdisk.c, ../bd_geometry.c, ../bd_tune.c), served through the
 # PGDFS server (../../dfs/dfs_server.c, dfs_fs.c) on the RAM disk FatFs
 # harness of ../../dfs/test.
 #
@@ -22,9 +22,9 @@ INC     := -I$(B) -I$(BD) -I$(DFS) -I$(DT) -I$(SW) -I$(SW)/../common
 DEFS    := -DBD_HOST_TEST
 
 LINKS := $(B)/ffconf.h $(B)/ff.c $(B)/ff.h $(B)/diskio.h $(B)/ffunicode.c
-OBJS  := $(B)/bootdisk.o $(B)/bd_geometry.o $(B)/dfs_server.o $(B)/dfs_fs.o \
+OBJS  := $(B)/bootdisk.o $(B)/bd_geometry.o $(B)/bd_tune.o $(B)/dfs_server.o $(B)/dfs_fs.o \
          $(B)/ff.o $(B)/ffunicode.o $(B)/ramdisk_diskio.o $(B)/test_bootdisk.o
-HDRS  := $(BD)/bootdisk.h $(BD)/bd_geometry.h $(DFS)/dfs.h $(DFS)/dfs_fs.h $(DFS)/dfs_server.h \
+HDRS  := $(BD)/bootdisk.h $(BD)/bd_geometry.h $(BD)/bd_tune.h $(DFS)/dfs.h $(DFS)/dfs_fs.h $(DFS)/dfs_server.h \
          $(SW)/../common/picogus.h $(DT)/ramdisk_diskio.h
 
 .PHONY: all test clean
