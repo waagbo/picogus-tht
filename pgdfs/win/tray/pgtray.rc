@@ -37,19 +37,20 @@ IDD_MIDI DIALOGEX 0, 0, 240, 140
 STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
 FONT 8, "MS Shell Dlg"
 BEGIN
-    LTEXT           "MIDI &output:", -1, 4, 7, 46, 8
-    COMBOBOX        IDC_MIDI_DEV, 54, 4, 182, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    GROUPBOX        "mt32-pi: synthesizer", -1, 4, 24, 232, 34
-    PUSHBUTTON      "&MT-32", IDC_MIDI_MT32, 12, 38, 64, 14
-    PUSHBUTTON      "&SoundFont (General MIDI)", IDC_MIDI_SF, 82, 38, 100, 14
-    GROUPBOX        "mt32-pi: MT-32 ROM set", -1, 4, 62, 232, 34
-    PUSHBUTTON      "MT-32 (o&ld)", IDC_MIDI_ROM_OLD, 12, 76, 64, 14
-    PUSHBUTTON      "MT-32 (&new)", IDC_MIDI_ROM_NEW, 82, 76, 64, 14
-    PUSHBUTTON      "&CM-32L", IDC_MIDI_ROM_CM32L, 152, 76, 64, 14
-    GROUPBOX        "mt32-pi: SoundFont", -1, 4, 100, 232, 34
-    LTEXT           "N&umber:", -1, 12, 117, 30, 8
-    EDITTEXT        IDC_MIDI_SFNUM, 46, 114, 30, 13, ES_NUMBER | ES_AUTOHSCROLL
-    PUSHBUTTON      "S&elect", IDC_MIDI_SFSET, 82, 114, 64, 14
+    LTEXT           "Windows MIDI &output:", -1, 4, 7, 74, 8
+    COMBOBOX        IDC_MIDI_DEV, 80, 4, 156, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_MIDI_INFO, 4, 21, 232, 18, SS_NOPREFIX
+    GROUPBOX        "mt32-pi on this output", -1, 4, 42, 232, 92
+    LTEXT           "Synthesizer:", -1, 12, 59, 52, 8
+    PUSHBUTTON      "&MT-32", IDC_MIDI_MT32, 68, 56, 50, 14
+    PUSHBUTTON      "&SoundFont (General MIDI)", IDC_MIDI_SF, 122, 56, 104, 14
+    LTEXT           "MT-32 ROMs:", -1, 12, 81, 52, 8
+    PUSHBUTTON      "o&ld", IDC_MIDI_ROM_OLD, 68, 78, 50, 14
+    PUSHBUTTON      "&new", IDC_MIDI_ROM_NEW, 122, 78, 50, 14
+    PUSHBUTTON      "&CM-32L", IDC_MIDI_ROM_CM32L, 176, 78, 50, 14
+    LTEXT           "SoundFont n&umber:", -1, 12, 103, 64, 8
+    EDITTEXT        IDC_MIDI_SFNUM, 80, 100, 30, 13, ES_NUMBER | ES_AUTOHSCROLL
+    PUSHBUTTON      "S&elect", IDC_MIDI_SFSET, 122, 100, 50, 14
 END
 
 IDD_CARD DIALOGEX 0, 0, 240, 140

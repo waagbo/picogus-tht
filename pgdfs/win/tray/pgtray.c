@@ -4,9 +4,10 @@
  * Copyright (C) 2026 PicoGUS contributors
  * Distributed under the MIT license, see ../../LICENSE.
  *
- * Loads and unloads the CD image of the card's CD-ROM emulation, switches an
- * mt32-pi on the MIDI output between its synthesizers, switches the card
- * mode and sets up the WiFi network of the firmware with the web server. An
+ * Loads and unloads the CD image of the card's CD-ROM emulation, chooses the
+ * MIDI output Windows plays on and switches an mt32-pi there between its
+ * synthesizers, switches the card mode and sets up the WiFi network of the
+ * firmware with the web server. An
  * icon in the notification area with a menu, and a window that hides there.
  *
  * One program for Windows 95 / 98 / ME and Windows NT 4.0 / 2000 / XP: plain
@@ -39,7 +40,6 @@
 #define HOVER_MS        2000    /* the tip is refreshed this often while the mouse is on the icon */
 #define MENU_IMAGES     30      /* CD images in the menu; the window lists all */
 #define LIST_BYTES      32768
-#define REG_APP         "Software\\PicoGUS\\PGTray"
 #define REG_RUN         "Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define RUN_VALUE       "PGTray"
 
@@ -303,86 +303,210 @@ static void switch_mode(unsigned char mode, int save) {
   }
 }
 
-/* ---- MIDI: an mt32-pi on the card's MIDI output ---------------------------------------- */
+/* ---- MIDI: the output Windows plays on, and an mt32-pi there ------------------------------- */
 
-static void reg_get(const char *name, char *value, DWORD max) {
-  HKEY key;
+/* The MIDI tab of Multimedia Properties in the Control Panel chooses the
+ * device the MIDI mapper plays on, which is what programs get that open "the
+ * MIDI device" and name none. The choice is a value of the user's MIDIMap key:
+ *
+ *   Windows 95/98/ME   CurrentInstrument, the registry name of a MIDI driver
+ *                      entry: a key below MediaResources\midi, named as the
+ *                      driver's INF file names it ("msmpu401.drv",
+ *                      "sbfm.drv", "name<0001>"). UseScheme 0 says that this
+ *                      single instrument is used, not a custom configuration,
+ *                      AutoScheme 0 that the user chose it.
+ *   Windows NT 4/2000  CurrentInstrument, the name of the MIDI output device
+ *                      (MIDIOUTCAPS.szPname), with UseScheme and AutoScheme 0.
+ *   Windows XP         szPname, the name of the MIDI output device.
+ *
+ * The mapper is then told with DRVM_MAPPER_RECONFIGURE, which the Windows 95
+ * DDK describes as the message of Control Panel applications for this: with
+ * DRV_F_PROP_INSTR, "new MIDI instrument settings have been applied", and
+ * DRV_F_NEWDEFAULTS, "new mapper defaults have been applied due to a
+ * change". A mapper that is open at that moment changes over when it is
+ * closed: a program that is playing keeps its device until it opens MIDI
+ * again. */
+
+#define MIDIMAP_KEY     "Software\\Microsoft\\Windows\\CurrentVersion\\Multimedia\\MIDIMap"
+#define MIDIRES_KEY     "System\\CurrentControlSet\\Control\\MediaResources\\midi"
+#define MAPPER_RECONFIGURE  0x2001  /* DRVM_MAPPER_RECONFIGURE (mmddk.h) */
+#define MAPPER_INSTRUMENT   0x0004  /* DRV_F_PROP_INSTR */
+#define MAPPER_DEFAULTS     0x0008  /* DRV_F_NEWDEFAULTS */
+#define MIDI_OUTPUTS    32
+#define MIDI_VALUE      128
+#define MIDI_LABEL      200
+
+static struct {
+  char value[MIDI_VALUE];       /* what the MIDIMap key calls it; "" cannot be chosen */
+  char label[MIDI_LABEL];       /* what the lists show */
+} midi_out[MIDI_OUTPUTS];
+static int midi_outs;
+static int midi_now = -1;       /* the one Windows plays on, -1: none of them */
+
+/* 0 for Windows 95/98/ME, else the Windows NT version: 0400h, 0500h, 0501h */
+static unsigned nt_version(void) {
+  DWORD v = GetVersion();
+  if (v & 0x80000000UL) return 0;
+  return ((v & 0xFF) << 8) | ((v >> 8) & 0xFF);
+}
+
+static const char *midimap_value(void) {
+  return nt_version() >= 0x0501 ? "szPname" : "CurrentInstrument";
+}
+
+static int reg_string(HKEY key, const char *name, char *value, DWORD max) {
   DWORD type = 0, size = max;
   value[0] = 0;
-  if (RegOpenKeyExA(HKEY_CURRENT_USER, REG_APP, 0, KEY_READ, &key) != ERROR_SUCCESS) return;
-  if (RegQueryValueExA(key, name, NULL, &type, (BYTE *)value, &size) != ERROR_SUCCESS || type != REG_SZ) value[0] = 0;
-  value[max - 1] = 0;
-  RegCloseKey(key);
-}
-
-static void reg_set(const char *name, const char *value) {
-  HKEY key;
-  DWORD disp;
-  if (RegCreateKeyExA(HKEY_CURRENT_USER, REG_APP, 0, NULL, 0, KEY_WRITE, NULL, &key, &disp) != ERROR_SUCCESS) return;
-  RegSetValueExA(key, name, 0, REG_SZ, (const BYTE *)value, lstrlenA(value) + 1);
-  RegCloseKey(key);
-}
-
-static int contains(const char *s, const char *word) {
-  int n = lstrlenA(word), i;
-  for (; *s; s++) {
-    for (i = 0; i < n && s[i]; i++) {
-      char a = s[i], b = word[i];
-      if (a >= 'a' && a <= 'z') a = (char)(a - 32);
-      if (a != b) break;
-    }
-    if (i == n) return 1;
+  if (RegQueryValueExA(key, name, NULL, &type, (BYTE *)value, &size) != ERROR_SUCCESS || type != REG_SZ) {
+    value[0] = 0;
+    return 0;
   }
-  return 0;
+  value[max - 1] = 0;
+  return value[0] != 0;
 }
 
-/* the MIDI outputs of Windows; the one used last, else the first that looks
- * like an MPU-401 */
+/* the outputs Windows can be set to, and the one it is set to */
+static void midi_scan(void) {
+  char now[MIDI_VALUE], text[MIDI_VALUE];
+  HKEY key, sub;
+  DWORD scheme = 0, type, size, i;
+  int custom = 0;
+
+  midi_outs = 0;
+  midi_now = -1;
+  if (nt_version() == 0) {
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, MIDIRES_KEY, 0, KEY_READ, &key) == ERROR_SUCCESS) {
+      for (i = 0; midi_outs < MIDI_OUTPUTS - 1; i++) {
+        char name[MIDI_VALUE];
+        FILETIME written;
+        size = sizeof(name);
+        if (RegEnumKeyExA(key, i, name, &size, NULL, NULL, NULL, &written) != ERROR_SUCCESS) break;
+        if (RegOpenKeyExA(key, name, 0, KEY_READ, &sub) != ERROR_SUCCESS) continue;
+        /* "Active" is "0" for a driver that is installed and not loaded */
+        if (!(reg_string(sub, "Active", text, sizeof(text)) && text[0] == '0')) {
+          lstrcpyA(midi_out[midi_outs].value, name);
+          if (reg_string(sub, "Description", text, 64) || reg_string(sub, "FriendlyName", text, 64)) {
+            wsprintfA(midi_out[midi_outs].label, "%s (%s)", text, name);
+          } else {
+            lstrcpyA(midi_out[midi_outs].label, name);
+          }
+          midi_outs++;
+        }
+        RegCloseKey(sub);
+      }
+      RegCloseKey(key);
+    }
+  } else {
+    MIDIOUTCAPSA caps;
+    UINT n = midiOutGetNumDevs(), id;
+    for (id = 0; id < n && midi_outs < MIDI_OUTPUTS - 1; id++) {
+      if (midiOutGetDevCapsA(id, &caps, sizeof(caps)) != MMSYSERR_NOERROR || !caps.szPname[0]) continue;
+      lstrcpynA(midi_out[midi_outs].value, caps.szPname, MIDI_VALUE);
+      lstrcpynA(midi_out[midi_outs].label, caps.szPname, MIDI_LABEL);
+      midi_outs++;
+    }
+  }
+
+  now[0] = 0;
+  if (RegOpenKeyExA(HKEY_CURRENT_USER, MIDIMAP_KEY, 0, KEY_READ, &key) == ERROR_SUCCESS) {
+    size = sizeof(scheme);
+    if (RegQueryValueExA(key, "UseScheme", NULL, &type, (BYTE *)&scheme, &size) != ERROR_SUCCESS) scheme = 0;
+    custom = scheme != 0 && nt_version() < 0x0501;
+    if (!custom) reg_string(key, midimap_value(), now, sizeof(now));
+    RegCloseKey(key);
+  }
+  for (i = 0; now[0] && i < (DWORD)midi_outs; i++) {
+    if (lstrcmpiA(now, midi_out[i].value) == 0) midi_now = (int)i;
+  }
+  /* a setting that is none of these stays in the list, as the registry has
+   * it: it can be chosen again after another one was */
+  if (midi_now < 0 && (now[0] || custom)) {
+    lstrcpyA(midi_out[midi_outs].value, now);
+    if (custom) lstrcpyA(midi_out[midi_outs].label, "(custom configuration of Multimedia Properties)");
+    else lstrcpynA(midi_out[midi_outs].label, now, MIDI_LABEL);
+    midi_now = midi_outs++;
+  }
+}
+
+/* the list of the MIDI tab and the line below it */
 static void fill_midi(void) {
   HWND cb = GetDlgItem(page[PAGE_MIDI], IDC_MIDI_DEV);
-  MIDIOUTCAPSA caps;
-  char saved[MAXPNAMELEN + 1];
-  UINT n = midiOutGetNumDevs(), i;
-  int pick = -1, guess = -1;
-  reg_get("MidiOut", saved, sizeof(saved));
+  char text[MIDI_VALUE + 200];
+  int i;
+  midi_scan();
   SendMessageA(cb, CB_RESETCONTENT, 0, 0);
-  for (i = 0; i < n; i++) {
-    if (midiOutGetDevCapsA(i, &caps, sizeof(caps)) != MMSYSERR_NOERROR) continue;
-    SendMessageA(cb, CB_SETITEMDATA, SendMessageA(cb, CB_ADDSTRING, 0, (LPARAM)caps.szPname), i);
-    if (saved[0] && lstrcmpA(saved, caps.szPname) == 0) pick = (int)i;
-    if (guess < 0 && caps.wTechnology == MOD_MIDIPORT &&
-        (contains(caps.szPname, "MPU") || contains(caps.szPname, "MIDI OUT") || contains(caps.szPname, "EXTERNAL"))) {
-      guess = (int)i;
-    }
+  for (i = 0; i < midi_outs; i++) SendMessageA(cb, CB_ADDSTRING, 0, (LPARAM)midi_out[i].label);
+  SendMessageA(cb, CB_SETCURSEL, midi_now >= 0 ? (WPARAM)midi_now : (WPARAM)-1, 0);
+  if (midi_now >= 0 && midi_out[midi_now].value[0]) {
+    wsprintfA(text, "What Windows plays MIDI on, as in Multimedia Properties. Registry: %s = \"%s\".", midimap_value(),
+              midi_out[midi_now].value);
+  } else if (midi_now >= 0) {
+    lstrcpyA(text, "Multimedia Properties has a custom configuration of several outputs. Choosing one here replaces it.");
+  } else if (midi_outs == 0) {
+    lstrcpyA(text, "Windows lists no MIDI output.");
+  } else {
+    lstrcpyA(text, "What Windows plays MIDI on, as in Multimedia Properties. Nothing is chosen there now.");
   }
-  if (pick < 0) pick = guess;
-  if (pick < 0 && n) pick = 0;
-  n = (UINT)SendMessageA(cb, CB_GETCOUNT, 0, 0);
-  for (i = 0; i < n; i++) {
-    if ((int)SendMessageA(cb, CB_GETITEMDATA, i, 0) == pick) SendMessageA(cb, CB_SETCURSEL, i, 0);
-  }
+  set_text(page[PAGE_MIDI], IDC_MIDI_INFO, text);
 }
 
+/* makes output index the one Windows plays MIDI on */
+static void midi_set(int index) {
+  char text[MIDI_LABEL + 200];
+  HKEY key;
+  DWORD disp, zero = 0;
+  MMRESULT mr, mr2;
+  int ok = 0;
+
+  if (index < 0 || index >= midi_outs) return;
+  if (!midi_out[index].value[0]) {              /* the custom configuration is the control panel's to set */
+    fill_midi();
+    return;
+  }
+  if (RegCreateKeyExA(HKEY_CURRENT_USER, MIDIMAP_KEY, 0, NULL, 0, KEY_WRITE, NULL, &key, &disp) == ERROR_SUCCESS) {
+    ok = RegSetValueExA(key, midimap_value(), 0, REG_SZ, (const BYTE *)midi_out[index].value,
+                        lstrlenA(midi_out[index].value) + 1) == ERROR_SUCCESS;
+    if (ok && nt_version() < 0x0501) {
+      RegSetValueExA(key, "UseScheme", 0, REG_DWORD, (const BYTE *)&zero, sizeof(zero));
+      RegSetValueExA(key, "AutoScheme", 0, REG_DWORD, (const BYTE *)&zero, sizeof(zero));
+    }
+    RegCloseKey(key);
+  }
+  if (!ok) {
+    complain("The MIDI output of Windows could not be changed: its registry key cannot be written.");
+    fill_midi();
+    return;
+  }
+  mr = midiOutMessage((HMIDIOUT)(UINT_PTR)MIDI_MAPPER, MAPPER_RECONFIGURE, 0, MAPPER_INSTRUMENT);
+  mr2 = midiOutMessage((HMIDIOUT)(UINT_PTR)MIDI_MAPPER, MAPPER_RECONFIGURE, 0, MAPPER_DEFAULTS);
+  fill_midi();
+  wsprintfA(text, mr == MMSYSERR_NOERROR || mr2 == MMSYSERR_NOERROR
+                      ? "Windows plays MIDI on %.120s. A program that is playing follows when it opens MIDI again."
+                      : "%.120s is set as the MIDI output of Windows. Programs follow when they are started again.",
+            midi_out[index].label);
+  status(text);
+}
+
+/* a MIDI message to the output Windows plays on (the MIDI mapper) */
 static void midi_send(const unsigned char *msg, unsigned len, const char *done) {
   static char data[32];
-  HWND cb = GetDlgItem(page[PAGE_MIDI], IDC_MIDI_DEV);
-  char text[300], name[MAXPNAMELEN + 1];
+  char text[MIDI_LABEL + 200];
+  const char *name;
   HMIDIOUT out;
   MIDIHDR hdr;
   MMRESULT mr;
   DWORD start;
-  int sel = (int)SendMessageA(cb, CB_GETCURSEL, 0, 0);
   unsigned i;
 
-  if (sel < 0) {
+  midi_scan();
+  name = midi_now >= 0 ? midi_out[midi_now].label : "the MIDI output of Windows";
+  if (midiOutGetNumDevs() == 0) {
     complain("Windows has no MIDI output. The mt32-pi is reached through the MIDI driver of the card's MPU-401.");
     return;
   }
-  name[0] = 0;
-  SendMessageA(cb, CB_GETLBTEXT, sel, (LPARAM)name);
-  mr = midiOutOpen(&out, (UINT)SendMessageA(cb, CB_GETITEMDATA, sel, 0), 0, 0, CALLBACK_NULL);
+  mr = midiOutOpen(&out, MIDI_MAPPER, 0, 0, CALLBACK_NULL);
   if (mr != MMSYSERR_NOERROR) {
-    wsprintfA(text, "%.40s: ", name);
+    wsprintfA(text, "%.80s: ", name);
     if (mr == MMSYSERR_ALLOCATED) {
       lstrcatA(text, "the MIDI output is in use by another program.");
     } else {
@@ -411,11 +535,10 @@ static void midi_send(const unsigned char *msg, unsigned len, const char *done) 
   }
   midiOutClose(out);
   if (mr != MMSYSERR_NOERROR) {
-    wsprintfA(text, "%.40s: the message could not be sent.", name);
+    wsprintfA(text, "%.80s: the message could not be sent.", name);
     complain(text);
   } else {
-    reg_set("MidiOut", name);
-    wsprintfA(text, "%s (sent to %.40s)", done, name);
+    wsprintfA(text, "%s (sent to %.80s)", done, name);
     status(text);
   }
 }
@@ -600,6 +723,7 @@ static void hide_window(void) {
 
 static void tray_menu(void) {
   HMENU menu = CreatePopupMenu(), cd = CreatePopupMenu(), mode = CreatePopupMenu(), midi = CreatePopupMenu();
+  HMENU output = CreatePopupMenu();
   char name[PGCARD_TEXT], line[PGCARD_TEXT + 16];
   POINT pt;
   unsigned i;
@@ -637,12 +761,19 @@ static void tray_menu(void) {
     AppendMenuA(mode, MF_STRING | (ok && card.info.mode == modes[i] ? MF_CHECKED : 0), IDM_MODE + modes[i],
                 pgcard_mode_name(modes[i]));
   }
+  midi_scan();
+  for (i = 0; i < (unsigned)midi_outs; i++) {
+    AppendMenuA(output, MF_STRING | ((int)i == midi_now ? MF_CHECKED : 0) | (midi_out[i].value[0] ? 0 : MF_GRAYED),
+                IDM_MIDIOUT + i, midi_out[i].label);
+  }
+  if (!midi_outs) AppendMenuA(output, MF_STRING | MF_GRAYED, 0, "(Windows lists none)");
   AppendMenuA(midi, MF_STRING, IDC_MIDI_MT32, "&MT-32");
   AppendMenuA(midi, MF_STRING, IDC_MIDI_SF, "&SoundFont (General MIDI)");
 
   AppendMenuA(menu, MF_STRING, IDM_OPEN, "&Open PicoGUS");
   AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
   AppendMenuA(menu, MF_POPUP | (has_cd ? 0 : MF_GRAYED), (UINT_PTR)cd, "&CD image");
+  AppendMenuA(menu, MF_POPUP, (UINT_PTR)output, "Windows MIDI &output");
   AppendMenuA(menu, MF_POPUP, (UINT_PTR)midi, "mt32-pi &synthesizer");
   AppendMenuA(menu, MF_POPUP | (ok ? 0 : MF_GRAYED), (UINT_PTR)mode, "Card &mode");
   AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
@@ -666,6 +797,10 @@ static void on_command(int id, int code) {
 
   if (id >= IDM_CD && id <= IDM_CD + 255) {
     load_image((unsigned)(id - IDM_CD));
+    return;
+  }
+  if (id >= IDM_MIDIOUT && id < IDM_MIDIOUT + MIDI_OUTPUTS) {
+    midi_set(id - IDM_MIDIOUT);
     return;
   }
   if (id > IDM_MODE && id <= IDM_MODE + NE2000_MODE) {
@@ -716,12 +851,8 @@ static void on_command(int id, int code) {
     break;
 
   case IDC_MIDI_DEV:
-    if (code == CBN_SELCHANGE) {          /* the choice is kept */
-      char name[MAXPNAMELEN + 1];
-      sel = (int)SendDlgItemMessageA(page[PAGE_MIDI], IDC_MIDI_DEV, CB_GETCURSEL, 0, 0);
-      name[0] = 0;
-      if (sel >= 0) SendDlgItemMessageA(page[PAGE_MIDI], IDC_MIDI_DEV, CB_GETLBTEXT, sel, (LPARAM)name);
-      if (name[0]) reg_set("MidiOut", name);
+    if (code == CBN_SELCHANGE) {
+      midi_set((int)SendDlgItemMessageA(page[PAGE_MIDI], IDC_MIDI_DEV, CB_GETCURSEL, 0, 0));
     }
     break;
   case IDC_MIDI_MT32:
@@ -883,6 +1014,19 @@ static INT_PTR CALLBACK main_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 /* ---- start ----------------------------------------------------------------------------- */
+
+static int contains(const char *s, const char *word) {
+  int n = lstrlenA(word), i;
+  for (; *s; s++) {
+    for (i = 0; i < n && s[i]; i++) {
+      char a = s[i], b = word[i];
+      if (a >= 'a' && a <= 'z') a = (char)(a - 32);
+      if (a != b) break;
+    }
+    if (i == n) return 1;
+  }
+  return 0;
+}
 
 /* "/tray" after the program's name: start as the icon only */
 static int start_hidden(const char *cmd) {

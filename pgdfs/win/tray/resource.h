@@ -32,6 +32,7 @@
 #define IDC_MIDI_ROM_CM32L  1205
 #define IDC_MIDI_SFNUM      1206
 #define IDC_MIDI_SFSET      1207
+#define IDC_MIDI_INFO       1208
 
 #define IDC_CARD_FW         1300
 #define IDC_CARD_ACCESS     1301
@@ -51,6 +52,7 @@
 #define IDM_OPEN            2000
 #define IDM_EXIT            2001
 #define IDM_MODE            2100    /* + card_mode_t */
+#define IDM_MIDIOUT         2200    /* + index in the list of MIDI outputs */
 #define IDM_CD              3000    /* + image index, 0 = unload */
 
 #endif

@@ -14,16 +14,17 @@ with long file names, and the drive keeps working when the USB stick is
 pulled and plugged in again. The card serves the files from its own FatFs
 (FAT12, FAT16 or FAT32), so the drivers never see sectors.
 
-`PGDFS.VXD` has been run on a real machine with Windows 98 SE (before it
-learned the control requests PGTRAY uses). `pgdfs.sys` has not been on real
-hardware yet, and PGTRAY has only met an emulated card so far (the host
-tests, and `make demo` under Wine).
+`PGDFS.VXD` and PGTRAY have been run on a real machine with Windows 98 SE,
+in earlier versions: the VxD before it learned the control requests PGTRAY
+uses, PGTRAY before its MIDI output list set the output of Windows. That
+list has only been run under Wine, against a registry laid out as the
+Windows 95 DDK describes it. `pgdfs.sys` has not been on real hardware yet.
 
 With them comes **PGTRAY** (`pgtray.exe`, the same file in both folders), a
-small program in the notification area for what `PGUSINIT` does under DOS:
-loading CD images, switching the card mode, setting up WiFi for the web
-server, and switching an mt32-pi between its synthesizers. See
-[PGTRAY](#pgtray) below.
+small program in the notification area for what `PGUSINIT` does under DOS
+(loading CD images, switching the card mode, setting up WiFi for the web
+server) and for the MIDI side of Windows: which MIDI output Windows plays
+on, and the synthesizer of an mt32-pi. See [PGTRAY](#pgtray) below.
 
 ## Requirements
 
@@ -117,7 +118,8 @@ Windows NT 4.0, 2000, XP: copy it from `win9x` or `winnt` to the hard disk
 the card mode is switched) and start it.
 
 * **Right-click the icon** for the menu: the CD images on the USB drive with
-  a check mark on the loaded one, "No image (eject)", the two synthesizers of
+  a check mark on the loaded one, "No image (eject)", the MIDI outputs of
+  Windows with a check mark on the one it plays on, the two synthesizers of
   an mt32-pi, the card modes, and Exit.
 * **Double-click the icon** for the window. Minimizing or closing the window
   hides it again; the icon stays. Exit ends the program.
@@ -131,7 +133,7 @@ The window has four tabs:
 | Tab | |
 |---|---|
 | **CD-ROM** | The images on the USB drive, as `pgusinit /cdlist` shows them. Load (or a double-click) puts one into the emulated CD-ROM drive, Eject takes it out, Refresh reads the list again after the USB stick was changed. The card's CD-ROM emulation is part of Sound Blaster and USB mode and needs its port set (`pgusinit /cdport`). |
-| **MIDI** | For an [mt32-pi](https://github.com/dwhinham/mt32-pi) on the card's MIDI output: switch between its MT-32 and its SoundFont (General MIDI) synthesizer, choose the MT-32 ROM set (old, new, CM-32L) or a SoundFont by number. The messages are mt32-pi's own SysEx commands and go out through a MIDI output of Windows: choose the one of the card's MPU-401 at the top. It must not be in use by another program at that moment. |
+| **MIDI** | **Windows MIDI output** is the device Windows itself plays MIDI on, the one the MIDI tab of Multimedia Properties in the Control Panel sets: choosing another here (or in the icon's menu) switches, say, from the card's FM synthesizer to its MPU-401 and back. Programs that play through the MIDI Mapper follow the next time they open MIDI; programs with a MIDI device setting of their own keep that. Below it, for an [mt32-pi](https://github.com/dwhinham/mt32-pi) on that output: switch between its MT-32 and its SoundFont (General MIDI) synthesizer, choose the MT-32 ROM set (old, new, CM-32L) or a SoundFont by number. These are mt32-pi's own SysEx commands; the output must not be in use by another program at that moment. |
 | **Card mode** | The firmware version and the mode the card runs in. Switch restarts the card in another mode (GUS, Sound Blaster, AdLib, MPU-401, Tandy / CMS, USB), as `pgusinit /mode` does; "Keep this mode after power-off" saves it as well. The card becomes a different device: programs in a DOS box see the new one at once, but a Windows sound driver that was loaded for the old mode has no card until you switch back. The USB drive is "not ready" for the two or three seconds the card needs. |
 | **Web server** | For firmware with the web server (Pico W and Pico 2 W boards): the card's WiFi status and the address of its web page, a button that opens the page in the browser, and the network name and password for it (`pgusinit /wifissid`, `/wifipass`). "Save to the card" keeps the network after power-off (it saves all of the card's settings, as `pgusinit /save`). |
 
@@ -147,6 +149,18 @@ How the program reaches the card:
 * **Windows NT, 2000, XP without the driver**: not at all. Programs cannot
   reach I/O ports there, so PGTRAY needs `pgdfs.sys`, and with it a card
   with PGDFS.
+
+What "Windows MIDI output" changes is the setting of the MIDI Mapper in the
+user's registry key `Software\Microsoft\Windows\CurrentVersion\Multimedia\MIDIMap`,
+followed by the message with which the Control Panel tells the mapper to
+read it again. Under Windows 95, 98 and ME that is `CurrentInstrument`, the
+registry name of a MIDI driver entry (the keys of
+`HKLM\System\CurrentControlSet\Control\MediaResources\midi`, which is
+where the list comes from; the name is shown in parentheses); under Windows
+NT 4.0 and 2000 `CurrentInstrument`, and under Windows XP `szPname`, hold the
+name of the MIDI output device. The MIDI tab shows the value as the registry
+has it, and a value it does not know (one that the Control Panel set) stays
+in the list.
 
 The program looks at the card when its menu or window opens, every few
 seconds while the window shows, and when the mouse rests on its icon;
