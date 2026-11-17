@@ -678,7 +678,7 @@ t_T18() {
     grep -q 'PGBOOT boot menu: opens at every boot; colours: Setup' "$W/serial.lf" || m="$m [status after /bdmenu 2]"
     grep -q 'PGBOOT start-up tune: 3 (Sweep)' "$W/serial.lf" || m="$m [status after /bdtune 3]"
     grep -q 'PGBOOT boot menu: offered at boot (press M), for 7 s; colours: Commander' "$W/serial.lf" || m="$m [status after /bdmenu 1 /bdtheme commander]"
-    grep -q 'PGBOOT start-up tune: 7 (Mountain King)' "$W/serial.lf" || m="$m [status after /bdtune 7]"
+    grep -q 'PGBOOT start-up tune: 7 (Tycoon Swing)' "$W/serial.lf" || m="$m [status after /bdtune 7]"
     grep -q 'PGBOOT start-up tune: custom (Mine)' "$W/serial.lf" || m="$m [status after /bdmelody and /bdtune custom]"
     grep -q 'PGBOOT start-up tune: custom (From a file)' "$W/serial.lf" || m="$m [status after /bdmelody @file]"
     grep -q 'colours: Mono' "$W/serial.lf" || m="$m [status after /bdtheme 2]"
@@ -831,7 +831,7 @@ t_T22() {
     { [ "$n" = 4 ] && [ "$ms" -ge 480 ] && [ "$ms" -le 700 ]; } ||
         { menu_fail T22 "tune 1 took $ms ms with $n notes; 550 ms and 4 expected"; return; }
     # on to the user's melody: each M ends the tune before it
-    send_keys m m m m m m m m m m m m m m
+    send_keys m m m m m m m m
     wait_screen "$W" menu3 'Start-up tune: Beep$' 20 || { menu_fail T22 "M did not reach the user's melody"; return; }
     : > "$W/trace.log"
     sleep 1

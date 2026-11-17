@@ -107,7 +107,7 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /bdmenu n     - boot menu of the ROM: 0 off, 1 offered at boot (press M),\n");
     pageprintf("                   2 opens at every boot. Default: 1\n");
     pageprintf("   /bdwait n     - seconds the ROM waits for M (1-15). Default: 3\n");
-    pageprintf("   /bdtune n     - start-up tune on the PC speaker: off (or 0), 1-14, or custom\n");
+    pageprintf("   /bdtune n     - start-up tune on the PC speaker: off (or 0), 1-8, or custom\n");
     pageprintf("                   for the melody set with /bdmelody. Default: 1\n");
     pageprintf("   /bdmelody x   - your own start-up melody as RTTTL text (name:d=4,o=5,b=120:\n");
     pageprintf("                   c,e,g), or @file to read it from a file. - to remove\n");

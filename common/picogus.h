@@ -153,7 +153,7 @@ typedef enum {
                             // hard disk first; reads return the value | 80h (firmware without PGBOOT reads FFh)
 #define CMD_BDMENU     0x8B // byte (DATA_PORT_HIGH): boot menu of the ROM: bits 0-1 0 off, 1 offered for a few seconds, 2 always;
                             // bits 2-5 those seconds (1-15); reads return the value | 40h (firmware without the menu reads FFh)
-#define CMD_BDTUNE     0x8C // byte (DATA_PORT_HIGH): start-up tune on the PC speaker, 0 = silent, 1-14 = the firmware's melodies,
+#define CMD_BDTUNE     0x8C // byte (DATA_PORT_HIGH): start-up tune on the PC speaker, 0 = silent, 1-8 = the firmware's melodies,
                             // 62 = the user's (CMD_BDMELODY); 3Fh written = the next one; reads return the value | 40h
 #define CMD_BDTHEME    0x8D // byte (DATA_PORT_HIGH): colours of the boot menu, 0 Setup, 1 Commander, 2 Mono; 3Fh written = the next;
                             // reads return the value | 40h

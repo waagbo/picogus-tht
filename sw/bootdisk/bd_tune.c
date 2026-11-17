@@ -12,24 +12,17 @@
 #include <string.h>
 #include "bd_tune.h"
 
-/* The melodies that come with the firmware. 1-4 and 11-13 were made for
- * PGBOOT: 11-13 in the manner of the soundtracks that made the Gravis
- * UltraSound worth having (a metal riff, a bouncy platform tune, an easy
- * swing), not taken from them. 5-10 are themes old enough to be anybody's.
- * 14 is the opening of a game's theme, as the maintainer supplied it.
- * Add one by adding a line at the end and raising BD_TUNE_BUILTIN; the
+/* The melodies that come with the firmware. 1-7 were made for PGBOOT: 5-7
+ * in the manner of the soundtracks that made the Gravis UltraSound worth
+ * having (a metal riff, a bouncy platform tune, an easy swing), not taken
+ * from them. 8 is the opening of a game's theme, as the maintainer supplied
+ * it. Add one by adding a line at the end and raising BD_TUNE_BUILTIN; the
  * numbers of the others then stay what users have saved. */
 const char *const bd_tune_builtin[BD_TUNE_BUILTIN] = {
     "Rising:d=16,o=5,b=136:c,e,g,8c6",
     "Fanfare:d=16,o=5,b=136:c,g4,c,e,g.,32p,32g,8c6.",
     "Sweep:d=32,o=6,b=136:e,c,g5,e5,g5,c,e,8g",
     "Power Up:d=32,o=5,b=150:c,e,g,c6,e,g,c6,e6,g,c6,e6,8g6",
-    "Ode to Joy:d=4,o=5,b=160:e,e,f,g,g,f,e,d,c,c,d,e,e.,8d,2d",
-    "Fur Elise:d=8,o=5,b=140:e6,d#6,e6,d#6,e6,b,d6,c6,4a,p,c,e,a,4b,p,e,g#,b,4c6",
-    "Mountain King:d=8,o=5,b=150:a4,b4,c,d,e,c,4e,d#,b4,4d#,d,a#4,4d,a4,b4,c,d,e,c,e,a,g,e,c,e,4g",
-    "Nachtmusik:d=8,o=5,b=150:4g,p,d,4g,p,d,g,d,g,b,4d6,p,4c6,p,a,4c6,p,a,c6,a,f#,a,4d",
-    "Toccata:d=16,o=5,b=100:32a,32g,2a,8p,g,f,e,d,4c#,2d",
-    "Greensleeves:d=8,o=5,b=150:a4,4c,d,e.,16f,e,4d,b4,g4.,16a4,b4,4c,a4,a4.,16g#4,a4,4b4,g#4,4e4",
     "Demon Riff:d=16,o=4,b=160:8a,a,a,8c5,8a,a,a,8d#5,8a,a,a,8d5,8c5,8a#,4a",
     "Rabbit Run:d=16,o=5,b=170:c,p,e,g,8a,g,e,8c6,a,g,8e,8g,4c6",
     "Tycoon Swing:d=8,o=5,b=132:f.,16a,c6.,16d6,c6.,16a,g.,16a#,d6.,16c6,4a.,f",

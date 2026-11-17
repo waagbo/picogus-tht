@@ -555,7 +555,7 @@ static void usage(void) {
         "  --hd NAME            hard disk image path on the stick\n"
         "  --opts N             CMD_BDOPTS value (bit0 fd ro, bit1 hd ro, bit2 rom off, bit3 boot hd)\n"
         "  --menu N             CMD_BDMENU value: mode (0 off, 1 on a key, 2 always) + 4 * seconds (default 13)\n"
-        "  --tune N             CMD_BDTUNE value: start-up tune 0-14, 62 = --melody (default 1)\n"
+        "  --tune N             CMD_BDTUNE value: start-up tune 0-8, 62 = --melody (default 1)\n"
         "  --theme N            CMD_BDTHEME value: 0 Setup, 1 Commander, 2 Mono (default 0)\n"
         "  --melody RTTTL       the user's melody (CMD_BDMELODY)\n"
         "  --mount-delay-ms N   report NODRIVE for N ms after the bridge connects\n"

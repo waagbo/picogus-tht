@@ -26,7 +26,7 @@ extern "C" {
 #define BD_TUNE_PIT_HZ      1193182u
 
 /* The melodies that come with the firmware, as RTTTL: tune 1 is index 0 */
-#define BD_TUNE_BUILTIN     14
+#define BD_TUNE_BUILTIN     8
 extern const char *const bd_tune_builtin[BD_TUNE_BUILTIN];
 
 /* Compiles RTTTL text ("name:d=4,o=5,b=120:c,e,g", the name and the

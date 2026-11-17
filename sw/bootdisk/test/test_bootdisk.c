@@ -701,10 +701,10 @@ static void test_tunes(void) {
         tstream[n] = bd_ctl_tunedata_read();
         if (n > 0 && tstream[n] == 0xFF && tstream[n - 1] == 0xFF) break;
     }
-    CHECK(tune_parse(tstream, n + 1) && strcmp(tname, "Ode to Joy") == 0 && tcount == 30, "tune 5 after init: '%s', %u entries", tname, tcount);
+    CHECK(tune_parse(tstream, n + 1) && strcmp(tname, "Demon Riff") == 0 && tcount == 30, "tune 5 after init: '%s', %u entries", tname, tcount);
     CHECK(bd_ctl_tunedata_read() == 0xFF && bd_ctl_tunedata_read() == 0xFF, "past the end: FFh");
     bd_ctl_tunedata_select();
-    CHECK(bd_ctl_tunedata_read() == 10 && bd_ctl_tunedata_read() == 'O', "select rewinds");
+    CHECK(bd_ctl_tunedata_read() == 10 && bd_ctl_tunedata_read() == 'D', "select rewinds");
     /* a change shows after core 1 has run */
     bd_ctl_tune_write(0);
     bd_tasks();
