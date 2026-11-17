@@ -174,7 +174,10 @@ silkscreen. Each round found real faults. Apply these from the start on the next
   - **When a standing resistor will not lie flat, try the 0204 size.** A 0204 resistor (about 3.4 × 1.9 mm, 1/6 W,
     on 5.08 mm) needs 7 × 2.2 mm of board, against 12.4 × 3.1 mm for the usual 0207 on 10.16 mm. On THT v2.1 that
     let R33 lie above the radio module and R34 upright between the Core2350B and the module's lands, where only
-    standing 0207s had fitted. For signal resistors the lower power rating does not matter.
+    standing 0207s had fitted. For signal resistors the lower power rating does not matter. (The owner then chose
+    0805s on the back for those two and R19/R20: one part size fewer, and the front keeps only lying resistors.)
+  - **A back-side SMD part next to a socketed module's pin column goes on before the sockets.** THT v2.1's R33/R34
+    sit 0.2 mm from the Core2350B socket strips' pins: once those are soldered, the iron cannot reach the 0805.
   - **Freerouting on a few nets in a full corner can run away.** Moving THT v2.1's J3 displaced fourteen links;
     Freerouting, with everything else locked, sat at seven open links for 15 minutes and grew to 40 GB of
     memory. The grid router closed all fourteen, but only in one of three net orders: route first the nets with

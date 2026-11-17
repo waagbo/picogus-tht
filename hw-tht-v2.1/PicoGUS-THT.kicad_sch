@@ -25729,7 +25729,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 389.89 187.96 0)
 			(hide yes)
 			(show_name no)
@@ -25751,7 +25751,7 @@
 				)
 			)
 		)
-		(property "Description" "5.1k 1/4W 1% metal film: USB-C CC pull-down (Rd); standing"
+		(property "Description" "5.1k 1% 0805 thick film, on the back: USB-C CC pull-down (Rd)"
 			(at 389.89 187.96 0)
 			(hide yes)
 			(show_name no)
@@ -25773,7 +25773,7 @@
 				)
 			)
 		)
-		(property "MPN" "MFR-25FBF52-5K1"
+		(property "MPN" "RC0805FR-075K1L"
 			(at 389.89 187.96 0)
 			(hide yes)
 			(show_name no)
@@ -25784,7 +25784,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "MFR-25FBF52-5K1-ND"
+		(property "DigiKey" "311-5.10KCRCT-ND"
 			(at 389.89 187.96 0)
 			(hide yes)
 			(show_name no)
@@ -25795,7 +25795,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C1369975"
+		(property "LCSC" "C27834 (UNI-ROYAL 0805W8F5101T5E)"
 			(at 389.89 187.96 0)
 			(hide yes)
 			(show_name no)
@@ -32050,7 +32050,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 397.51 190.5 0)
 			(hide yes)
 			(show_name no)
@@ -32072,7 +32072,7 @@
 				)
 			)
 		)
-		(property "Description" "5.1k 1/4W 1% metal film: USB-C CC pull-down (Rd); standing"
+		(property "Description" "5.1k 1% 0805 thick film, on the back: USB-C CC pull-down (Rd)"
 			(at 397.51 190.5 0)
 			(hide yes)
 			(show_name no)
@@ -32094,7 +32094,7 @@
 				)
 			)
 		)
-		(property "MPN" "MFR-25FBF52-5K1"
+		(property "MPN" "RC0805FR-075K1L"
 			(at 397.51 190.5 0)
 			(hide yes)
 			(show_name no)
@@ -32105,7 +32105,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "MFR-25FBF52-5K1-ND"
+		(property "DigiKey" "311-5.10KCRCT-ND"
 			(at 397.51 190.5 0)
 			(hide yes)
 			(show_name no)
@@ -32116,7 +32116,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C1369975"
+		(property "LCSC" "C27834 (UNI-ROYAL 0805W8F5101T5E)"
 			(at 397.51 190.5 0)
 			(hide yes)
 			(show_name no)
@@ -38167,7 +38167,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38189,7 +38189,7 @@
 				)
 			)
 		)
-		(property "Description" "470R 1/6W 1% metal film, 0204 size (3.4 x 1.9 mm): RM2 data out to the shared data GPIO (as on the Pico W); lying, 5.08 mm"
+		(property "Description" "470R 1% 0805 thick film, on the back: RM2 data out to the shared data GPIO (as on the Pico W)"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38211,7 +38211,7 @@
 				)
 			)
 		)
-		(property "MPN" "MFR-12FTF52-470R"
+		(property "MPN" "RC0805FR-07470RL"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38222,7 +38222,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "13-MFR-12FTF52-470RCT-ND"
+		(property "DigiKey" "311-470CRCT-ND"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38233,7 +38233,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C172904 (YAGEO MFR-12FTE52-470R)"
+		(property "LCSC" "C17710 (UNI-ROYAL 0805W8F4700T5E)"
 			(at 232.41 254.0 0)
 			(hide yes)
 			(show_name no)
@@ -38293,7 +38293,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Horizontal"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38315,7 +38315,7 @@
 				)
 			)
 		)
-		(property "Description" "10k 1/6W 1% metal film, 0204 size (3.4 x 1.9 mm): RM2 host-wake IRQ onto the shared data GPIO (as on the Pico W); lying, 5.08 mm"
+		(property "Description" "10k 1% 0805 thick film, on the back: RM2 host-wake IRQ onto the shared data GPIO (as on the Pico W)"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38337,7 +38337,7 @@
 				)
 			)
 		)
-		(property "MPN" "MFR-12FTF52-10K"
+		(property "MPN" "RC0805FR-0710KL"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38348,7 +38348,7 @@
 				)
 			)
 		)
-		(property "DigiKey" "13-MFR-12FTF52-10KCT-ND"
+		(property "DigiKey" "311-10.0KCRCT-ND"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)
@@ -38359,7 +38359,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C172889 (YAGEO MFR-12FTE52-10K)"
+		(property "LCSC" "C17414 (UNI-ROYAL 0805W8F1002T5E)"
 			(at 232.41 259.08 0)
 			(hide yes)
 			(show_name no)

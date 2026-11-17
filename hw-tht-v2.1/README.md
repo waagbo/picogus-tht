@@ -24,8 +24,9 @@ The parts that only exist as SMD are soldered on the card: U1/U2 (SN74CB3T3257, 
 TSSOP-20) on THT v1.3.2's test-pad TSSOP footprints (hand-solder toes and a 0.7 mm test pad per pin), U13 (M62429L)
 on v2.0's SOIC-8; the radio module is a castellated module on hand-solder lands. On this branch the boot ROM's
 decoder U16 (74HCT138) is a TSSOP-16 too, **on the back of the card** between the pin rows of the flash socket, on
-KiCad's standard TSSOP-16 lands (there is no room for test pads there): its DIP does not fit. Everything else is
-through hole; see
+KiCad's standard TSSOP-16 lands (there is no room for test pads there): its DIP does not fit. **Four resistors are
+0805 SMD on the back**, where a through-hole one could only stand: R19/R20 (the USB-C's CC pull-downs, above J6)
+and R33/R34 (the radio module's, between the Core2350B and the module). Everything else is through hole; see
 [Parts with no through-hole version](#parts-with-no-through-hole-version).
 
 > **Status: schematic done; board placed and routed (4 layers, DRC clean, matches the schematic), for review. Not
@@ -80,8 +81,8 @@ module's U14, R33, R34 and C47, and the boot ROM's U15, U16, R35, C48, C49 and J
 | U12 RP2040 (QFN-56), U11 W25Q128 flash, Y1 12 MHz crystal, R12/R14/R15/R16, C24–C37 (the RP2040 sheet) | **U12 Waveshare Core2350B** module on four 2x8 sockets (or soldered on its headers) | No chip-down RP2040 by hand. The module has the RP2350B, 16 MB flash, crystal, its own 3.3 V LDO and the 27 Ω USB resistors |
 | U9 AMS1117-3.3 (SOT-223) | **U9 MCP1826S-3302E/AB** (TO-220) | Through hole, and 250 mV dropout: VSYS is now one Schottky drop below +5V (see [Power](#power)) |
 | Q1 AO3401A ideal-diode switch (+5V → VSYS), R17 | **D3 1N5819** | No good TO-92 P-MOSFET; a second Schottky as for USB (D2) |
-| J6 micro-USB (SMD) | **J6 GCT USB4085** through-hole USB-C + **R19/R20** 5.1 kΩ CC pull-downs, in v2.0's place on the bottom edge | Through hole; device only, never sources VBUS |
-| – (no radio; the Pico-based boards take a Pico W) | **U14 Raspberry Pi Radio Module 2** (optional) + R33, R34, C47, on GPIO40/42/44/45 | Wi-Fi for the NE2000 firmware: see [Radio module](#radio-module-optional) |
+| J6 micro-USB (SMD) | **J6 GCT USB4085** through-hole USB-C + **R19/R20** 5.1 kΩ CC pull-downs (0805 on the back), in v2.0's place on the bottom edge | Through hole; device only, never sources VBUS |
+| – (no radio; the Pico-based boards take a Pico W) | **U14 Raspberry Pi Radio Module 2** (optional) + R33, R34 (0805 on the back), C47, on GPIO40/42/44/45 | Wi-Fi for the NE2000 firmware: see [Radio module](#radio-module-optional) |
 | U6 74LVC2G06 (SOT-363), open-drain MIDI and I/O CH RDY drivers | **U6 74AHCT126** (DIP-14) on +5V + **C46** | No DIP open-drain inverter that runs on 3.3 V; the v1.3 THT boards' solution (OE = the old input, A tied low, so OE high pulls the line low). Spare gates tied low |
 | U4/U5 74LVC00, U3 74AHC14, U7 SN74CB3T3245 (TSSOP) | 74AHC00 ×2, 74AHC14, **74AHC244** (DIP) | AHC: 3.3 V supply with 5 V tolerant inputs (as on v1.2/v1.3) |
 | U1/U2 SN74CB3T3257, U10 PCM5100 (TSSOP) | same chips, **SMD on the card** (TSSOP-16/-20 on v1.3.2's hand-solder footprints with a test pad per pin) | No through-hole version exists |
@@ -115,6 +116,10 @@ axial or radial equivalent (`THT status` column of `docs/BOM-THT.csv`).
 | **M62429** volume control | SOP-8 (DIP-8 M62429P discontinued) | No DIP part in stock at DigiKey or LCSC; DIP clones (FM62429, U2429) only at hobby shops | Same chip, **SMD on the card** (SOIC-8, 1.27 mm pitch) |
 | micro-USB receptacle | SMD | – | **GCT USB4085** through-hole USB-C: through hole, but 0.85 mm contact pitch (the hardest joint on the card) |
 
+Not in this table because they have through-hole versions: **R19, R20, R33 and R34** are 0805 resistors on the back,
+for lack of room to lay through-hole ones flat around the radio module and the USB-C connector (see [Layout
+status](#layout-status)).
+
 Replaced by a different through-hole part (circuit change): 74LVC2G06 → **74AHCT126** (U6), AO3401A → **1N5819**
 (D3), AMS1117 → **MCP1826S** (U9), 74LVC00 → 74AHC00, SN74CB3T3245/74LVC244 → 74AHC244.
 
@@ -124,19 +129,18 @@ digikey.no prices of 2026-10-30, for one board, in NOK; shipping not included. P
 
 | | NOK excl. MVA | NOK incl. 25 % MVA |
 |---|---|---|
-| DigiKey order, `docs/BOM-THT-digikey.csv` (49 lines, with the boot ROM) | 625.11 + four parts | 781.39 + four parts |
+| DigiKey order, `docs/BOM-THT-digikey.csv` (49 lines, with the boot ROM) | 623.23 + six parts | 779.04 + six parts |
 | Optional IC sockets, `docs/BOM-THT-digikey-optional.csv` (U3–U7, U11) | 58.98 | 73.73 |
-| Both | 684.09 + four parts | 855.11 + four parts |
+| Both | 682.21 + six parts | 852.76 + six parts |
 
 * **The boot ROM's four lines** (U15, its socket, U16, C48/C49; R35 is one more 10 kΩ on the line of R1 and
   R5): 26.27 NOK for the flash (18.87, price of 2026-10-05), the capacitors and the resistor, **plus the PLCC-32
   socket and the 74HCT138PW, whose digikey.no prices were not looked up** (the socket was US$1.91 on digikey.com
   on 2026-11-12; a 74HCT138 costs a few kroner). Without the boot ROM the order is the plain v2.1's: 45 lines,
-  598.84 NOK (748.55 with MVA) plus R33 and R34.
-* **R33 and R34 have their own lines** (Yageo MFR-12, 0204 size, so that they lie flat: see [Radio
-  module](#radio-module-optional)); their digikey.no prices and stock were not looked up (DigiKey lists them as
-  13-MFR-12FTF52-470RCT-ND and 13-MFR-12FTF52-10KCT-ND). The 470 Ω and 10 kΩ lines of the other resistors are one
-  part shorter each.
+  596.96 NOK (746.20 with MVA) plus the four 0805 resistors.
+* **The four 0805 resistors** (R19/R20 on one line, R33 and R34 on their own: Yageo RC0805FR, DigiKey
+  311-5.10KCRCT-ND, 311-470CRCT-ND and 311-10.0KCRCT-ND): their digikey.no prices and stock were not looked up.
+  The 470 Ω and 10 kΩ lines of the through-hole resistors are one part shorter each.
 
 * **Not in the DigiKey order**: the Core2350B2 (waveshare.com, US$6.99), the M62429L (LCSC C52260216, minimum 5),
   the optional Radio Module 2 (RMC20452T, Farnell 4737257; its two resistors and capacitor are in the order) and the
@@ -150,12 +154,12 @@ line):
 
 | | US$ |
 |---|---|
-| LCSC order, `docs/BOM-THT-lcsc.csv` (42 lines, quantities raised to LCSC's minimums) | 53.27 + R33, R34 |
+| LCSC order, `docs/BOM-THT-lcsc.csv` (42 lines, quantities raised to LCSC's minimums) | 52.22 + the 0805 resistors |
 | Optional IC sockets, `docs/BOM-THT-lcsc-optional.csv` | 7.77 |
 
-* **R33 and R34** are LCSC C172904 and C172889 (Yageo MFR-12FTE52-470R and -10K, the same resistors on ammo
-  tape), 100 each at LCSC's minimum; LCSC has listed the 10 kΩ at about US$0.007 each, so the two lines add about
-  US$1.50. Their stock and prices were not re-checked (2026-11-17).
+* **The 0805 resistors** are UNI-ROYAL's at LCSC: C27834 (5.1 kΩ, R19/R20), C17710 (470 Ω, R33) and C17414
+  (10 kΩ, R34), 100 of each in the upload file; their stock, minimums and prices were not checked (2026-11-17).
+  R19/R20 were a through-hole line of US$1.05 before.
 * **Not at LCSC**: U3 SN74AHC14N, U6 SN74AHCT126N and U9 MCP1826S-3302E/AB (none in stock, and no LCSC part fits
   without a design change: the 74HC14 does not take 5 V inputs at 3.3 V, the 125 has the opposite enable, the
   LM2940 clones want a larger output capacitor with ESR): buy them at DigiKey (296-4550-5-ND, 296-4659-5-ND,
@@ -279,7 +283,7 @@ Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link
 
 As on v2.0, the RP2350's one USB port goes to both **J5** (USB-A host: joystick, mouse, keyboard, storage, hub; VBUS
 from +5V through F1) and **J6** (USB-C, for programming: BOOTSEL + drag-and-drop, and powering the card from USB
-alone). Use one at a time. J6 has 5.1 kΩ Rd on CC1/CC2 (R19/R20, standing above it), so any USB-C charger or host
+alone). Use one at a time. J6 has 5.1 kΩ Rd on CC1/CC2 (R19/R20, 0805s on the back above it), so any USB-C charger or host
 supplies 5 V; it never sources VBUS.
 
 J6 is where v2.0 has its program connector: on the bottom edge right of the ISA connector, facing down (see
@@ -328,11 +332,12 @@ is as before.
   the 21 castellations. Pin 1 is at the dot, top right, next to the antenna end.
 * **Firmware**: `sw/boards/picogus21.h` gives the SDK's CYW43 driver the four pins, and the NE2000 firmware builds
   for the card (`pg-ne2k-v21.uf2`). Not tested on hardware. The other firmware modes do not use the radio.
-* **R33 and R34 lie flat, as 0204-size resistors** (Yageo MFR-12: 3.4 × 1.9 mm body, 1/6 W, on 5.08 mm). R33
-  lies above the module with its DATA_OUT pad straight above pin 6; R34 stands upright in the board's plane
-  between the Core2350B's pin column and the module's left lands, its IRQ pad level with pin 10. A 6.3 mm (0207)
-  resistor fits neither place. The D3 and +5V tracks step 0.25–0.3 mm left beside R34. Solder the module first,
-  then R34.
+* **R33 and R34 are 0805 SMD resistors on the back**, side by side in the strip between the Core2350B's right pin
+  column and the module's left lands, where the shared data line WL_D already arrives on the back: their upper
+  pads take WL_D, R33's lower pad goes through a via over the top of pin 7 into pin 6 (DATA_OUT), R34's through a
+  via down the strip into pin 10 (IRQ). A through-hole resistor fits there only standing. They sit on KiCad's
+  standard 0805 lands (the strip is too narrow for the hand-solder ones) next to the Core2350B socket strips' pins:
+  **solder them before the socket strips**.
 
 ## Boot ROM (experimental)
 
@@ -465,7 +470,7 @@ or `cmake -DPICO_PLATFORM=rp2350 -DPICO_BOARD=picogus21`. Details are in [sw/doc
 
 ## Layout status
 
-**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12; its socket lined up with the DIPs and R31, R32, R35 laid flat 2026-11-14; J3 3 mm to the right and R31/R32 in line with J8's top row 2026-11-16; R33/R34 laid flat 2026-11-17), for review.** The placement and the silkscreen labels are the user's (the DAC
+**Placed and routed (2026-11-07; radio module added and USB-C moved 2026-11-11; boot ROM on this branch 2026-11-12; its socket lined up with the DIPs and R31, R32, R35 laid flat 2026-11-14; J3 3 mm to the right and R31/R32 in line with J8's top row 2026-11-16; R19, R20, R33, R34 as 0805s on the back 2026-11-17), for review.** The placement and the silkscreen labels are the user's (the DAC
 block turned and moved under the daughterboard; regulator, module, USB-C parts and headers moved), with the changes
 listed below. **DRC with schematic parity: 0 unconnected items, no clearance, hole or parity errors.** What is left:
 the 12 accepted courtyard overlaps of the logic column (U3–U7 on v1.3.2's 12.05 mm pitch with their decoupling discs
@@ -538,20 +543,20 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   and from the end of `v2.1.0` to the edge (letters x 186.92–212.69, `v2.1.0` at (212.84, 40.58)).
 * **Radio module in, USB-C moved (2026-11-11)**: U14 took the USB-C's place at the bracket end. J6 went to v2.0's
   place on the bottom edge, with R19/R20 standing above it. D2 moved to the strip above SW1/SW2 (and into the
-  `Core2350B + power` group). R33/R34 stood in a row above the module, C47 above them (since 2026-11-17 they lie
-  flat: see [Radio module](#radio-module-optional)). What crossed that corner was
+  `Core2350B + power` group). R33/R34 stood in a row above the module, C47 above them (since 2026-11-17 they and
+  R19/R20 are 0805s on the back: see [Radio module](#radio-module-optional)). What crossed that corner was
   rerouted by hand: **+5V** from the ISA finger to F1 (the feed of everything on +5V) now runs on the front between
   the Core2350B's pin column and the module's lands and changes to the back at (198.6, 120.2); **RV_DATA, RV_CLK,
   the USB-C's VBUS and its data pair** run on the back under the module; the radio's four signals leave the
-  Core2350B on the back, under the +5V track, and reach the module through vias (or R34's pad) next to its lands. The ISA D3 line now stays on the front all the way (two
-  vias less), and the old VSYS run to D2's former place is gone (VSYS reaches D2 from C12). Labels: `RUN` (now
+  Core2350B on the back, under the +5V track, and reach the module through vias next to its lands. The ISA D3
+  line now stays on the front all the way (two vias less), and the old VSYS run to D2's former place is gone (VSYS reaches D2 from C12). Labels: `RUN` (now
   0.9 mm, like `BOOTSEL`) and `BOOTSEL` moved sideways to clear D2; `USB-C FLASH` (1.0 mm) stands left of J6;
   `USB HOST` moved 1.7 mm right; `WIFI` is new. H2's reference is hidden; the references of J6 and F1 are inside
   their own outlines.
 * **Labels to look at** (visible references over a neighbour's courtyard): C23 under J9's body and U13 under C41
-  (both hidden once the parts are fitted), D1 over R13, C16 over C14; R33 between its resistor and C47, R34 above
-  its upper pad, U14 below R34 left of the module's lands, R19/R20 between the two resistors. C38's reference is
-  horizontal, left of the capacitor (2026-11-17; it stood on end before).
+  (both hidden once the parts are fitted), D1 over R13, C16 over C14; U14 left of the module's lands. C38's
+  reference is horizontal, left of the capacitor (2026-11-17; it stood on end before). On the back: R33/R34 on end
+  below their resistors, R19/R20 below theirs.
 * **PicoGUS logo in copper, as on v1.3.2**: the eight solder-mask openings (the letters) with copper letters 0.15 mm
   larger under them, and a rule area that keeps tracks and vias off them. `v2.1.0` stands right of it (Jost 1.2 mm).
 * **Silkscreen labels** (Jost, embedded in the board file as on v1.3.2): `WAVEBLASTER`, `MIXER`, `DAC`, `WT VOL`,
@@ -569,7 +574,6 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
 * **R21–R30 (mixer) are on 10.16 mm pitch** like every other lying resistor on the card, and so are R31, R32
   (side by side right of J8, their upper pads in line with its top pin row; -12 V and UART_TX pass between their
   lower pads) and, on this branch,
-  R35 (below U9); R33 and R34 lie flat as smaller 0204-size resistors (see [Radio module](#radio-module-optional)).
-  **R19 and R20 still stand** (2.54 mm): between the radio module and the USB-C connector J6 (with H2 beside it)
-  the strip is 13.1 × 3.2 mm, room for one lying resistor but not two, even in the 0204 size, and both J6 and H2
-  are fixed by the bracket and the card edge.
+  R35 (below U9). **R19, R20, R33 and R34 are 0805s on the back** (2026-11-17): around the radio module and the
+  USB-C connector there is no room to lay four through-hole resistors flat (between the module and J6 the strip is
+  13.1 × 3.2 mm, room for one), and no part on the card stands any more.
