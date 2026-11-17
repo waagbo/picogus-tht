@@ -34,6 +34,10 @@
 extern cdrom_t cdrom;
 #endif
 
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
+
 #include "web.h"
 #include "web_internal.h"
 
@@ -236,6 +240,9 @@ void json_features(Json &j) {
 #ifdef CDROM
     j.item("cd");
 #endif
+#ifdef CAPTURE
+    j.item("rec");
+#endif
 #ifdef PICOGUS_MULTIFW
     j.item("multifw");
 #endif
@@ -244,6 +251,35 @@ void json_features(Json &j) {
 #endif
     j.close(']');
 }
+
+#ifdef CAPTURE
+// The song recorder: its settings and what it is doing
+void json_rec(Json &j) {
+    capture_config_t cfg;
+    capture_status_t cs;
+    capture_get_config(&cfg);
+    capture_get_status(&cs);
+    j.open("rec", '{');
+    j.kv("drive", cs.drive);
+    j.kv("opl", cfg.on[CAPTURE_OPL]);
+    j.kv("midi", cfg.on[CAPTURE_MIDI]);
+    j.kv("split", cfg.split);
+    j.kv("gap", cfg.gap);
+    j.kv("min", cfg.minlen);
+    static const char *const names[CAPTURE_STREAMS] = { "fm", "mid" };
+    for (int s = 0; s < CAPTURE_STREAMS; ++s) {
+        j.open(names[s], '{');
+        j.kv("state", cs.state[s]);
+        j.kvs("file", cs.file[s]);
+        j.kv("secs", (int32_t)cs.seconds[s]);
+        j.close('}');
+    }
+    j.kv("songs", (int32_t)cs.songs);
+    j.kv("lost", (int32_t)cs.lost);
+    j.kvs("error", cs.error);
+    j.close('}');
+}
+#endif
 
 void json_status(Json &j) {
     web_net_info_t net;
@@ -304,6 +340,9 @@ void json_status(Json &j) {
     j.kvs("error", up.error ? up.error : "");
     j.close('}');
 
+#ifdef CAPTURE
+    json_rec(j);
+#endif
 #ifdef CDROM
     j.open("cd", '{');
     j.kv("index", cdman_current_image_index());
@@ -519,6 +558,110 @@ void h_cd_load(http_conn_t *c) {
 }
 #endif
 
+#ifdef CAPTURE
+// Settings of the song recorder (any of opl, midi, split, gap, min), and
+// cut=1 to end the songs being recorded now
+void h_rec(http_conn_t *c) {
+    const char *form = http_form_body(c);
+    capture_config_t cfg;
+    capture_get_config(&cfg);
+    const struct { const char *key; uint8_t *field; } fields[] = {
+        {"opl", &cfg.on[CAPTURE_OPL]}, {"midi", &cfg.on[CAPTURE_MIDI]}, {"split", &cfg.split},
+        {"gap", &cfg.gap}, {"min", &cfg.minlen},
+    };
+    bool changed = false;
+    char tmp[16];
+    int32_t v;
+    for (const auto &f : fields) {
+        if (http_form_get(form, f.key, tmp, sizeof(tmp))) {
+            if (!http_form_get_int(form, f.key, &v) || v < 0 || v > 255) {
+                http_send_error(c, 400, "invalid value");
+                return;
+            }
+            *f.field = (uint8_t)v;
+            changed = true;
+        }
+    }
+    if (changed) {
+        const char *err = capture_set_config(&cfg);
+        if (err) {
+            http_send_error(c, 400, err);
+            return;
+        }
+    }
+    if (http_form_get_int(form, "cut", &v) && v) {
+        capture_cut();
+    }
+    send_status(c);
+}
+
+// The recorded files, as many as fit in an answer, from the given position
+// in the folder: {"files":[[name,size,busy],...],"next":n}, next = 0 at the end
+void h_rec_files(http_conn_t *c) {
+    int32_t from = 0, index = 0, next = 0;
+    http_form_get_int(http_query(c), "from", &from);
+    Json j(web_scratch, WEB_SCRATCH_SIZE - 64);
+    j.open(nullptr, '{');
+    j.open("files", '[');
+    if (capture_list_open()) {
+        capture_file_t f;
+        while (capture_list_next(&f)) {
+            if (index++ < from) {
+                continue;
+            }
+            if (j.len + 48 > j.cap) {
+                next = index - 1;
+                break;
+            }
+            j.open(nullptr, '[');
+            j.item(f.name);
+            j.ch(',');
+            j.uint(f.size);
+            j.ch(',');
+            j.uint(f.busy);
+            j.close(']');
+        }
+        capture_list_close();
+    }
+    j.close(']');
+    j.kv("next", next);
+    j.close('}');
+    http_send_json(c, j.buf, j.len);
+}
+
+const web_stream_t rec_stream = { capture_read, capture_read_close };
+
+// One recorded file: ?f=OPL00001.DRO
+void h_rec_file(http_conn_t *c) {
+    char name[16];
+    uint32_t size = 0;
+    if (!http_form_get(http_query(c), "f", name, sizeof(name))) {
+        http_send_error(c, 400, "missing file name");
+        return;
+    }
+    const char *err = capture_read_open(name, &size);
+    if (err) {
+        http_send_error(c, 409, err);
+        return;
+    }
+    http_send_stream(c, name, size, &rec_stream);
+}
+
+void h_rec_delete(http_conn_t *c) {
+    char name[16];
+    if (!http_form_get(http_form_body(c), "f", name, sizeof(name))) {
+        http_send_error(c, 400, "missing file name");
+        return;
+    }
+    const char *err = capture_delete(name);
+    if (err) {
+        http_send_error(c, 409, err);
+        return;
+    }
+    send_ok(c);
+}
+#endif // CAPTURE
+
 } // namespace
 
 extern "C" {
@@ -534,6 +677,13 @@ const web_route_t web_routes[] = {
 #ifdef SOUND_MPU
     {"/api/midi",       HTTP_POST, nullptr, nullptr, h_midi, nullptr},
     {"/api/upload/syx", HTTP_POST, web_syx_begin, web_syx_body, web_syx_finish, web_syx_abort},
+#endif
+#ifdef CAPTURE
+    // these use the USB drive: deferred
+    {"/api/rec",        HTTP_POST, nullptr, nullptr, h_rec, nullptr, true},
+    {"/api/rec/files",  HTTP_GET,  nullptr, nullptr, h_rec_files, nullptr, true},
+    {"/api/rec/file",   HTTP_GET,  nullptr, nullptr, h_rec_file, nullptr, true},
+    {"/api/rec/delete", HTTP_POST, nullptr, nullptr, h_rec_delete, nullptr, true},
 #endif
 #ifdef CDROM
     {"/api/cd",         HTTP_GET,  nullptr, nullptr, h_cd_list, nullptr},

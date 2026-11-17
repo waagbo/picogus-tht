@@ -8,7 +8,7 @@ packed again on every request, so edit and reload), and answers the web
 server's HTTP API with made-up values. GET /log returns the requests made.
 
     python3 sw/web/test/mock_card.py 8080
-    python3 sw/web/test/mock_card.py 8080 gus,mpu,joy,multifw     (GUS mode)
+    python3 sw/web/test/mock_card.py 8080 gus,mpu,joy,rec,multifw (GUS mode)
 """
 import json
 import os
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "scripts"))
 import web_pack  # noqa: E402
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
-FEATURES = sys.argv[2].split(",") if len(sys.argv) > 2 else ["sb", "opl", "mpu", "joy", "cd", "multifw"]
+FEATURES = sys.argv[2].split(",") if len(sys.argv) > 2 else ["sb", "opl", "mpu", "joy", "cd", "rec", "multifw"]
 MODE = 1 if "gus" in FEATURES else 4 if "tandy" in FEATURES else 5 if "sb" in FEATURES else 2 if "opl" in FEATURES else 3
 
 state = {
@@ -39,6 +39,26 @@ state = {
 }
 if "cd" in FEATURES:
     state["cd"] = {"index": 2, "image": "TOMBRAID.CUE", "status": 0, "error": ""}
+if "rec" in FEATURES:
+    # the song recorder: off, with songs on the drive from before
+    state["rec"] = {"drive": 1, "opl": 0, "midi": 0, "split": 1, "gap": 3, "min": 5,
+                    "fm": {"state": 0, "file": "", "secs": 0}, "mid": {"state": 0, "file": "", "secs": 0},
+                    "songs": 0, "lost": 0, "error": ""}
+SONGS = {f"OPL{i:05}.DRO": b"DBRAWOPL" + bytes(100 * i) for i in range(1, 76)}
+SONGS.update({f"MID{i:05}.MID": b"MThd" + bytes(400 * i) for i in range(1, 76)})
+SONG_PAGE = 60
+
+
+def rec_update():
+    """What the recorder does with its settings: a stream that is on records."""
+    r = state["rec"]
+    for key, stream, name in (("opl", "fm", "OPL00076.DRO"), ("midi", "mid", "MID00076.MID")):
+        on = r[key] and key in ("opl" if "opl" in FEATURES else "", "midi" if "mpu" in FEATURES else "")
+        r[stream] = {"state": 2, "file": name, "secs": 75} if on else {"state": 0, "file": "", "secs": 0}
+        if on:
+            SONGS.setdefault(name, b"")
+
+
 IMAGES = ["DOOM2.ISO", "TOMBRAID.CUE", "<b>WC3 & co</b>.CUE"] + [f"GAME{i:02}.ISO" for i in range(1, 22)]
 log = []
 cd_polls = [0]
@@ -71,6 +91,29 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(200, {"busy": True})
             else:
                 self.send(200, {"current": state["cd"]["index"], "images": IMAGES, "truncated": False, "error": ""})
+        elif path == "/api/rec/files":
+            query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+            start = int(query.get("from", 0))
+            names = list(SONGS)
+            recording = {state["rec"]["fm"]["file"], state["rec"]["mid"]["file"]}
+            page = [[n, len(SONGS[n]), int(n in recording)] for n in names[start:start + SONG_PAGE]]
+            self.send(200, {"files": page, "next": start + SONG_PAGE if start + SONG_PAGE < len(names) else 0})
+        elif path == "/api/rec/file":
+            query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+            name = query.get("f", "")
+            log.append({"path": path, "file": name})
+            if name not in SONGS:
+                return self.send(409, {"error": "No such file."})
+            if name in (state["rec"]["fm"]["file"], state["rec"]["mid"]["file"]):
+                return self.send(409, {"error": "This song is still being recorded."})
+            data = SONGS[name]
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
         elif path == "/log":
             self.send(200, log)
         else:
@@ -111,6 +154,23 @@ class Handler(BaseHTTPRequestHandler):
             hexstr = form.get("hex", "").replace(" ", "")
             if not hexstr or len(hexstr) % 2:
                 return self.send(400, {"error": "invalid hex"})
+            return self.send(200, {"ok": True})
+        if path == "/api/rec":
+            r = state["rec"]
+            for key, value in form.items():
+                if key == "cut":
+                    continue
+                if key not in ("opl", "midi", "split", "gap", "min") or not value.isdigit():
+                    return self.send(400, {"error": "invalid value"})
+                if key == "gap" and not 1 <= int(value) <= 60:
+                    return self.send(400, {"error": "Invalid value."})
+                r[key] = int(value)
+            rec_update()
+            return self.send(200, state)
+        if path == "/api/rec/delete":
+            if form.get("f") not in SONGS:
+                return self.send(409, {"error": "No such file."})
+            del SONGS[form["f"]]
             return self.send(200, {"ok": True})
         if path in ("/api/save", "/api/reboot"):
             return self.send(200, {"ok": True})

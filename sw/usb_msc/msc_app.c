@@ -53,6 +53,9 @@
 #include "dfs/dfs.h"
 #include "dfs/dfs_fs.h"     /* dfs_platform_fatfs() */
 #endif
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
 
 //------------- Elm Chan FatFS -------------//
 static FATFS fatfs; // for simplicity only support 1 device
@@ -137,6 +140,9 @@ void msc_app_task(void)
             // Invalidate the file server's open handles before the volume goes away
             dfs_on_drive_unmounted();
 #endif
+#ifdef CAPTURE
+            capture_on_drive_unmounted();
+#endif
             f_unmount("");
 #ifdef CDROM
             cdman_unload_image(&cdrom);
@@ -167,6 +173,10 @@ void msc_app_task(void)
         // The volume is mounted: let the file server refresh its drive info
         dfs_on_drive_mounted();
 #endif
+#ifdef CAPTURE
+        // and the song recorder read its settings from the drive
+        capture_on_drive_mounted();
+#endif
     }
 }
 
@@ -192,6 +202,8 @@ FATFS *dfs_platform_fatfs(void)
 }
 #endif
 
+void (*msc_app_io_wait_hook)(void);
+
 static void wait_for_disk_io(uint8_t dev)
 {
     /* Timeout — prevents a hung or disconnected USB drive from locking the
@@ -202,6 +214,9 @@ static void wait_for_disk_io(uint8_t dev)
     uint32_t deadline = time_us_32() + (_disk_is_write ? 10000000u : 2000000u);
     while (_disk_busy) {
         tuh_task();
+        if (msc_app_io_wait_hook) {
+            msc_app_io_wait_hook();
+        }
         if (mounted_dev != dev) {
             /* the drive went away (or was replaced) under this transfer */
             _disk_busy = false;

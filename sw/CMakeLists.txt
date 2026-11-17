@@ -113,6 +113,16 @@ endfunction()
 
 option(PGDEBUG "Enable debug printf framework" OFF)
 option(PGDFS "Build the PGDFS USB-drive file service into USB-capable firmwares" ON)
+# Song recorder: FM register writes and MIDI output to .DRO and .MID files on
+# the USB drive, one per song (capture/, experimental/capture.md). For the
+# RP2350 only: it takes about 10KB of RAM and a FatFs that can write, which
+# the RP2040 does not have left in Sound Blaster mode with the web server
+# (all code runs from RAM).
+if(PICOGUS_CHIP STREQUAL "rp2350")
+    option(CAPTURE "Build the song recorder into firmwares with FM or MIDI and the USB stack" ON)
+else()
+    option(CAPTURE "Build the song recorder into firmwares with FM or MIDI and the USB stack (not enough RAM on the RP2040)" OFF)
+endif()
 set(FATFS_CODE_PAGE 437 CACHE STRING "FatFs OEM code page for file names (437 US, 850 Western Europe, 865 Nordic, ...)")
 if(NOT FATFS_CODE_PAGE MATCHES "^(437|720|737|771|775|850|852|855|857|860|861|862|863|864|865|866|869|932|936|949|950)$")
     message(FATAL_ERROR "FATFS_CODE_PAGE must be one FatFs OEM code page (437, 850, 865, ...); 0 (runtime f_setcp) is not supported")
@@ -209,9 +219,13 @@ function(config_target TARGET_NAME MULTIFW)
         target_link_libraries(${TARGET_NAME} tinyusb_host)
         target_compile_definitions(${TARGET_NAME} PRIVATE USB_STACK=1)
         target_sources(${TARGET_NAME} PRIVATE usb_hid/hid_app.c)
-        # Mount the USB drive only when something uses it (CD-ROM images or
-        # PGDFS), so -DPGDFS=OFF builds the same firmware set as before.
-        if(CDROM OR PGDFS)
+        # Mount the USB drive only when something uses it (CD-ROM images, PGDFS
+        # or the song recorder), so -DPGDFS=OFF -DCAPTURE=OFF builds the same
+        # firmware set as before.
+        if(CAPTURE AND (SOUND_OPL OR SOUND_MPU))
+            set(USE_CAPTURE TRUE)
+        endif()
+        if(CDROM OR PGDFS OR USE_CAPTURE)
             set(USB_MSC TRUE)
         endif()
     endif()
@@ -249,6 +263,18 @@ function(config_target TARGET_NAME MULTIFW)
             ${CMAKE_CURRENT_LIST_DIR}/fatfs/source/
             ${CMAKE_CURRENT_LIST_DIR}/usb_msc/
         )
+        if(USE_CAPTURE)
+            # Song recorder. It only runs in the core 1 main loop, where speed
+            # matters little, and all code is in RAM: compiled for size.
+            target_compile_definitions(${TARGET_NAME} PRIVATE CAPTURE=1)
+            target_sources(${TARGET_NAME} PRIVATE
+                capture/capture.c
+                capture/capture_opl.c
+                capture/capture_midi.c
+            )
+            set_source_files_properties(capture/capture.c capture/capture_opl.c capture/capture_midi.c
+                PROPERTIES COMPILE_OPTIONS "-Os")
+        endif()
         if(PGDFS)
             # PGDFS: DOS file system redirector service for the USB drive.
             # DFS_MAX_PAYLOAD (bytes per frame, excluding the 4-byte header) can be

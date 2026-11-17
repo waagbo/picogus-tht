@@ -539,6 +539,7 @@ function mainMenu() {
     {label: "&Settings", sub: 1, run: settingsMenu, desc: "Change ports, IRQ, DMA and options."},
     has("cd") && {label: "&CD-ROM Image", sub: 1, run: cdImage, desc: "Load a CD image from the USB drive."},
     has("mpu") && {label: "M&IDI and mt32-pi", sub: 1, run: midiMenu, desc: "Control the synth on the MIDI port."},
+    has("rec") && {label: "Song R&ecorder", sub: 1, run: recorder, desc: "Record FM and MIDI music to the USB drive."},
     {label: "&WiFi Network", run: wifi, desc: "Join another wireless network."},
     {label: "&Firmware Update", run: firmware, desc: "Install new firmware from a file."},
     {label: "Card I&nformation", run: information, desc: "Show the state of the card."},
@@ -559,6 +560,7 @@ function mainMenu() {
     out.push("WiFi   " + (n.ip && n.ip !== "0.0.0.0" ? (n.ssid || "-") + (n.rssi ? "  " + n.rssi + " dBm" : "") + "  " + n.ip : "Not connected"));
     if (has("mpu") && st.mode !== 3) out.push("MIDI   MPU-401 at " + hex(s.mpuport));
     if (st.cd) out.push("CD     " + (st.cd.image ? st.cd.image.toUpperCase() : "No image loaded"));
+    if (st.rec && (st.rec.opl || st.rec.midi)) out.push("Rec    " + recSummary());
     lines.replaceChildren(...out.map(t => pre(t.slice(0, 58))));
   };
   v.paint();
@@ -771,6 +773,109 @@ async function sysexFile() {
     infoBox("SysEx File", j.messages + " SysEx message" + (j.messages === 1 ? "" : "s") + " sent from " + name.slice(0, 30) + ".");
   } catch (e) { close(w); errorBox(e.message); }
   quiet = false;
+}
+
+// ---- song recorder ---------------------------------------------------------
+
+const mmss = t => Math.floor(t / 60) + ":" + ("" + t % 60).padStart(2, "0");
+// what one stream of the recorder is doing
+function recState(on, x) {
+  if (!on) return "Off";
+  if (!st.rec.drive) return "No USB drive";
+  return x.state === 2 ? "Recording " + x.file + "  " + mmss(x.secs) : "Waiting for a song";
+}
+function recSummary() {
+  const r = st.rec;
+  if (r.error) return "Stopped";
+  if (!r.drive) return "No USB drive";
+  const files = [r.fm, r.mid].filter(x => x.state === 2).map(x => x.file);
+  return files.length ? "Recording " + files.join(", ") : "Waiting for a song";
+}
+function recorder() {
+  const r = st.rec;
+  const secs = (lo, hi) => (t, name) => {
+    if (!/^\d+$/.test(t) || +t < lo || +t > hi) throw new Error(name + ": enter a number from " + lo + " to " + hi + ".");
+    return +t;
+  };
+  const rows = [
+    has("opl") && Object.assign(checkRow("Record &FM music to .DRO files", r.opl, "Record what programs write to the FM chip."), {key: "opl"}),
+    has("mpu") && Object.assign(checkRow("Record &MIDI to .MID files", r.midi, "Record what programs send to the MIDI port."), {key: "midi"}),
+    Object.assign(checkRow("&One file for each song", r.split, "Start a new file when the music pauses."), {key: "split"}),
+    Object.assign(fieldRow("&Pause that ends a song", 26, "" + r.gap, 2, "seconds", secs(1, 60)), {key: "gap"}),
+    Object.assign(fieldRow("&Shortest song to keep", 26, "" + r.min, 2, "seconds", secs(0, 60)), {key: "min"}),
+  ].filter(Boolean);
+  const lines = h("div");
+  const v = dialog("Song Recorder", [rows, pre(" "), lines], [
+    button("&Apply", async () => {
+      const changed = {};
+      try {
+        for (const row of rows) { const val = row.value(); if (val !== st.rec[row.key]) changed[row.key] = val; }
+      } catch (e) { errorBox(e.message); return; }
+      if (!Object.keys(changed).length) { say("Nothing was changed."); return; }
+      if (await call("/api/rec", changed)) say(st.rec.opl || st.rec.midi ? "The recorder is on." : "The recorder is off.");
+    }, true, "Use these settings. They are kept on the USB drive."),
+    button("&New Song", async () => { if (await call("/api/rec", {cut: 1})) say("The next notes start a new file."); },
+           false, "End the songs that are being recorded now."),
+    button("Song &List", recFiles, false, "Download or delete the recorded songs."),
+    button("&Close", () => close(v))], {keys: [["Tab", "Next"], ["Enter", "Apply"], ["Esc", "Close"]]});
+  v.paint = () => {
+    const x = st.rec, row = (k, val) => pre((k + "      ").slice(0, 7) + ("" + val).slice(0, 51));
+    lines.replaceChildren(...[
+      has("opl") && row("FM", recState(x.opl, x.fm)),
+      has("mpu") && row("MIDI", recState(x.midi, x.mid)),
+      row("Songs", x.songs + " recorded since the card started" + (x.lost ? ", " + x.lost + " events lost" : "")),
+      x.error && row("Error", x.error)].filter(Boolean));
+    if (top() === v) place(v);  // the number of lines may have changed
+  };
+  v.paint();
+  show(v);
+}
+function recFiles() {
+  const list = listBox(40, 10);
+  let files = [];
+  const chosen = () => (files.length && list.value() ? files[list.value() - 1] : null);
+  const busy = f => { if (f[2]) errorBox("This song is still being recorded.\nNew Song in the recorder ends it."); return f[2]; };
+  const download = () => {
+    const f = chosen();
+    if (!f || busy(f)) return;
+    // the card sends it as a file to save
+    const a = h("a", {href: "/api/rec/file?f=" + encodeURIComponent(f[0]), download: f[0], style: "display:none"});
+    D.body.append(a);
+    a.click();
+    a.remove();
+    say("Downloading " + f[0] + ".");
+  };
+  const v = dialog("Recorded Songs", [list], [
+    button("&Download", download, true, "Save the highlighted song on this computer."),
+    button("D&elete", async () => {
+      const f = chosen();
+      if (!f || busy(f) || !await confirmBox("Delete", "Delete " + f[0] + " from the USB drive?")) return;
+      if (await call("/api/rec/delete", {f: f[0]})) { say(f[0] + " deleted."); read(list.value()); }
+    }, false, "Delete the highlighted song from the USB drive."),
+    button("&Refresh", () => read(), false, "Read the USB drive again."),
+    button("&Close", () => close(v))], {keys: [["↑↓", "Move"], ["Enter", "Download"], ["Esc", "Close"]]});
+  // the card sends the list in parts; the newest song comes first here
+  async function read(at) {
+    list.fill([], 0, "Reading the USB drive.");
+    const all = [];
+    try {
+      for (let from = 0, n = 0; n < 100 && stack.includes(v); n++) {
+        const j = await api("/api/rec/files?from=" + from);
+        all.push(...j.files);
+        from = j.next;
+        if (!from) break;
+      }
+    } catch (e) { list.fill([], 0, "No songs."); errorBox(e.message); return; }
+    if (!stack.includes(v)) return;
+    files = all.reverse();
+    const size = n => (n < 10240 ? (n / 1024).toFixed(1) : Math.round(n / 1024)) + " KB";
+    list.fill(files.map(f => f[0] + size(f[1]).padStart(12) + (f[2] ? "  recording" : "")),
+              clamp(at || 1, 1, files.length), "No recorded songs on the USB drive.");
+    if (top() === v) focus(files.length ? list.input() : stops(v)[0]);
+  }
+  list.addEventListener("dblclick", download);
+  show(v);
+  read();
 }
 
 function firmware() {

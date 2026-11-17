@@ -85,6 +85,9 @@ extern uint LED_PIN;
 #ifdef WEBSERVER
 #include "web/web.h"
 #endif
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
 
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
@@ -169,6 +172,30 @@ static sample_pair opl_resample_tick()
 #else
 static StereoResampler<get_opl_stereo_sample> opl_resampler;
 #endif
+
+#ifdef CAPTURE
+// The FM output buffer holds 5.8 ms and is filled by the main loop, which
+// stands still while a transfer to the USB drive is waited for. This keeps FM
+// going meanwhile: the song recorder has it called from that wait while it
+// records or one of its files is read (capture_set_audio_pump()).
+static void opl_pump(void) {
+#if OPL_CMD_BUFFER && USE_EMU8950_OPL
+    while (opl_cmd_buffer.tail != opl_cmd_buffer.head) {
+        auto cmd = opl_cmd_buffer.cmds[opl_cmd_buffer.tail];
+        OPL_Pico_WriteRegister(cmd.addr, cmd.data);
+        ++opl_cmd_buffer.tail;
+    }
+#endif
+    // a little at a time: the wait must keep looking at the USB stack
+    for (uint32_t i = 0; i < 32 && opl_fifo_free_space() >= 1; i++) {
+#ifdef USE_LINEAR_RESAMPLER
+        opl_fifo_add_sample(opl_resample_tick());
+#else
+        opl_fifo_add_sample(opl_resampler.get_sample());
+#endif
+    }
+}
+#endif // CAPTURE
 
 // Setup values for audio sample clock
 // 8390 clock cycles per sample (370MHz / 8390 ~= 44100Hz)
@@ -311,6 +338,9 @@ void play_adlib() {
 #if OPL_CMD_BUFFER
     uint8_t opl_led_head = opl_cmd_buffer.head;
 #endif
+#ifdef CAPTURE
+    capture_set_audio_pump(opl_pump);
+#endif
 
     for (;;) {
 #if OPL_CMD_BUFFER
@@ -378,6 +408,9 @@ void play_adlib() {
 #endif // USB_MSC
 #ifdef PGDFS
         dfs_tasks();
+#endif
+#ifdef CAPTURE
+        capture_task();   // song recorder: events of the taps to files on the USB drive
 #endif
     }
 }

@@ -70,6 +70,9 @@ extern dma_inst_t dma_config;
 #ifdef WEBSERVER
 #include "web/web.h"
 #endif
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
 
 #define DMA_PIO_SM 2
 
@@ -202,6 +205,9 @@ void play_gus() {
 #endif // USB_MSC
 #ifdef PGDFS
         dfs_tasks();
+#endif
+#ifdef CAPTURE
+        capture_task();   // song recorder: events of the taps to files on the USB drive
 #endif
 #ifdef SOUND_MPU
         send_midi_bytes(8);

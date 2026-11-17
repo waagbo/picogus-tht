@@ -183,6 +183,62 @@ async function run(browser) {
   check(await title(page) === 'MIDI and mt32-pi', 'left arrow leaves a submenu');
   await keys(page, 'Escape');
 
+  // song recorder: E, Space ticks FM, Enter applies; N cuts; L lists
+  await keys(page, 'e');
+  check(await title(page) === 'Song Recorder', 'hotkey E opens the recorder: ' + await title(page));
+  await grid(page, 'recorder');
+  check((await page.textContent(cmd('Record FM music')) !== null) && (await page.locator('.win:not([inert]) .dos-pre:has-text("FM     Off")').count()) === 1, 'the recorder is off');
+  await keys(page, 'Space', 'Enter');
+  await settle(page);
+  check(JSON.stringify((await last(page)).form) === JSON.stringify({ opl: '1' }), 'only what changed is sent: ' + JSON.stringify(await last(page)));
+  check((await page.locator('.win:not([inert]) .dos-pre:has-text("FM     Recording OPL00076.DRO  1:15")').count()) === 1, 'the recorder shows what it records');
+  check((await desc(page)).startsWith('The recorder is on'), 'status line confirms: ' + await desc(page));
+  await grid(page, 'recorder, recording');
+  await shot(page, 'recorder');
+  // a bad entry is refused: the pause that ends a song
+  await keys(page, 'p');
+  await page.keyboard.type('99');
+  await keys(page, 'Enter');
+  check(await title(page) === 'Error', 'bad pause gives an error box: ' + await title(page));
+  await keys(page, 'Enter', 'Alt+p');                     // back in the dialog: Alt+P selects the field again
+  await page.keyboard.type('8');
+  await keys(page, 'Enter');
+  await settle(page);
+  check(JSON.stringify((await last(page)).form) === JSON.stringify({ gap: '8' }), 'pause changed: ' + JSON.stringify(await last(page)));
+  await keys(page, 'Alt+n');
+  await settle(page);
+  check(JSON.stringify((await last(page)).form) === JSON.stringify({ cut: '1' }), 'New Song: ' + JSON.stringify(await last(page)));
+  await keys(page, 'Alt+l');
+  await page.waitForSelector('.dos-listbox__item input:not(:disabled)');
+  await settle(page);
+  check(await title(page) === 'Recorded Songs', 'Song List opens the list: ' + await title(page));
+  await grid(page, 'recorded songs');
+  // 151 files in three parts, the newest first: the one being recorded
+  check(await page.locator('.dos-listbox__item').count() === 151, 'all songs are listed: ' + await page.locator('.dos-listbox__item').count());
+  check((await page.textContent('.dos-listbox__item >> nth=0')).startsWith('OPL00076.DRO') && (await page.textContent('.dos-listbox__item >> nth=0')).endsWith('recording'), 'newest first: ' + await page.textContent('.dos-listbox__item >> nth=0'));
+  await shot(page, 'songs');
+  await keys(page, 'Enter');
+  check(await title(page) === 'Error', 'a song being recorded can not be downloaded: ' + await title(page));
+  await keys(page, 'Enter', 'ArrowDown', 'ArrowDown');
+  let [dl] = await Promise.all([page.waitForEvent('download'), keys(page, 'Enter')]);
+  check(dl.suggestedFilename() === 'MID00074.MID', 'Enter downloads the highlighted song: ' + dl.suggestedFilename());
+  check(fs.readFileSync(await dl.path()).length === 4 + 400 * 74, 'the whole file arrives');
+  check((await desc(page)).startsWith('Downloading MID00074.MID'), 'status line says so: ' + await desc(page));
+  await keys(page, 'e');
+  check(await title(page) === 'Delete', 'E asks before deleting: ' + await title(page));
+  await keys(page, 'y');
+  await settle(page);
+  check(JSON.stringify((await last(page)).form) === JSON.stringify({ f: 'MID00074.MID' }) && (await last(page)).path === '/api/rec/delete', 'delete request: ' + JSON.stringify(await last(page)));
+  await page.waitForSelector('.dos-listbox__item input:not(:disabled)');
+  await settle(page);
+  check(await page.locator('.dos-listbox__item').count() === 150, 'the list is read again after deleting');
+  check((await page.textContent('.dos-listbox__item:has(input:checked)')).startsWith('MID00073.MID'), 'the bar stays where it was: ' + await page.textContent('.dos-listbox__item:has(input:checked)'));
+  await keys(page, 'Escape');
+  check(await title(page) === 'Song Recorder', 'Esc returns to the recorder: ' + await title(page));
+  await keys(page, 'Escape');
+  check((await page.textContent('.dos-window--single')).includes('Rec    Recording OPL00076.DRO'), 'status box shows the recorder');
+  await grid(page, 'main menu, recording');
+
   // CD image: C, list scrolls with the bar, Enter loads
   await keys(page, 'c');
   await page.waitForSelector('.dos-listbox__item input:not(:disabled)');
@@ -263,6 +319,21 @@ async function run(browser) {
   // status line hints are buttons
   await page.click('#bar >> text=Esc');
   check(await title(page) === 'Main Menu', 'clicking Esc=Back goes back: ' + await title(page));
+  // song recorder with the mouse: tick MIDI, Apply, open the list, double click downloads
+  await page.click(cmd('Song Recorder'));
+  await grid(page, 'recorder (mouse)');
+  await page.click(cmd('Record MIDI'));
+  await page.click(cmd('Apply'));
+  await settle(page);
+  check(JSON.stringify((await last(page)).form) === JSON.stringify({ midi: '1' }), 'mouse recorder settings: ' + JSON.stringify(await last(page)));
+  await page.click(cmd('Song List'));
+  await page.waitForSelector('.dos-listbox__item input:not(:disabled)');
+  await grid(page, 'recorded songs (mouse)');
+  const [dl2] = await Promise.all([page.waitForEvent('download'), page.dblclick(cmd('MID00075.MID'))]);
+  check(dl2.suggestedFilename() === 'MID00075.MID', 'double click downloads: ' + dl2.suggestedFilename());
+  await page.click(cmd('Close'));
+  await page.click(cmd('Close'));
+  check(await title(page) === 'Main Menu', 'Close returns to the menu: ' + await title(page));
   // SysEx file and firmware upload
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pgui-'));
   fs.writeFileSync(path.join(dir, 'test.syx'), Buffer.from([0xf0, 0x41, 0x10, 0x16, 0x12, 0x7f, 0, 0, 0, 1, 0xf7]));

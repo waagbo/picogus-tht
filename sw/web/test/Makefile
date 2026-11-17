@@ -18,7 +18,7 @@ LWIP_SRC := $(addprefix $(LWIP)/src/core/, init.c def.c dns.c inet_chksum.c ip.c
 WEB_SRC := ../web_http.c ../web_upload.c ../web_assets.c
 WWW := $(shell find ../www -type f)
 
-DEFS := -DPICOGUS_WEB_MDNS=0 -DWEBSERVER=1 -DSOUND_MPU=1 -DSOUND_SB=1 -DSOUND_OPL=1 -DPICOGUS_MULTIFW=1
+DEFS := -DPICOGUS_WEB_MDNS=0 -DWEBSERVER=1 -DSOUND_MPU=1 -DSOUND_SB=1 -DSOUND_OPL=1 -DPICOGUS_MULTIFW=1 -DCAPTURE=1
 # test dir first: it overrides lwipopts.h and stubs the Pico SDK headers
 INC := -I. -Istubs -I.. -I$(SW) -I$(LWIP)/src/include -I$(LWIP)/contrib/ports/unix/port/include -I$(OUT)
 CFLAGS := -O1 -g -Wall -Wno-unused-function -Wno-unused-variable -fsanitize=address,undefined $(DEFS) $(INC)

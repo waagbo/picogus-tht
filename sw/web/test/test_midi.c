@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "mpu401/export.h"
+#include "capture/capture.h"
 
 void MIDI_Init(bool delaysysex, bool fakeallnotesoff);
 
@@ -12,6 +13,9 @@ static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { ++failures; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
 uint64_t test_now_us = 1000000;
+// the song recorder's tap in the MIDI output: this ring, while it is recorded
+capture_ring_t *volatile capture_rings[CAPTURE_STREAMS];
+static capture_ring_t tap;
 uart_inst_t *uart0;
 unsigned int LED_PIN;
 void MPU401_FlushDeferred(void) {}
@@ -203,6 +207,38 @@ int main(void) {
     CHECK(MIDI_Inject(prog, sizeof(prog)), "inject");
     run(10);
     CHECK(wire_is(prog, sizeof(prog)), "injected message sent after a reset");
+
+    // The song recorder's tap gets what the program sends, in order and with
+    // its time, and not what the web UI sends in between
+    reset();
+    host(note, 3);                  // not recorded yet
+    run(5);
+    capture_rings[CAPTURE_MIDI] = &tap;
+    test_now_us = 5000000;
+    static const uint8_t song[] = {0x90, 0x3C, 0x7F, 0x40, 0x7F};      // with running status
+    host(song, 3);
+    CHECK(MIDI_Inject(sx, sizeof(sx)), "inject");
+    run(10);
+    uint32_t t1 = (uint32_t)(test_now_us >> CAPTURE_TICK_SHIFT);
+    host(song + 3, 2);
+    run(300);                       // the output waits a while after a SysEx message
+    CHECK(tap.head == 6 && tap.lost == 0, "the tap has the program's bytes (%u)", (unsigned)tap.head);
+    // the status byte comes again after the web UI's message: that is on the wire too
+    static const uint8_t tapped[] = {0x90, 0x3C, 0x7F, 0x90, 0x40, 0x7F};
+    for (uint32_t i = 0; i < tap.head && i < sizeof(tapped); ++i) {
+        CHECK((tap.ev[i] & 0xff) == tapped[i], "tap byte %u is %02X", (unsigned)i, (unsigned)(tap.ev[i] & 0xff));
+    }
+    CHECK((tap.ev[0] >> 8) == ((5000000u >> CAPTURE_TICK_SHIFT) & 0xffffff), "tap time of the first byte");
+    CHECK((tap.ev[5] >> 8) == (t1 & 0xffffff), "tap time of the last byte");
+    {
+        static const uint8_t want[] = {0x90, 0x3C, 0x7F, 0xF0, 0x7D, 0x03, 0x01, 0xF7, 0x90, 0x40, 0x7F};
+        bool ok = wire_len >= sizeof(want) && !memcmp(wire + wire_len - sizeof(want), want, sizeof(want));
+        if (!ok) wire_is(want, sizeof(want));
+        CHECK(ok, "the wire has both");
+    }
+    capture_rings[CAPTURE_MIDI] = NULL;
+    host(note, 3);
+    CHECK(tap.head == 6, "nothing is tapped when it is not recorded");
 
     printf("%s: %d failure(s)\n", failures ? "FAILED" : "OK", failures);
     return failures ? 1 : 0;

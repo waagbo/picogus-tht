@@ -37,6 +37,11 @@ bool msc_app_init(void);
 /* Core 1 loop: applies USB drive mount/unmount events outside of any FatFs call */
 void msc_app_task(void);
 
+/* If set, called over and over while a transfer to or from the drive is waited
+ * for, so that work of the core 1 main loop that can't wait (FM synthesis) is
+ * kept going. It runs underneath a FatFs call: it must not use the drive. */
+extern void (*msc_app_io_wait_hook)(void);
+
 /*
  * Disk I/O telemetry. Updated inside disk_read()/disk_write() (core 1, under
  * a FatFs call) and read by the PGDFS DIAG request (core 1 as well), so no

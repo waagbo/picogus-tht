@@ -49,6 +49,9 @@ extern Settings settings;
 #ifdef WEBSERVER
 #include "web/web.h"
 #endif
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
 
 #ifdef CDROM
 #define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
@@ -138,6 +141,9 @@ void play_usb() {
 #endif // USB_MSC
 #ifdef PGDFS
         dfs_tasks();
+#endif
+#ifdef CAPTURE
+        capture_task();   // song recorder: events of the taps to files on the USB drive
 #endif
         sermouse_core1_task();
         uartemu_core1_task();

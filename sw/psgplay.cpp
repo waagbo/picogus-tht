@@ -75,6 +75,9 @@ extern Settings settings;
 #ifdef WEBSERVER
 #include "web/web.h"
 #endif
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
 
 #define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
 
@@ -194,6 +197,9 @@ void play_psg() {
 #endif // USB_MSC
 #ifdef PGDFS
         dfs_tasks();
+#endif
+#ifdef CAPTURE
+        capture_task();   // song recorder: events of the taps to files on the USB drive
 #endif
 #ifdef USB_MOUSE
         // mouse task

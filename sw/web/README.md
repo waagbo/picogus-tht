@@ -15,6 +15,9 @@ card emulation. Open the card's address in a browser to:
   text on the MT-32 display, GM/GS/MT-32 resets, all notes off, raw MIDI bytes
 * upload files: a SysEx file (`.syx`) to send to MIDI out, or a firmware
   update (`.uf2`)
+* with the song recorder (an experimental feature of its own, for the Pico 2 W:
+  `sw/experimental/capture.md`): record FM and MIDI music to the USB drive, and
+  download or delete the recorded songs
 
 The page is a text-mode setup program, as sound cards came with: one 80x25
 screen in the 16 VGA colours, worked with the keyboard or the mouse (see
@@ -255,6 +258,22 @@ The web page uses this API; scripts can too. Forms are
 | `GET /api/cd` | list CD images on the USB drive (answers `{"busy":true}` until the list is ready) |
 | `POST /api/cd/load` | `index=n` from the list, 0 to eject |
 
+With the song recorder (`features` in the status has `rec`):
+
+| Request | |
+| --- | --- |
+| `GET /api/status` | `rec`: the settings below, `drive` (a USB drive is there), per stream (`fm`, `mid`) its `state` (0 off, 1 waiting for a song, 2 recording), `file` and `secs` of the song, `songs` kept and `lost` events since the card started, `error` |
+| `POST /api/rec` | any of `opl=0/1`, `midi=0/1` (record FM, MIDI), `split=0/1` (a file per song), `gap=1..60` (seconds of silence that end a song), `min=0..60` (shortest song kept, seconds); `cut=1` ends the songs being recorded now. Answers with the status. The settings are kept on the USB drive. |
+| `GET /api/rec/files?from=n` | recorded files from position n of the folder, as many as fit: `{"files":[[name,size,recording],...],"next":n}`; ask again from `next` until it is 0 |
+| `GET /api/rec/file?f=OPL00001.DRO` | the file, as a download. One at a time: 409 while another is being sent, or while the song is still being recorded. |
+| `POST /api/rec/delete` | `f=OPL00001.DRO` |
+
+These requests read and write the USB drive, which takes a few milliseconds
+at a time. They are answered from `web_task()` itself rather than from inside
+lwIP's packet processing (`deferred` routes in `web_http.c`), and a file is
+read 1KB at a time, at most twice per run, as lwIP has room for it. FM
+synthesis is kept going while the drive is waited for.
+
 ## Tests
 
 `web/test` runs the real lwIP stack and the web server on a PC over a
@@ -267,6 +286,9 @@ the page is served from its pack, with `304` for a copy the browser has.
 ```
 make -C sw/web/test PICO_SDK_PATH=/path/to/pico-sdk test
 ```
+
+The song recorder's requests are tested here with made-up files; the recorder
+itself has its own tests in `sw/capture/test`.
 
 `make -C sw/web/test ui` tests the page itself in a browser (Node.js with
 Playwright) against a mock card: every command once by keyboard and once by

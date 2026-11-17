@@ -52,6 +52,9 @@ typedef enum {
     CONN_FREE = 0,
     CONN_HEADERS,
     CONN_BODY,
+#if WEB_HTTP_FILES
+    CONN_DEFERRED,      // request complete, its route answers from web_http_poll()
+#endif
     CONN_SENDING,
 } conn_state_t;
 
@@ -80,6 +83,10 @@ struct http_conn {
     // response body still to be queued (copied into lwIP buffers in chunks)
     const uint8_t *tx_ptr;
     uint32_t tx_left;
+#if WEB_HTTP_FILES
+    uint32_t tx_offset;         // of a streamed body: how much was queued
+    char query[24];             // the request's query string, without the '?'
+#endif
     uint16_t buf_len;
     char buf[HTTP_BUF];
 };
@@ -89,6 +96,12 @@ static http_conn_t *conns;
 char *web_scratch;
 // set when a callback had to tcp_abort() its pcb; lwIP then wants ERR_ABRT back
 static bool pcb_aborted;
+#if WEB_HTTP_FILES
+// The one connection whose response body is read from a source as it is sent
+// (http_send_stream()), NULL if there is none
+static http_conn_t *stream_conn;
+static const web_stream_t *stream_src;
+#endif
 
 // keep within this module's share of the web server's XIP SRAM (on the RP2040)
 #if UINTPTR_MAX == 0xffffffffu
@@ -114,6 +127,12 @@ const char *http_form_body(http_conn_t *c) {
 uint32_t http_content_length(http_conn_t *c) {
     return c->content_length;
 }
+
+#if WEB_HTTP_FILES
+const char *http_query(http_conn_t *c) {
+    return c->query;
+}
+#endif
 
 static int hexval(char ch) {
     if (ch >= '0' && ch <= '9') return ch - '0';
@@ -177,6 +196,12 @@ static void conn_free(http_conn_t *c, bool abort_pcb) {
     if (c->route && c->route->abort && c->began && !c->responded) {
         c->route->abort(c);
     }
+#if WEB_HTTP_FILES
+    if (c == stream_conn) {
+        stream_conn = NULL;
+        stream_src->close();
+    }
+#endif
     if (c->pending) {
         pbuf_free(c->pending);
         c->pending = NULL;
@@ -205,6 +230,11 @@ static void conn_free(http_conn_t *c, bool abort_pcb) {
 // everything is queued (lwIP keeps sending after the close). Data is copied:
 // it may live in flash, which core 0 could erase between two web_task() calls.
 static void conn_push(http_conn_t *c) {
+#if WEB_HTTP_FILES
+    if (c == stream_conn) {
+        return;     // read and queued by web_http_poll(), not from lwIP's callbacks
+    }
+#endif
     while (c->tx_left) {
         uint32_t n = tcp_sndbuf(c->pcb);
         if (n > c->tx_left) n = c->tx_left;
@@ -238,13 +268,15 @@ static char *put_uint(char *p, char *end, uint32_t v) {
 // printf is not available in release builds, hence the hand-rolled formatting
 // etag: for a file of the page, which the browser may keep but must ask about
 // each time (a firmware update changes it); 0 for answers that must not be kept
-static bool send_head(http_conn_t *c, int status, const char *content_type, uint32_t len, bool gzip, uint32_t etag) {
+// filename: the answer is a file to save under this name, NULL otherwise
+static bool send_head(http_conn_t *c, int status, const char *content_type, uint32_t len, bool gzip, uint32_t etag,
+                      const char *filename) {
     const char *reason = status == 200 ? "OK" : status == 304 ? "Not Modified"
                        : status == 400 ? "Bad Request" : status == 404 ? "Not Found"
                        : status == 405 ? "Method Not Allowed" : status == 409 ? "Conflict"
                        : status == 413 ? "Payload Too Large" : status == 431 ? "Header Too Large"
                        : status == 503 ? "Service Unavailable" : "Error";
-    char head[224];
+    char head[288];
     char *end = head + sizeof(head);
     char *p = put_str(head, end, "HTTP/1.0 ");
     p = put_uint(p, end, (uint32_t)status);
@@ -258,6 +290,15 @@ static bool send_head(http_conn_t *c, int status, const char *content_type, uint
         if (gzip) {
             p = put_str(p, end, "\r\nContent-Encoding: gzip");
         }
+#if WEB_HTTP_FILES
+        if (filename) {
+            p = put_str(p, end, "\r\nContent-Disposition: attachment; filename=\"");
+            p = put_str(p, end, filename);
+            p = put_str(p, end, "\"");
+        }
+#else
+        (void)filename;
+#endif
     }
     if (etag) {
         static const char hex[] = "0123456789abcdef";
@@ -283,7 +324,7 @@ static void respond(http_conn_t *c, int status, const char *content_type, const 
     }
     c->responded = true;
     c->state = CONN_SENDING;
-    if (!send_head(c, status, content_type, len, gzip, etag)) {
+    if (!send_head(c, status, content_type, len, gzip, etag, NULL)) {
         conn_free(c, true);     // out of lwIP memory: drop rather than send garbage
         return;
     }
@@ -317,6 +358,58 @@ void http_send_json(http_conn_t *c, const char *json, uint32_t len) {
     }
 }
 
+#if WEB_HTTP_FILES
+void http_send_stream(http_conn_t *c, const char *filename, uint32_t len, const web_stream_t *src) {
+    if (c->responded || !c->pcb || stream_conn) {
+        src->close();
+        http_send_error(c, 409, "busy");
+        return;
+    }
+    c->responded = true;
+    c->state = CONN_SENDING;
+    stream_conn = c;
+    stream_src = src;
+    c->tx_ptr = NULL;
+    c->tx_left = len;
+    c->tx_offset = 0;
+    if (!send_head(c, 200, "application/octet-stream", len, false, 0, filename)) {
+        conn_free(c, true);
+        return;
+    }
+    tcp_output(c->pcb);
+    if (!len) {
+        conn_free(c, false);
+    }
+}
+
+// Queue more of the streamed body: as much as lwIP has room for, in pieces
+// read into web_scratch, at most two per call
+static void stream_push(http_conn_t *c) {
+    for (int i = 0; i < 2 && c->tx_left; ++i) {
+        uint32_t n = tcp_sndbuf(c->pcb);
+        if (n > c->tx_left) n = c->tx_left;
+        if (n > 1024) n = 1024;
+        // wait for room for a good part of a packet rather than send crumbs
+        if ((n < 512 && n < c->tx_left) || tcp_sndqueuelen(c->pcb) >= TCP_SND_QUEUELEN - 1) {
+            break;
+        }
+        if (stream_src->read(c->tx_offset, (uint8_t *)web_scratch, n) != n) {
+            conn_free(c, true);     // the source failed: the client sees a short file
+            return;
+        }
+        if (tcp_write(c->pcb, web_scratch, (u16_t)n, TCP_WRITE_FLAG_COPY) != ERR_OK) {
+            break;                  // read again later
+        }
+        c->tx_offset += n;
+        c->tx_left -= n;
+    }
+    tcp_output(c->pcb);
+    if (!c->tx_left) {
+        conn_free(c, false);
+    }
+}
+#endif // WEB_HTTP_FILES
+
 void http_send_error(http_conn_t *c, int status, const char *message) {
     // {"error":"..."}; messages are fixed strings without quotes
     static char body[96];
@@ -344,7 +437,18 @@ static void parse_request_line(http_conn_t *c, char *line) {
         return;
     }
     // path ends at the query string or the protocol version
-    path[strcspn(path, " ?")] = 0;
+    size_t pathlen = strcspn(path, " ?");
+#if WEB_HTTP_FILES
+    if (path[pathlen] == '?') {
+        // keep the start of the query string for the routes that take one
+        char *q = path + pathlen + 1;
+        size_t n = strcspn(q, " ");
+        if (n > sizeof(c->query) - 1) n = sizeof(c->query) - 1;
+        memcpy(c->query, q, n);
+        c->query[n] = 0;
+    }
+#endif
+    path[pathlen] = 0;
     bool path_found = false;
     for (uint32_t i = 0; i < web_routes_count; ++i) {
         if (!strcmp(web_routes[i].path, path)) {
@@ -383,6 +487,13 @@ static void body_complete(http_conn_t *c) {
     if (!c->route->body) {
         c->buf[c->buf_len] = 0;
     }
+#if WEB_HTTP_FILES
+    if (c->route->deferred && c->state != CONN_DEFERRED) {
+        // not from inside lwIP: web_http_poll() comes back to this
+        c->state = CONN_DEFERRED;
+        return;
+    }
+#endif
     c->route->finish(c);
     if (!c->responded) {
         http_send_error(c, 500, "no response");
@@ -665,8 +776,23 @@ bool web_http_start(void) {
 }
 
 // Called from web_task() after the network stack was polled: offer held-back
-// body data again to consumers that were full (e.g. the MIDI queue).
+// body data again to consumers that were full (e.g. the MIDI queue), and send
+// more of a streamed response.
 void web_http_poll(void) {
+#if WEB_HTTP_FILES
+    // Answers first: they are small, and must not find lwIP's memory taken by
+    // what a streamed response queues in the same call
+    for (int i = 0; i < HTTP_MAX_CONN; ++i) {
+        if (conns[i].state == CONN_DEFERRED) {
+            pcb_aborted = false;
+            body_complete(&conns[i]);
+        }
+    }
+    if (stream_conn && stream_conn->pcb) {
+        pcb_aborted = false;
+        stream_push(stream_conn);
+    }
+#endif
     for (int i = 0; i < HTTP_MAX_CONN; ++i) {
         http_conn_t *c = &conns[i];
         if (c->state == CONN_BODY && c->pending) {

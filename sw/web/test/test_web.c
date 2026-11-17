@@ -24,6 +24,7 @@
 #include "system/flash_settings.h"
 #include "../../common/picogus.h"
 #include "mpu401/export.h"
+#include "capture/capture.h"
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { ++failures; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -135,6 +136,77 @@ static void midi_drain(uint32_t n) {
     midi_out_len += n;
     memmove(midi_queue, midi_queue + n, midi_queued - n);
     midi_queued -= n;
+}
+
+// Song recorder: its settings, and files made up here
+static capture_config_t rec_cfg = { {0, 0}, 1, 3, 5 };
+static int rec_cuts;
+void capture_get_config(capture_config_t *cfg) { *cfg = rec_cfg; }
+const char *capture_set_config(const capture_config_t *cfg) {
+    if (cfg->gap < CAPTURE_GAP_MIN || cfg->gap > CAPTURE_GAP_MAX) return "Invalid value.";
+    rec_cfg = *cfg;
+    return NULL;
+}
+void capture_cut(void) { ++rec_cuts; }
+void capture_get_status(capture_status_t *st) {
+    memset(st, 0, sizeof(*st));
+    st->drive = 1;
+    st->state[CAPTURE_OPL] = rec_cfg.on[CAPTURE_OPL] ? CAPTURE_RECORDING : CAPTURE_OFF;
+    strcpy(st->file[CAPTURE_OPL], rec_cfg.on[CAPTURE_OPL] ? "OPL00200.DRO" : "");
+    st->seconds[CAPTURE_OPL] = 75;
+    st->songs = 12;
+    st->error = "";
+}
+#define REC_FILES 200
+static bool rec_deleted[REC_FILES];
+static int rec_list_at = -1;
+static int rec_open = -1, rec_reads, rec_closes, rec_fail_at = -1;
+static uint32_t rec_size(int i) { return i == 3 ? 0 : 1000 + (uint32_t)i * 97; }
+static uint8_t rec_byte(int i, uint32_t offset) { return (uint8_t)(offset * 7 + (uint32_t)i); }
+static void rec_name(int i, char *name) { snprintf(name, 13, "%s%05d.%s", i % 2 ? "MID" : "OPL", i + 1, i % 2 ? "MID" : "DRO"); }
+static int rec_find(const char *name) {
+    char n[13];
+    for (int i = 0; i < REC_FILES; ++i) {
+        rec_name(i, n);
+        if (!rec_deleted[i] && !strcmp(n, name)) return i;
+    }
+    return -1;
+}
+bool capture_list_open(void) { rec_list_at = 0; return true; }
+bool capture_list_next(capture_file_t *file) {
+    while (rec_list_at >= 0 && rec_list_at < REC_FILES) {
+        int i = rec_list_at++;
+        if (rec_deleted[i]) continue;
+        rec_name(i, file->name);
+        file->size = rec_size(i);
+        file->busy = i == REC_FILES - 1;
+        return true;
+    }
+    return false;
+}
+void capture_list_close(void) { rec_list_at = -1; }
+const char *capture_read_open(const char *name, uint32_t *size) {
+    int i = rec_find(name);
+    if (i < 0) return "No such file.";
+    if (i == REC_FILES - 1) return "This song is still being recorded.";
+    if (rec_open >= 0) return "Another file is being read.";
+    rec_open = i;
+    *size = rec_size(i);
+    return NULL;
+}
+uint32_t capture_read(uint32_t offset, uint8_t *buf, uint32_t len) {
+    ++rec_reads;
+    if (rec_open < 0 || offset + len > rec_size(rec_open) || len > 1024) return 0;
+    if (rec_fail_at >= 0 && offset + len > (uint32_t)rec_fail_at) return 0;
+    for (uint32_t k = 0; k < len; ++k) buf[k] = rec_byte(rec_open, offset + k);
+    return len;
+}
+void capture_read_close(void) { rec_open = -1; ++rec_closes; }
+const char *capture_delete(const char *name) {
+    int i = rec_find(name);
+    if (i < 0) return "No such file.";
+    rec_deleted[i] = true;
+    return NULL;
 }
 
 // ---- test client -----------------------------------------------------------------
@@ -551,6 +623,143 @@ static void test_fw_upload(void) {
     CHECK(st == 200, "upload after abort -> %d %s", st, out);
 }
 
+// Body of a response that isn't text: its start and length
+static const uint8_t *client_data(client_t *c, size_t *len) {
+    const char *b = strstr(c->resp, "\r\n\r\n");
+    *len = b ? c->resp_len - (size_t)(b + 4 - c->resp) : 0;
+    return (const uint8_t *)(b ? b + 4 : c->resp);
+}
+
+static void test_recorder(void) {
+    // settings: any of them, checked, and in the status
+    CHECK(form("/api/rec", "opl=1&gap=7", out, sizeof(out)) == 200, "rec settings");
+    CHECK(rec_cfg.on[CAPTURE_OPL] == 1 && rec_cfg.on[CAPTURE_MIDI] == 0 && rec_cfg.gap == 7 && rec_cfg.split == 1, "rec settings applied");
+    CHECK(strstr(out, "\"rec\":{\"drive\":1,\"opl\":1,\"midi\":0,\"split\":1,\"gap\":7,\"min\":5,") != NULL, "rec in status: %s", out);
+    CHECK(strstr(out, "\"fm\":{\"state\":2,\"file\":\"OPL00200.DRO\",\"secs\":75}") != NULL, "rec stream in status");
+    CHECK(strstr(out, "\"rec\"") && strstr(out, "\"features\":[") && strstr(out, "\"rec\",") != NULL, "rec feature");
+    CHECK(form("/api/rec", "gap=0", out, sizeof(out)) == 400 && rec_cfg.gap == 7, "bad gap refused: %s", out);
+    CHECK(form("/api/rec", "midi=x", out, sizeof(out)) == 400 && rec_cfg.on[CAPTURE_MIDI] == 0, "bad value refused");
+    CHECK(form("/api/rec", "midi=300", out, sizeof(out)) == 400, "value out of range refused");
+    CHECK(form("/api/rec", "cut=1", out, sizeof(out)) == 200 && rec_cuts == 1 && rec_cfg.gap == 7, "cut");
+    CHECK(form("/api/rec", "opl=0&midi=1&split=0&gap=3&min=0", out, sizeof(out)) == 200 && rec_cfg.on[CAPTURE_MIDI] == 1
+          && rec_cfg.split == 0 && rec_cfg.minlen == 0 && rec_cuts == 1, "all rec settings");
+    FILE *f = fopen("status.json", "w");
+    if (f) { fputs(out, f); fclose(f); }
+
+    // the list comes in pages: follow "next" until it is 0
+    int total = 0, pages = 0, from = 0;
+    char path[64], name[13];
+    do {
+        snprintf(path, sizeof(path), "/api/rec/files?from=%d", from);
+        int st = request("GET", path, NULL, NULL, 0, 1460, out, sizeof(out));
+        CHECK(st == 200, "rec list page %d -> %d", pages, st);
+        for (const char *p = out; (p = strstr(p, "[\"")) != NULL; ++p) {
+            char want[64];
+            rec_name(total, name);
+            snprintf(want, sizeof(want), "[\"%s\",%u,%d]", name, rec_size(total), total == REC_FILES - 1);
+            if (strncmp(p, want, strlen(want))) {
+                CHECK(0, "rec list entry %d: %.40s, expected %s", total, p, want);
+                break;
+            }
+            ++total;
+        }
+        const char *n = strstr(out, "\"next\":");
+        CHECK(n != NULL, "rec list has next: %s", out);
+        from = n ? atoi(n + 7) : 0;
+        ++pages;
+    } while (from && pages < 50);
+    CHECK(total == REC_FILES && pages > 2, "rec list: %d files in %d pages", total, pages);
+    CHECK(request("GET", "/api/rec/files", NULL, NULL, 0, 1460, out, sizeof(out)) == 200 && strstr(out, "[\"OPL00001.DRO\",1000,0]"),
+          "rec list without a position starts at the first file");
+
+    // a file comes whole, with its name and length, however the request is cut up
+    for (int i = 10; i < 14; ++i) {
+        char head[128];
+        rec_name(i, name);
+        snprintf(head, sizeof(head), "GET /api/rec/file?f=%s HTTP/1.1\r\nHost: x\r\n\r\n", name);
+        client_t *c = client_start(head, NULL, 0, i == 10 ? 1 : 1460);
+        int st = client_wait(c, 20000);
+        size_t len;
+        const uint8_t *data = client_data(c, &len);
+        char want[64];
+        snprintf(want, sizeof(want), "Content-Length: %u\r\n", rec_size(i));
+        CHECK(st == 200 && len == rec_size(i) && strstr(c->resp, want), "rec file %s -> %d, %zu bytes", name, st, len);
+        snprintf(want, sizeof(want), "Content-Disposition: attachment; filename=\"%s\"", name);
+        CHECK(strstr(c->resp, want) != NULL && strstr(c->resp, "Content-Type: application/octet-stream"), "rec file headers");
+        size_t bad = 0;
+        for (size_t k = 0; k < len; ++k) bad += data[k] != rec_byte(i, (uint32_t)k);
+        CHECK(bad == 0, "rec file %s: %zu wrong bytes", name, bad);
+        CHECK(rec_open < 0, "rec file closed after %s", name);
+        client_free(c);
+    }
+    // a file of 20KB, far more than fits lwIP's buffers at once
+    {
+        client_t *c = client_start("GET /api/rec/file?f=OPL00197.DRO HTTP/1.1\r\n\r\n", NULL, 0, 1460);
+        int st = client_wait(c, 60000);
+        size_t len, bad = 0;
+        const uint8_t *data = client_data(c, &len);
+        for (size_t k = 0; k < len; ++k) bad += data[k] != rec_byte(196, (uint32_t)k);
+        CHECK(st == 200 && len == rec_size(196) && bad == 0, "large rec file -> %d, %zu bytes, %zu wrong", st, len, bad);
+        client_free(c);
+    }
+    // an empty file
+    {
+        int st = request("GET", "/api/rec/file?f=MID00004.MID", NULL, NULL, 0, 1460, out, sizeof(out));
+        CHECK(st == 200 && !out[0] && rec_open < 0, "empty rec file -> %d, body '%s', open %d", st, out, rec_open);
+    }
+    // what is not there, or can't be had
+    CHECK(request("GET", "/api/rec/file?f=OPL99999.DRO", NULL, NULL, 0, 1460, out, sizeof(out)) == 409 && strstr(out, "No such file"), "no such rec file: %s", out);
+    CHECK(request("GET", "/api/rec/file?f=MID00200.MID", NULL, NULL, 0, 1460, out, sizeof(out)) == 409 && strstr(out, "still being recorded"), "busy rec file: %s", out);
+    CHECK(request("GET", "/api/rec/file", NULL, NULL, 0, 1460, out, sizeof(out)) == 400, "rec file without a name");
+    CHECK(request("GET", "/api/rec/file?f=..%2F..%2FAUTOEXEC.BAT", NULL, NULL, 0, 1460, out, sizeof(out)) == 409, "rec file with a path");
+    CHECK(rec_open < 0, "nothing left open");
+
+    // one file at a time: a second request while a file is sent is refused, and the first is not disturbed
+    {
+        client_t *a = client_start("GET /api/rec/file?f=MID00196.MID HTTP/1.1\r\n\r\n", NULL, 0, 1460);
+        run_ms(3);
+        CHECK(rec_open == 195, "first rec file is being sent");
+        int st = request("GET", "/api/rec/file?f=OPL00011.DRO", NULL, NULL, 0, 1460, out, sizeof(out));
+        CHECK(st == 409 && strstr(out, "Another file"), "second rec file while one is sent -> %d %s", st, out);
+        st = client_wait(a, 60000);
+        size_t len, bad = 0;
+        const uint8_t *data = client_data(a, &len);
+        for (size_t k = 0; k < len; ++k) bad += data[k] != rec_byte(195, (uint32_t)k);
+        CHECK(st == 200 && len == rec_size(195) && bad == 0 && rec_open < 0, "first rec file whole -> %d, %zu bytes", st, len);
+        client_free(a);
+    }
+    // the browser goes away in the middle: the file is closed
+    {
+        int closes = rec_closes;
+        client_t *a = client_start("GET /api/rec/file?f=MID00198.MID HTTP/1.1\r\n\r\n", NULL, 0, 1460);
+        run_ms(4);
+        CHECK(rec_open == 197 && a->resp_len > 0, "rec file being sent");
+        tcp_abort(a->pcb);
+        a->pcb = NULL;
+        run_ms(200);
+        CHECK(rec_open < 0 && rec_closes == closes + 1, "rec file closed when the connection broke");
+        client_free(a);
+    }
+    // the drive fails in the middle: the connection is dropped, short of the length it promised
+    {
+        rec_fail_at = 5000;
+        client_t *a = client_start("GET /api/rec/file?f=MID00198.MID HTTP/1.1\r\n\r\n", NULL, 0, 1460);
+        client_wait(a, 20000);
+        size_t len;
+        client_data(a, &len);
+        CHECK(len < rec_size(197) && rec_open < 0, "rec file that can't be read: %zu bytes", len);
+        client_free(a);
+        rec_fail_at = -1;
+        CHECK(request("GET", "/api/status", NULL, NULL, 0, 1460, out, sizeof(out)) == 200, "server fine after a failed file");
+    }
+
+    // deleting
+    CHECK(form("/api/rec/delete", "f=OPL00011.DRO", out, sizeof(out)) == 200 && rec_deleted[10], "rec delete: %s", out);
+    CHECK(form("/api/rec/delete", "f=OPL00011.DRO", out, sizeof(out)) == 409, "rec delete twice");
+    CHECK(form("/api/rec/delete", "", out, sizeof(out)) == 400, "rec delete without a name");
+    CHECK(request("GET", "/api/rec/delete?f=OPL00013.DRO", NULL, NULL, 0, 1460, out, sizeof(out)) == 405 && !rec_deleted[12], "rec delete needs POST");
+}
+
 static void test_connection_limit(void) {
     // Three slow clients occupy all connections; a fourth is refused, then all
     // clean up and the server is usable again
@@ -599,6 +808,7 @@ int main(void) {
     test_midi();
     test_syx_upload();
     test_fw_upload();
+    test_recorder();
     test_connection_limit();
     test_long_run();
 

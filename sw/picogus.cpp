@@ -90,6 +90,9 @@ static uint16_t sb_port_test;
 #endif
 #ifdef SOUND_OPL
 #include "opl.h"
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
 void play_adlib(void);
 #if OPL_CMD_BUFFER
 #include "include/cmd_buffers.h"
@@ -990,6 +993,9 @@ __force_inline void handle_iow(void) {
             {
                 uint8_t opl_data = iow_read & 0xFF;
                 uint8_t opl_addr = (uint8_t)opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
+#ifdef CAPTURE
+                capture_opl_write(opl_addr, opl_data);     // song recorder
+#endif
                 if (opl_addr <= OPL_REG_TIMER_CTRL) {
                     // Timer registers: handle immediately on core 0 so OPL_Pico_PortRead
                     // always sees current timer state without a cross-core race.
@@ -999,6 +1005,9 @@ __force_inline void handle_iow(void) {
                 }
             }
 #else
+#ifdef CAPTURE
+            capture_opl_write(opl_addr, iow_read & 0xff);     // song recorder
+#endif
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
             break;
@@ -1017,6 +1026,9 @@ __force_inline void handle_iow(void) {
             {
                 uint8_t opl_data = iow_read & 0xFF;
                 uint16_t opl_addr_full = opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
+#ifdef CAPTURE
+                capture_opl_write(opl_addr_full, opl_data);     // song recorder
+#endif
                 uint8_t opl_addr_low = (uint8_t)(opl_addr_full & 0xFF);
                 if (opl_addr_low <= OPL_REG_TIMER_CTRL && !(opl_addr_full & 0x100)) {
                     OPL_Pico_WriteRegister(opl_addr_low, opl_data);
@@ -1025,6 +1037,9 @@ __force_inline void handle_iow(void) {
                 }
             }
 #else
+#ifdef CAPTURE
+            capture_opl_write(opl_addr, iow_read & 0xff);     // song recorder
+#endif
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
             break;
@@ -1076,6 +1091,9 @@ __force_inline void handle_iow(void) {
             {
                 uint8_t opl_data = iow_read & 0xFF;
                 uint16_t opl_addr_full = opl_cmd_buffer.cmds[opl_cmd_buffer.head].addr;
+#ifdef CAPTURE
+                capture_opl_write(opl_addr_full, opl_data);     // song recorder
+#endif
                 uint8_t opl_addr_low = (uint8_t)(opl_addr_full & 0xFF);
                 if (opl_addr_low <= OPL_REG_TIMER_CTRL && !(opl_addr_full & 0x100)) {
                     // Timer registers (bank 1 only): handle immediately on core 0
@@ -1085,6 +1103,9 @@ __force_inline void handle_iow(void) {
                 }
             }
 #else
+#ifdef CAPTURE
+            capture_opl_write(opl_addr, iow_read & 0xff);     // song recorder
+#endif
             OPL_Pico_WriteRegister(opl_addr, iow_read & 0xff);
 #endif
             break;

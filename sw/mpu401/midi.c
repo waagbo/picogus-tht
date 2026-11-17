@@ -40,6 +40,9 @@
 #include "hardware/timer.h"
 #include "hardware/gpio.h"
 #include "pico/critical_section.h"
+#ifdef CAPTURE
+#include "../capture/capture.h"
+#endif
 extern uint LED_PIN;
 static critical_section_t midi_crit;
 
@@ -187,6 +190,12 @@ __force_inline static void PlayMsg(Bit8u* msg, Bitu len)
         if (next != midi_out_buff.tail) {
             midi_out_buff.buffer[midi_out_buff.head] = msg[i];
             midi_out_buff.head = next;
+#ifdef CAPTURE
+            /* PicoGUS song recorder: what the program sends, as it goes to the
+               output. Inside the critical section, which puts the bytes of
+               both cores in one order. */
+            capture_midi_byte(msg[i]);
+#endif
         }
         critical_section_exit(&midi_crit);
     }

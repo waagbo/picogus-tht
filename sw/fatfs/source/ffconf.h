@@ -8,10 +8,11 @@
 / Function Configurations
 /---------------------------------------------------------------------------*/
 
-/* PicoGUS: read/write and the full API where the PGDFS file service is built
-/  in. Firmware without it only reads the drive (CD-ROM images) and keeps the
-/  read-only, minimized configuration, which takes several KB less RAM. */
-#ifdef PGDFS
+/* PicoGUS: read/write and the full API where the PGDFS file service or the
+/  song recorder (CAPTURE) is built in. Firmware without them only reads the
+/  drive (CD-ROM images) and keeps the read-only, minimized configuration,
+/  which takes several KB less RAM. */
+#if defined(PGDFS) || defined(CAPTURE)
 #define FF_FS_READONLY	0
 #else
 #define FF_FS_READONLY	1
@@ -22,7 +23,7 @@
 /  and optional writing functions as well. */
 
 
-#ifdef PGDFS
+#if defined(PGDFS) || defined(CAPTURE)
 #define FF_FS_MINIMIZE	0
 #else
 #define FF_FS_MINIMIZE	1

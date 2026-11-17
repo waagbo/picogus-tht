@@ -38,6 +38,9 @@ extern Settings settings;
 #ifdef WEBSERVER
 #include "web/web.h"
 #endif
+#ifdef CAPTURE
+#include "capture/capture.h"
+#endif
 
 void play_mpu() {
     DBG_PUTS("starting core 1 MPU");
@@ -67,6 +70,9 @@ void play_mpu() {
 #endif // USB_MSC
 #ifdef PGDFS
         dfs_tasks();
+#endif
+#ifdef CAPTURE
+        capture_task();   // song recorder: events of the taps to files on the USB drive
 #endif
     }
 }

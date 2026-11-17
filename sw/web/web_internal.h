@@ -61,6 +61,14 @@ const void *web_flash_uncached(const void *p);
 
 // ---- web_http.c ------------------------------------------------------------
 
+// Routes that send files from the USB drive (the song recorder's) need a few
+// things of the server that cost RAM: left out where no such route exists
+#ifdef CAPTURE
+#define WEB_HTTP_FILES 1
+#else
+#define WEB_HTTP_FILES 0
+#endif
+
 typedef struct http_conn http_conn_t;
 
 enum { HTTP_GET = 1, HTTP_POST = 2 };
@@ -79,6 +87,11 @@ typedef struct {
     void (*finish)(http_conn_t *c);
     // Called if the connection dies before finish() (uploads)
     void (*abort)(http_conn_t *c);
+    // finish() is called from web_http_poll() instead of from inside lwIP's
+    // processing of the packet that completed the request: for routes that
+    // use the USB drive, which takes time and stack
+    // (with WEB_HTTP_FILES)
+    bool deferred;
 } web_route_t;
 
 bool web_http_init(void);   // allocate buffers
@@ -88,6 +101,9 @@ void web_http_poll(void);
 // request accessors
 const char *http_form_body(http_conn_t *c);   // urlencoded body (NUL terminated)
 uint32_t http_content_length(http_conn_t *c);
+// With WEB_HTTP_FILES: the query string of the request (urlencoded like a
+// form, at most 23 characters are kept), "" if there was none
+const char *http_query(http_conn_t *c);
 // find "key" in an urlencoded string, decode its value into buf. false if missing.
 bool http_form_get(const char *form, const char *key, char *buf, size_t buflen);
 bool http_form_get_int(const char *form, const char *key, int32_t *out);
@@ -95,6 +111,18 @@ bool http_form_get_int(const char *form, const char *key, int32_t *out);
 // responses (exactly one per request)
 void http_send_json(http_conn_t *c, const char *json, uint32_t len);
 void http_send_error(http_conn_t *c, int status, const char *message);
+// With WEB_HTTP_FILES: a response whose body is read from a source as it is
+// sent, such as a file on the USB drive. Only one at a time: answers 409 while another is being
+// sent. read() is called from web_task(), outside of lwIP, for consecutive
+// pieces of at most 1024 bytes (the same piece again if it could not be
+// queued) and returns how much it read, less than len on an error. close() is
+// called once, when the connection is done with the source, also if it is
+// refused or breaks off.
+typedef struct {
+    uint32_t (*read)(uint32_t offset, uint8_t *buf, uint32_t len);
+    void (*close)(void);
+} web_stream_t;
+void http_send_stream(http_conn_t *c, const char *filename, uint32_t len, const web_stream_t *src);
 
 // Scratch buffer for building responses (core 1 only, not reentrant)
 #define WEB_SCRATCH_SIZE 2048
