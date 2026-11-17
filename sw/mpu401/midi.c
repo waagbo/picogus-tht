@@ -135,6 +135,27 @@ static struct {
     /*MidiHandler * handler;*/ /* SOFTMPU */
 } midi;
 
+#ifdef WEBSERVER
+/* PicoGUS web UI: in UART mode the host's bytes go to the output as they
+   arrive, so a message from the web UI (see MIDI_Inject() below) must not
+   start while the host is part way through one of its own. Tracked here, as
+   the host writes its bytes, under midi_crit. */
+static struct {
+    bool open;          // the host has started a message and not finished it
+    Bit32u time;        // when its last byte arrived
+} host_msg;
+/* A program that stops in the middle of a message (it crashed, or it was
+   quit) must not block the web UI's MIDI for good */
+#define HOST_MSG_TIMEOUT_US 1000000u
+
+__force_inline static void host_msg_set(bool open) {
+    critical_section_enter_blocking(&midi_crit);
+    host_msg.open = open;
+    host_msg.time = time_us_32();
+    critical_section_exit(&midi_crit);
+}
+#endif
+
 /* SOFTMPU: Sysex delay is decremented from PIC_Update */
 //volatile Bitu MIDI_sysex_delaytime;
 
@@ -217,6 +238,12 @@ void MIDI_RawOutByte(Bit8u data) {
     /* PicoGUS: act like a real MPU-401 in UART mode: every byte goes straight to the output buffer.
      * But still parse messages into cmd_buf to support fake all notes off note tracking */
     if (midi.cmd_len) {
+#ifdef WEBSERVER
+        /* Before anything of this byte is queued: once the message is open no
+           web UI message can start, and one that started already has cleared
+           wire_status, so a running status is resent below */
+        host_msg_set(midi.cmd_pos + 1 < midi.cmd_len);
+#endif
         if (midi.cmd_pos==0) {
             midi.wire_status=data;
         } else if (midi.cmd_pos==1 && midi.wire_status!=midi.status) {
@@ -261,6 +288,11 @@ void MIDI_RawOutByte(Bit8u data) {
     }
     else
     {
+#ifdef WEBSERVER
+        /* Sysex: open from 0xf0 until the status byte that ends it */
+        if (data&0x80) host_msg_set(data==0xf0);
+        else if (midi.status==0xf0) host_msg_set(true);
+#endif
         midi.rt_buf[0] = data;
         PlayMsg(midi.rt_buf,1);
     }
@@ -275,6 +307,9 @@ void MIDI_ClearBuffer(void) {
         midi_out_buff.tail = midi_out_buff.head;
         midi_output_busy = false;
     }
+#ifdef WEBSERVER
+    host_msg.open = false;
+#endif
     critical_section_exit(&midi_crit);
     midi.status=0;
     midi.wire_status=0;
@@ -282,8 +317,174 @@ void MIDI_ClearBuffer(void) {
     midi.cmd_len=0;
 }
 
+#ifdef WEBSERVER
+/* PicoGUS web UI: MIDI messages injected from the web server (core 1).
+   Every queued message is complete (checked by the web server). A message is
+   only started from the core 1 main loop, between complete messages of the
+   host's MIDI stream (host_msg above), and while the MPU-401 is in UART mode.
+
+   send_midi_bytes() runs in the core 1 main loop of every mode. Should it ever
+   be called from core 0 or an interrupt again, as MPU-401 intelligent mode
+   used to, such a caller must never wait for injected data: if an injected
+   message is being sent, it drops the rest of it instead.
+   All injection state is guarded by midi_crit, which covers both cores. */
+#include "hardware/sync.h"
+bool MPU401_IsIntelligent(void);
+
+#define INJECTBUF      1024
+#define INJECTBUF_BITS 1023
+static struct {
+    uint8_t buffer[INJECTBUF];
+    uint32_t head;
+    uint32_t tail;
+    uint32_t remaining;     // bytes left of the message being sent, 0 = between messages
+    bool in_sysex;
+    uint32_t sysex_len;
+    uint8_t sysex_addr_hi;  // byte 5 of a Roland sysex (address MSB)
+    uint32_t delay_start;
+    uint32_t delay;
+} inject;
+
+uint32_t MIDI_InjectFree(void) {
+    return (INJECTBUF - 1) - ((inject.head - inject.tail) & INJECTBUF_BITS);
+}
+
+bool MIDI_Inject(const uint8_t *msg, uint32_t len) {
+    if (!critical_section_is_initialized(&midi_crit) || len > MIDI_InjectFree()) {
+        return false;
+    }
+    critical_section_enter_blocking(&midi_crit);
+    for (uint32_t i = 0; i < len; ++i) {
+        inject.buffer[inject.head] = msg[i];
+        inject.head = (inject.head + 1) & INJECTBUF_BITS;
+    }
+    critical_section_exit(&midi_crit);
+    return true;
+}
+
+// Whether MIDI from the web UI is on hold (MPU-401 intelligent mode)
+bool MIDI_InjectHeld(void) {
+    return MPU401_IsIntelligent();
+}
+
+// Only the core 1 main loop sends injected data; anything else (core 0 or an
+// interrupt, i.e. MPU-401 intelligent mode) must not wait for it.
+__force_inline static bool inject_context(void) {
+    return get_core_num() == 1 && __get_current_exception() == 0;
+}
+
+// Drop the rest of an injected message that was cut short (midi_crit held)
+static void inject_drop_current(void) {
+    if (inject.in_sysex) {
+        while (inject.head != inject.tail) {
+            uint8_t b = inject.buffer[inject.tail];
+            inject.tail = (inject.tail + 1) & INJECTBUF_BITS;
+            if (b == 0xf7) break;
+        }
+        // the device sees the next status byte as the end of the sysex
+    } else {
+        while (inject.remaining-- && inject.head != inject.tail) {
+            inject.tail = (inject.tail + 1) & INJECTBUF_BITS;
+        }
+    }
+    inject.remaining = 0;
+    inject.in_sysex = false;
+}
+
+// Returns true if a byte from the inject queue was sent (midi_crit held)
+static bool send_inject_byte(void) {
+    if (inject.head == inject.tail) {
+        inject.remaining = 0;
+        inject.in_sysex = false;
+        return false;
+    }
+    if (inject.remaining == 0) {
+        // Only start a new message when the host has nothing queued and is not
+        // in the middle of a message or a sysex, and after any pending sysex delay
+        if (midi_out_buff.head != midi_out_buff.tail) return false;
+        if (midi.sysex.status == 0xf0) return false;
+        if (host_msg.open) {
+            if ((time_us_32() - host_msg.time) < HOST_MSG_TIMEOUT_US) return false;
+            host_msg.open = false;  // abandoned by the host
+        }
+        if (MPU401_IsIntelligent()) return false;
+        if (midi.sysex.start && (time_us_32() - midi.sysex.start) < midi.sysex.delay) return false;
+        if (inject.delay && (time_us_32() - inject.delay_start) < inject.delay) return false;
+        inject.delay = 0;
+        // The host's running status no longer holds on the wire after this
+        // message: MIDI_RawOutByte() then sends its status byte again
+        midi.wire_status = 0;
+        uint8_t status = inject.buffer[inject.tail];
+        if (status == 0xf0) {
+            inject.in_sysex = true;
+            inject.sysex_len = 0;
+            inject.remaining = 1;   // extended byte by byte until 0xf7
+        } else {
+            inject.in_sysex = false;
+            inject.remaining = MIDI_evt_len[status] ? MIDI_evt_len[status] : 1;
+        }
+    }
+    uint8_t data = inject.buffer[inject.tail];
+    inject.tail = (inject.tail + 1) & INJECTBUF_BITS;
+    output_to_uart(data);
+    if (inject.in_sysex) {
+        if (++inject.sysex_len == 6) {
+            inject.sysex_addr_hi = data;
+        }
+        if (data == 0xf7) {
+            inject.remaining = 0;
+            inject.in_sysex = false;
+            // Give the synth time to process the sysex, like the MPU sysex delay
+            // (same rules as below: MT-32 "all parameters reset" needs 290ms)
+            if (inject.sysex_addr_hi == 0x7f && inject.sysex_len >= 10) {
+                inject.delay = 290000;
+            } else {
+                uint32_t min_delay = midi.sysex.extra_delay ? 40000 : 20000;
+                inject.delay = inject.sysex_len * 400 + 2000;
+                if (inject.delay < min_delay) inject.delay = min_delay;
+            }
+            inject.delay_start = time_us_32();
+        }
+    } else {
+        --inject.remaining;
+    }
+    return true;
+}
+
+// Returns true if a byte was sent, false to go on with the host stream, -1 to wait
+__force_inline static int send_inject(void) {
+    if (!inject.remaining && !inject.delay && inject.head == inject.tail) return 0;   // fast path
+    int ret = 0;
+    critical_section_enter_blocking(&midi_crit);
+    if (!inject_context()) {
+        // intelligent mode flushing MIDI out: never wait for injected data
+        if (inject.remaining) inject_drop_current();
+    } else if (inject.remaining || (inject.head != inject.tail && midi_out_buff.head == midi_out_buff.tail)) {
+        if (send_inject_byte()) {
+            ret = 1;
+        } else if (inject.remaining) {
+            ret = -1;   // finish the injected message first
+        }
+    }
+    if (ret == 0 && inject.delay && inject_context()) {
+        // the synth is still processing an injected sysex
+        if ((time_us_32() - inject.delay_start) < inject.delay) {
+            ret = -1;
+        } else {
+            inject.delay = 0;
+        }
+    }
+    critical_section_exit(&midi_crit);
+    return ret;
+}
+#endif
+
 __force_inline static bool send_midi_byte() {
     if (uart_tx_status()) return false;   // can't send yet
+#ifdef WEBSERVER
+    int inj = send_inject();
+    if (inj) return inj > 0;
+#endif
     if (midi_out_buff.head == midi_out_buff.tail) return false; // nothing to send
     /* putchar('s'); */
     critical_section_enter_blocking(&midi_crit);
@@ -404,6 +605,9 @@ void MIDI_Init(bool delaysysex,bool fakeallnotesoff){
     /* midi.sysex.start = time_us_32(); // PicoGUS */
     midi.cmd_pos=0;
     midi.cmd_len=0;
+#ifdef WEBSERVER
+    host_msg.open = false;
+#endif
     midi.fakeallnotesoff = fakeallnotesoff;
     midi_busy_threshold = RAWBUF - 2 - (fakeallnotesoff ? 3 * MAX_TRACKED_NOTES : 0);
     midi.available=true;

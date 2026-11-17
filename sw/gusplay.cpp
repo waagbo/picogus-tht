@@ -67,6 +67,10 @@ extern dma_inst_t dma_config;
 
 #include "gus/gus-x.h"
 
+#ifdef WEBSERVER
+#include "web/web.h"
+#endif
+
 #define DMA_PIO_SM 2
 
 #define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
@@ -201,6 +205,10 @@ void play_gus() {
 #endif
 #ifdef SOUND_MPU
         send_midi_bytes(8);
+#endif
+#ifdef WEBSERVER
+        // Lowest priority work: GUS audio is rendered in an interrupt
+        web_task();
 #endif
     }
 }

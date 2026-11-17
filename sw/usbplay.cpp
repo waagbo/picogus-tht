@@ -46,6 +46,10 @@ extern Settings settings;
 
 #include "system/pico_pic.h"
 
+#ifdef WEBSERVER
+#include "web/web.h"
+#endif
+
 #ifdef CDROM
 #define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
 
@@ -137,5 +141,8 @@ void play_usb() {
 #endif
         sermouse_core1_task();
         uartemu_core1_task();
+#ifdef WEBSERVER
+        web_task();
+#endif
     }
 }

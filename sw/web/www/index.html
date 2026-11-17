@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-theme="setup">
+<head>
+<meta charset="utf-8">
+<!-- An 80x25 text screen is 720 pixels wide: phones fit it to their width -->
+<meta name="viewport" content="width=720">
+<title>PicoGUS Setup</title>
+<link rel="icon" href="data:,">
+<!-- scripts/web_pack.py puts the data-inline files into this document -->
+<link rel="stylesheet" href="textmode/tokens.css" data-inline>
+<link rel="stylesheet" href="textmode/components/bundle.css" data-inline>
+<link rel="stylesheet" href="app.css" data-inline>
+</head>
+<body>
+<div id="dos" class="dos screen-1x dos-screen">
+<header class="dos-titlebar"><span class="dos-titlebar__start"></span><span class="dos-titlebar__title">PicoGUS Setup</span><span class="dos-titlebar__end" id="ver"></span></header>
+<main class="dos-screen__body" id="body"></main>
+<footer class="dos-statusbar" id="bar"><span class="dos-statusbar__end" id="desc"></span></footer>
+</div>
+<input type="file" id="file" hidden>
+<noscript><p style="color:#aaa;font-family:monospace">PicoGUS Setup needs JavaScript.</p></noscript>
+<script src="app.js" data-inline></script>
+</body>
+</html>

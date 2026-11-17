@@ -35,6 +35,10 @@ extern Settings settings;
 
 #include "mpu401/export.h"
 
+#ifdef WEBSERVER
+#include "web/web.h"
+#endif
+
 void play_mpu() {
     DBG_PUTS("starting core 1 MPU");
     // flash_safe_execute_core_init();
@@ -50,6 +54,9 @@ void play_mpu() {
     MPU401_Init(settings.MPU.delaySysex, settings.MPU.fakeAllNotesOff, settings.MPU.waitBusyStatus);
 
     for (;;) {
+#ifdef WEBSERVER
+        web_task();
+#endif
         send_midi_bytes(8);
 #ifdef USB_STACK
         // Service TinyUSB events

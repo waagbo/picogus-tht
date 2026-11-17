@@ -82,6 +82,10 @@ extern Settings settings;
 
 extern uint LED_PIN;
 
+#ifdef WEBSERVER
+#include "web/web.h"
+#endif
+
 #if PICO_ON_DEVICE
 #include "pico/binary_info.h"
 bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DIN", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCK", PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCK"));
@@ -355,6 +359,13 @@ void play_adlib() {
 
         // uart emulation task
         uartemu_core1_task();
+#endif
+#ifdef WEBSERVER
+        // Lowest priority work, and only while at least half of the OPL output
+        // FIFO (~2.9ms of audio) is buffered so the network can't starve it
+        if (opl_fifo_free_space() <= OPL_FIFO_SIZE / 2) {
+            web_task();
+        }
 #endif
 #ifdef SOUND_MPU
         send_midi_bytes(8);

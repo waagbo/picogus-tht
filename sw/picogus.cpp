@@ -30,6 +30,9 @@
 #include "system/overclock.h"
 #include "system/pico_reflash.h"
 #include "system/flash_settings.h"
+#ifdef WEBSERVER
+#include "web/web.h"
+#endif
 
 // For multifw
 #include "hardware/watchdog.h"
@@ -175,6 +178,10 @@ static bool control_active = false;
 static uint8_t sel_reg = 0;
 static uint32_t cur_read = 0;
 static uint32_t cur_write = 0;
+#ifdef WEBSERVER
+// A settings save waiting for core 0 to get the flash (see handle_iow()); also set by the web UI on core 1
+static volatile bool queueSaveSettings = false;
+#endif
 
 Settings settings;
 void processSettings(void);
@@ -343,7 +350,14 @@ __force_inline void write_picogus_low(uint8_t value) {
     }
 }
 
+#ifdef WEBSERVER
+// The web UI applies settings through this same code (see picogus_web_write()),
+// passing in the register and the low bytes of 16 bit values, which the
+// parameters below take in place of the ISA control channel's state.
+__force_inline void write_setting(uint8_t sel_reg, uint8_t value, uint8_t basePort_low, uint8_t mouseSensitivity_low) {
+#else
 __force_inline void write_picogus_high(uint8_t value) {
+#endif
     switch (sel_reg) {
     case CMD_GUSPORT: // GUS Base port
         settings.GUS.basePort = (value || basePort_low) ? ((value << 8) | basePort_low) : 0xFFFF;
@@ -473,13 +487,18 @@ __force_inline void write_picogus_high(uint8_t value) {
         break;
     case CMD_WIFIAPPLY:
         DBG_PRINTF("Applying wifi settings: %s %s\n", settings.WiFi.ssid, settings.WiFi.password);
-#ifdef PICOW
+#if defined(NE2000)
         PG_Wifi_Connect(settings.WiFi.ssid, settings.WiFi.password);
+#elif defined(WEBSERVER)
+        // WiFi is owned by core 1; just flag the request
+        web_wifi_request_connect();
 #endif
         break;
     case CMD_WIFISTAT:
-#ifdef PICOW
+#if defined(NE2000)
         multicore_fifo_push_blocking(FIFO_WIFI_STATUS);
+#elif defined(WEBSERVER)
+        web_wifi_request_status();
 #endif
         break;
     case CMD_CDPORT: // CD Base port
@@ -591,6 +610,51 @@ __force_inline void write_picogus_high(uint8_t value) {
     }
 }
 
+#ifdef WEBSERVER
+__force_inline void write_picogus_high(uint8_t value) {
+    write_setting(sel_reg, value, basePort_low, mouseSensitivity_low);
+}
+
+// Settings changes from the web UI (core 1). Uses the same code as pgusinit so
+// both behave identically, without touching the ISA control channel state.
+bool picogus_web_write(uint8_t reg, uint16_t value) {
+    switch (reg) {
+    case CMD_GUSPORT: case CMD_OPLPORT: case CMD_SBPORT: case CMD_MPUPORT:
+    case CMD_TANDYPORT: case CMD_CMSPORT: case CMD_MOUSEPORT: case CMD_CDPORT:
+    case CMD_MOUSESEN:
+        write_setting(reg, value >> 8, value & 0xff, value & 0xff);
+        return true;
+    case CMD_BOOTMODE: case CMD_JOYEN: case CMD_GUSBUF: case CMD_GUSDMA: case CMD_GUS44K:
+    case CMD_MPUDELAY: case CMD_MPUFAKE: case CMD_MPUWAIT: case CMD_OPLWAIT:
+    case CMD_SBTYPE: case CMD_SBIRQ: case CMD_SBDMA: case CMD_SBOPTS:
+    case CMD_MOUSEPROTO: case CMD_MOUSERATE: case CMD_CDAUTOADV:
+    case CMD_MAINVOL: case CMD_OPLVOL: case CMD_SBVOL: case CMD_CDVOL: case CMD_GUSVOL: case CMD_PSGVOL:
+        write_setting(reg, value & 0xff, 0, 0);
+        return true;
+    default:
+        return false;
+    }
+}
+
+// The actual flash write happens on core 0 at the end of handle_iow(), exactly
+// like pgusinit's /save
+void picogus_request_save(void) {
+    queueSaveSettings = true;
+}
+
+bool picogus_save_pending(void) {
+    return queueSaveSettings;
+}
+
+void picogus_load_defaults(void) {
+    // Keep the WiFi network, or saving the defaults would cut off the web UI
+    auto wifi = settings.WiFi;
+    getDefaultSettings(&settings);
+    settings.WiFi = wifi;
+    processSettings();
+}
+#endif
+
 __force_inline uint8_t read_picogus_low(void) {
     switch (sel_reg) {
     case CMD_GUSPORT: // GUS Base port
@@ -694,8 +758,10 @@ __force_inline uint8_t read_picogus_high(void) {
         break;
     */
     case CMD_WIFISTAT:
-#ifdef PICOW
+#if defined(NE2000)
         return PG_Wifi_ReadStatusStr();
+#elif defined(WEBSERVER)
+        return web_wifi_read_status_char();
 #else
         return 0;
 #endif
@@ -837,6 +903,22 @@ static constexpr uint32_t IO_WAIT = 0xffffffffu;
 static constexpr uint32_t IO_END = 0x0u;
 // OR with 0x0000ff00 is required to set pindirs in the PIO
 static constexpr uint32_t IOR_SET_VALUE = 0x0000ff00u;
+
+#ifdef WEBSERVER
+// Save settings asked for by pgusinit or by the web UI. Core 1 may be reading (WiFi firmware, web page) or writing
+// (firmware upload) flash: if so, this is tried again on a later IOW.
+static __force_inline void save_queued_settings(void) {
+    if (!queueSaveSettings || !web_flash_try_lock()) {
+        return;
+    }
+    saveSettings(&settings);
+    queueSaveSettings = false;
+    // The boot ROM's flash routines turn the XIP cache back on. On RP2040 its memory holds the web server's
+    // buffers: turn it off before core 1 runs again.
+    platform_disable_xip_cache();
+    web_flash_unlock();
+}
+#endif
 
 __force_inline void handle_iow(void) {
     uint32_t iow_read = pio_sm_get(pio0, IOW_PIO_SM); //>> 16;
@@ -1135,13 +1217,22 @@ __force_inline void handle_iow(void) {
             if (sel_reg == CMD_SAVE) {
                 // Release IOCHRDY then save settings to flash
                 pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+#ifdef WEBSERVER
+                // ...unless core 1 is using the flash: then on a later IOW
+                queueSaveSettings = true;
+                save_queued_settings();
+#else
                 saveSettings(&settings);
+#endif
                 return;
             }
         }
     }
     // Fallthrough if no match, or for slow write, reset PIO
     pio_sm_put(pio0, IOW_PIO_SM, IO_END);
+#ifdef WEBSERVER
+    save_queued_settings();
+#endif
 }
 
 __force_inline void handle_ior(void) {
@@ -1360,6 +1451,9 @@ int main()
     // Load settings from flash
     loadSettings(&settings, true /* migrate */);
     platform_disable_xip_cache();
+#ifdef WEBSERVER
+    web_init_core0();
+#endif
 
 #if PICOGUS_BOARD_V21
     // PicoGUS v2.1 THT (Core2350B2, RP2350B): the v2.0 circuit, so it runs as a
@@ -1615,6 +1709,12 @@ extern void PIC_DeActivateIRQ(void);
 #endif
 
     processSettings();
+
+#ifdef WEBSERVER
+    // All PIO state machines and DMA channels used by this mode are claimed:
+    // core 1 may now bring up the WiFi chip
+    web_core0_ready();
+#endif
 
     for (;;) {
 #ifndef USE_IRQ

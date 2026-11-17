@@ -1,0 +1,475 @@
+/* Textmode: components, HTML + CSS only. Load after tokens.css.
+   Every size is in cells: 1ch = one column (9px at 1x), 1em = one row (16px at 1x).
+   Lines are in font pixels (--line-single = 1px at 1x), so .screen-2x scales everything. */
+
+/* ---------- Root ---------- */
+.dos {
+  font-family: var(--font-vga);
+  color: var(--screen-fg);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: never;
+  text-rendering: optimizeSpeed;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  font-synthesis: none;
+  --dos-bg: var(--screen-bg);
+  --dos-fg: var(--screen-fg);
+  --dos-border: var(--window-border);
+  --dos-hk: var(--window-hotkey);
+  --dos-key: var(--window-hotkey);
+  --dos-sel-bg: var(--select-bg);
+  --dos-sel-fg: var(--select-fg);
+  --dos-sel-hk: var(--select-hotkey);
+  --dos-focus-bg: var(--focus-bg);
+  --dos-focus-fg: var(--focus-fg);
+  --dos-disabled: var(--window-disabled);
+}
+:where(.dos) *, :where(.dos) *::before, :where(.dos) *::after { box-sizing: border-box; }
+:where(.dos) :where(h1, h2, h3, h4, h5, h6, p, ul, ol, menu, li, dl, dd, figure, fieldset, legend, pre, table, th, td) { margin: 0; padding: 0; font: inherit; }
+:where(.dos) :where(ul, ol, menu) { list-style: none; }
+:where(.dos) :where(fieldset) { border: 0; min-width: 0; }
+:where(.dos) :where(button, input, select, textarea, summary, kbd, code, samp) { font: inherit; color: inherit; letter-spacing: inherit; margin: 0; padding: 0; border: 0; border-radius: var(--radius-none); background: none; }
+:where(.dos) :where(a) { color: inherit; text-decoration: none; }
+:where(.dos) :where(table) { border-collapse: collapse; border-spacing: 0; }
+:where(.dos) :where(:focus) { outline: none; }
+
+.dos-hotkey { color: var(--dos-hk); }
+.dos-key { color: var(--dos-key); }
+[data-theme="mono"] .dos-hotkey { text-decoration: underline; text-decoration-thickness: var(--line-single); text-underline-offset: calc(var(--line-single) * 2); }
+.dos-pre { white-space: pre; }
+.dos-at { position: absolute; left: calc(var(--x, 0) * 1ch); top: calc(var(--y, 0) * 1em); }
+.dos-blink { animation: dos-blink 0.53s step-end infinite; }
+@keyframes dos-blink { 50% { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .dos-blink { animation: none; } }
+
+/* Light-shade (░) texture, one font pixel in four. */
+.dos-shade {
+  background-image: conic-gradient(at var(--line-single) var(--line-single), transparent 75%, var(--dos-shade, var(--screen-pattern)) 0);
+  background-size: calc(var(--line-single) * 2) calc(var(--line-single) * 2);
+}
+
+/* ---------- Screen ---------- */
+.dos-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: calc(var(--screen-cols) * 1ch);
+  block-size: calc(var(--screen-rows) * 1em);
+  overflow: hidden;
+  background-color: var(--screen-bg);
+  color: var(--screen-fg);
+}
+.dos-screen > * { flex: none; }
+.dos-screen__body {
+  position: relative;
+  flex: 1 1 auto;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1em;
+  background-color: var(--screen-bg);
+  background-image: conic-gradient(at var(--line-single) var(--line-single), transparent 75%, var(--screen-pattern) 0);
+  background-size: calc(var(--line-single) * 2) calc(var(--line-single) * 2);
+}
+.dos-screen--plain .dos-screen__body { background-image: none; }
+.dos-screen__body--split { display: flex; place-content: stretch; gap: 0; }
+.dos-screen__body--split > * { flex: 1 1 0; }
+.dos-screen__text { background: var(--screen-bg); color: var(--screen-fg); padding: 0 1ch; white-space: pre; }
+
+/* ---------- Title bar / menu bar line ---------- */
+.dos-titlebar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 2ch;
+  block-size: 1em;
+  padding: 0 1ch;
+  background: var(--title-bg);
+  color: var(--title-fg);
+  white-space: pre;
+  overflow: hidden;
+  --dos-hk: var(--title-hotkey);
+}
+.dos-titlebar__title { grid-column: 2; }
+.dos-titlebar__start { grid-column: 1; justify-self: start; }
+.dos-titlebar__end { grid-column: 3; justify-self: end; }
+
+/* ---------- Status line ---------- */
+.dos-statusbar {
+  display: flex;
+  gap: 2ch;
+  block-size: 1em;
+  padding: 0 1ch;
+  background: var(--status-bg);
+  color: var(--status-fg);
+  white-space: pre;
+  overflow: hidden;
+  --dos-key: var(--status-key);
+  --dos-hk: var(--status-key);
+}
+.dos-statusbar__end { margin-left: auto; }
+
+/* ---------- Window (dialog, menu, error, panel) ---------- */
+.dos-window {
+  --dos-bg: var(--window-bg);
+  --dos-fg: var(--window-fg);
+  --dos-border: var(--window-border);
+  --dos-title: var(--window-title);
+  --dos-hk: var(--window-hotkey);
+  --dos-key: var(--window-hotkey);
+  --dos-disabled: var(--window-disabled);
+  --dos-focus-bg: var(--focus-bg);
+  --dos-focus-fg: var(--focus-fg);
+  --dos-pad-x: 2ch;
+  --dos-pad-y: 1em;
+  position: relative;
+  display: inline-block;
+  vertical-align: top;
+  inline-size: calc(var(--cols) * 1ch);
+  block-size: calc(var(--rows) * 1em);
+  padding: var(--dos-pad-y) var(--dos-pad-x);
+  background: var(--dos-bg);
+  color: var(--dos-fg);
+  box-shadow: var(--shadow-window);
+}
+.dos-window::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--line-single) * 6) calc(var(--line-single) * 3);
+  border: var(--line-double) double var(--dos-border);
+  pointer-events: none;
+}
+.dos-window--single::before {
+  inset: calc(var(--line-single) * 7) calc(var(--line-single) * 4);
+  border: var(--line-single) solid var(--dos-border);
+}
+.dos-window--flat { box-shadow: none; }
+.dos-window--menu {
+  --dos-bg: var(--menu-bg);
+  --dos-fg: var(--menu-fg);
+  --dos-border: var(--menu-border);
+  --dos-title: var(--menu-title);
+  --dos-hk: var(--menu-hotkey);
+  --dos-key: var(--menu-hotkey);
+  --dos-disabled: var(--menu-disabled);
+}
+.dos-window--error {
+  --dos-bg: var(--error-bg);
+  --dos-fg: var(--error-fg);
+  --dos-border: var(--error-border);
+  --dos-title: var(--error-title);
+  --dos-hk: var(--error-hotkey);
+  --dos-key: var(--error-hotkey);
+  --dos-focus-bg: var(--error-focus-bg);
+  --dos-focus-fg: var(--error-focus-fg);
+}
+.dos-window__title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  inline-size: fit-content;
+  max-inline-size: calc(100% - 4ch);
+  margin: 0 auto;
+  padding: 0 1ch;
+  block-size: 1em;
+  overflow: hidden;
+  white-space: pre;
+  background: var(--dos-bg);
+  color: var(--dos-title);
+}
+.dos-window__rule {
+  position: relative;
+  block-size: 1em;
+  margin: 0 calc(var(--dos-pad-x) * -1);
+}
+.dos-window__rule::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--line-single) * 3);
+  right: calc(var(--line-single) * 3);
+  top: calc(var(--line-single) * 7);
+  border-top: var(--line-single) solid var(--dos-border);
+}
+.dos-window__body > * + * { margin-top: 1em; }
+.dos-window__actions { display: flex; justify-content: center; gap: 2ch; }
+.dos-window__text { white-space: pre-line; }
+
+/* ---------- Menu (vertical list in a window) ---------- */
+.dos-menu { margin: 0 -1ch; }
+.dos-menu__item {
+  display: block;
+  inline-size: 100%;
+  padding: 0 1ch;
+  text-align: left;
+  white-space: pre;
+  color: var(--dos-fg);
+  cursor: default;
+}
+.dos-menu__item:hover,
+.dos-menu__item:focus-visible,
+.dos-menu__item.is-selected,
+.dos-menu__item[aria-current="true"] {
+  background: var(--dos-sel-bg);
+  color: var(--dos-sel-fg);
+  --dos-hk: var(--dos-sel-hk);
+  --dos-key: var(--dos-sel-hk);
+}
+.dos-menu__item[aria-disabled="true"],
+.dos-menu__item:disabled { color: var(--dos-disabled); --dos-hk: var(--dos-disabled); background: none; }
+.dos-menu__item-end { float: right; }
+.dos-menu__rule { position: relative; block-size: 1em; margin: 0 -1ch; }
+.dos-menu__rule::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--line-single) * 3);
+  right: calc(var(--line-single) * 3);
+  top: calc(var(--line-single) * 7);
+  border-top: var(--line-single) solid var(--dos-border);
+}
+
+/* ---------- Pull-down menu bar ---------- */
+.dos-menubar {
+  display: flex;
+  gap: 0;
+  block-size: 1em;
+  padding: 0 1ch;
+  background: var(--title-bg);
+  color: var(--title-fg);
+  white-space: pre;
+  position: relative;
+  z-index: 2;
+  --dos-hk: var(--title-hotkey);
+}
+.dos-menubar__item { position: relative; white-space: normal; }
+.dos-menubar__item > summary { display: block; white-space: pre; padding: 0 2ch; list-style: none; cursor: default; }
+.dos-menubar__item > summary::-webkit-details-marker { display: none; }
+.dos-menubar__item > summary:hover,
+.dos-menubar__item > summary:focus-visible,
+.dos-menubar__item[open] > summary,
+.dos-menubar__item.is-selected > summary {
+  background: var(--select-bg);
+  color: var(--select-fg);
+  --dos-hk: var(--select-hotkey);
+}
+.dos-menubar__drop { position: absolute; top: 1em; left: 0; z-index: 3; min-inline-size: 22ch; }
+.dos-menubar__end { margin-left: auto; padding: 0 1ch; }
+
+/* ---------- Button ---------- */
+.dos-button {
+  display: inline-block;
+  padding: 0;
+  white-space: pre;
+  color: var(--dos-fg);
+  background: transparent;
+  cursor: default;
+}
+.dos-button::before { content: "[ "; }
+.dos-button::after { content: " ]"; }
+.dos-button--default::before { content: "[< "; }
+.dos-button--default::after { content: " >]"; }
+.dos-button:hover,
+.dos-button:focus-visible,
+.dos-button.is-focused {
+  background: var(--dos-focus-bg);
+  color: var(--dos-focus-fg);
+  --dos-hk: var(--dos-focus-fg);
+}
+.dos-button:disabled { color: var(--dos-disabled); --dos-hk: var(--dos-disabled); background: transparent; }
+
+/* ---------- Field (text input) ---------- */
+.dos-label { white-space: pre; }
+.dos-field {
+  display: inline-block;
+  inline-size: calc(var(--cols, 12) * 1ch);
+  block-size: 1em;
+  line-height: inherit;
+  padding: 0;
+  vertical-align: top;
+  background: var(--field-bg);
+  color: var(--field-fg);
+  caret-color: var(--field-fg);
+}
+.dos-field::placeholder { color: var(--field-fg); opacity: 1; }
+.dos-field::selection { background: var(--field-fg); color: var(--field-bg); }
+.dos-row { display: flex; gap: 1ch; white-space: pre; }
+.dos-row--spread { justify-content: space-between; }
+
+/* ---------- Choice (radio / checkbox) ---------- */
+.dos-choice { position: relative; display: inline-flex; gap: 1ch; white-space: pre; cursor: default; }
+.dos-choice__input { position: absolute; opacity: 0; inline-size: 1px; block-size: 1px; margin: 0; pointer-events: none; }
+.dos-choice__box { white-space: pre; }
+.dos-choice__box::before { content: "( )"; }
+.dos-choice__input:checked + .dos-choice__box::before { content: "(\2022)"; }
+.dos-choice__input[type="checkbox"] + .dos-choice__box::before { content: "[ ]"; }
+.dos-choice__input[type="checkbox"]:checked + .dos-choice__box::before { content: "[X]"; }
+.dos-choice:hover .dos-choice__box,
+.dos-choice.is-focused .dos-choice__box,
+.dos-choice__input:focus-visible + .dos-choice__box { background: var(--dos-focus-bg); color: var(--dos-focus-fg); }
+.dos-choice__input:disabled + .dos-choice__box,
+.dos-choice__input:disabled ~ * { color: var(--dos-disabled); }
+.dos-choices { display: grid; gap: 0; }
+.dos-choices--row { grid-auto-flow: column; justify-content: start; gap: 3ch; }
+
+/* ---------- List box ---------- */
+.dos-listbox {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1ch;
+  inline-size: calc(var(--cols, 20) * 1ch);
+  block-size: calc(var(--rows, 5) * 1em);
+}
+.dos-listbox__items { overflow: hidden; }
+.dos-listbox__item { display: block; padding: 0 1ch; white-space: pre; cursor: default; }
+.dos-listbox__item input { position: absolute; opacity: 0; inline-size: 1px; block-size: 1px; pointer-events: none; }
+.dos-listbox__item:hover { background: var(--dos-focus-bg); color: var(--dos-focus-fg); }
+.dos-listbox__item.is-selected,
+.dos-listbox__item:has(input:checked) { background: var(--dos-sel-bg); color: var(--dos-sel-fg); --dos-hk: var(--dos-sel-hk); }
+.dos-listbox__item:has(input:focus-visible) { background: var(--dos-sel-bg); color: var(--dos-sel-fg); }
+
+/* ---------- Scroll bar (▲ ░ ■ ▼) ---------- */
+.dos-scrollbar {
+  position: relative;
+  inline-size: 1ch;
+  color: var(--dos-border);
+  --dos-shade: var(--dos-border);
+  background-image: conic-gradient(at var(--line-single) var(--line-single), transparent 75%, var(--dos-border) 0);
+  background-size: calc(var(--line-single) * 2) calc(var(--line-single) * 2);
+  background-clip: content-box;
+  padding: 1em 0;
+}
+.dos-scrollbar::before, .dos-scrollbar::after { position: absolute; left: 0; inline-size: 1ch; block-size: 1em; background: var(--dos-bg); text-align: center; }
+.dos-scrollbar::before { content: "\25B2"; top: 0; }
+.dos-scrollbar::after { content: "\25BC"; bottom: 0; }
+.dos-scrollbar__thumb {
+  position: absolute;
+  left: 0;
+  inline-size: 1ch;
+  block-size: 1em;
+  top: calc(1em + (100% - 3em) * var(--pos, 0) / 100);
+  background: var(--dos-bg);
+  text-align: center;
+}
+.dos-scrollbar__thumb::before { content: "\25A0"; }
+
+/* ---------- Progress ---------- */
+.dos-progress {
+  position: relative;
+  display: block;
+  inline-size: calc(var(--cols, 40) * 1ch);
+  block-size: 1em;
+  background-image: conic-gradient(at var(--line-single) var(--line-single), transparent 75%, var(--progress-track) 0);
+  background-size: calc(var(--line-single) * 2) calc(var(--line-single) * 2);
+}
+.dos-progress__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  inline-size: calc(var(--value, 0) * 1%);
+  inline-size: round(down, calc(var(--value, 0) * 1%), 1ch);
+  background: var(--progress-fill);
+}
+.dos-progress__label { display: block; text-align: center; white-space: pre; }
+
+/* ---------- Function-key bar ---------- */
+.dos-keybar {
+  display: grid;
+  grid-template-columns: repeat(var(--keys, 10), 1fr);
+  block-size: 1em;
+  white-space: pre;
+  overflow: hidden;
+  background: var(--keybar-label-bg);
+}
+.dos-keybar__key { display: flex; overflow: hidden; color: var(--keybar-label-fg); background: var(--keybar-label-bg); }
+.dos-keybar__num { flex: none; min-inline-size: 2ch; text-align: right; background: var(--keybar-num-bg); color: var(--keybar-num-fg); }
+.dos-keybar__label { flex: 1 1 auto; overflow: hidden; }
+.dos-keybar__key:empty, .dos-keybar__label:empty { min-inline-size: 0; }
+
+/* ---------- File panel ---------- */
+.dos-panel {
+  --dos-bg: var(--panel-bg);
+  --dos-fg: var(--panel-fg);
+  --dos-border: var(--panel-border);
+  --dos-title: var(--panel-fg);
+  --dos-pad-x: 1ch;
+  --dos-pad-y: 1em;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: calc(var(--cols) * 1ch);
+  block-size: calc(var(--rows) * 1em);
+  padding: var(--dos-pad-y) var(--dos-pad-x);
+  background: var(--panel-bg);
+  color: var(--panel-fg);
+}
+.dos-panel::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--line-single) * 6) calc(var(--line-single) * 3);
+  border: var(--line-double) double var(--panel-border);
+  pointer-events: none;
+}
+.dos-panel .dos-window__title { background: var(--panel-bg); color: var(--panel-fg); }
+.dos-panel.is-active .dos-window__title { background: var(--cursor-bg); color: var(--cursor-fg); }
+.dos-panel__list { flex: 1 1 auto; overflow: hidden; }
+.dos-panel__table { inline-size: 100%; table-layout: fixed; }
+.dos-panel__table th, .dos-panel__table td { block-size: 1em; padding: 0; white-space: pre; overflow: hidden; text-overflow: clip; }
+.dos-panel__table th { color: var(--panel-header); text-align: center; font-weight: inherit; }
+.dos-panel__table td + td, .dos-panel__table th + th {
+  padding-left: 1ch;
+  background-image: linear-gradient(var(--panel-border), var(--panel-border));
+  background-repeat: no-repeat;
+  background-position: calc(var(--line-single) * 4) 0;
+  background-size: var(--line-single) 100%;
+}
+.dos-panel__table .is-num { text-align: right; }
+.dos-panel__table tbody td { color: var(--panel-fg); }
+.dos-panel__table .is-dir td:first-child { color: var(--panel-dir); }
+.dos-panel__table .is-exec td:first-child { color: var(--panel-exec); }
+.dos-panel__table .is-marked td { color: var(--panel-marked); }
+.dos-panel__table .is-cursor td { background-color: var(--cursor-bg); color: var(--cursor-fg); }
+.dos-panel__table .is-cursor td + td { background-image: linear-gradient(var(--cursor-fg), var(--cursor-fg)); }
+.dos-panel__table tr.is-empty td { color: transparent; }
+.dos-panel__info { white-space: pre; overflow: hidden; }
+.dos-panel__rule { position: relative; block-size: 1em; margin: 0 -1ch; }
+.dos-panel__rule::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--line-single) * 3);
+  right: calc(var(--line-single) * 3);
+  top: calc(var(--line-single) * 7);
+  border-top: var(--line-single) solid var(--panel-border);
+}
+
+/* ---------- Editor / viewer ---------- */
+.dos-editor {
+  display: flex;
+  flex-direction: column;
+  inline-size: calc(var(--cols) * 1ch);
+  block-size: calc(var(--rows) * 1em);
+  background: var(--editor-bg);
+  color: var(--editor-fg);
+}
+.dos-editor__status { flex: none; display: flex; gap: 2ch; block-size: 1em; padding: 0 1ch; background: var(--editor-status-bg); color: var(--editor-status-fg); white-space: pre; overflow: hidden; }
+.dos-editor__status-end { margin-left: auto; }
+.dos-editor__text {
+  flex: 1 1 auto;
+  display: block;
+  inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  white-space: pre;
+  resize: none;
+  background: var(--editor-bg);
+  color: var(--editor-fg);
+  caret-color: var(--editor-fg);
+  font: inherit;
+  line-height: inherit;
+}
+.dos-editor__text::selection, .dos-editor__text ::selection { background: var(--editor-sel-bg); color: var(--editor-sel-fg); }
+.dos-editor__kw { color: var(--editor-keyword); }
+.dos-editor__str { color: var(--editor-string); }
+.dos-editor__num { color: var(--editor-number); }
+.dos-editor__comment { color: var(--editor-comment); }
+.dos-editor__sel { background: var(--editor-sel-bg); color: var(--editor-sel-fg); }
+.dos-editor__cursor { background: var(--editor-fg); color: var(--editor-bg); }

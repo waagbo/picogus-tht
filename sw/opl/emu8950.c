@@ -202,6 +202,12 @@ static int16_t kl_tablex16[16] = {dB2x16(0.000), dB2x16(9.000), dB2x16(12.000), 
 #if !EMU8950_NO_TLL
 #ifdef EMU8950_TLL_FLASH
 extern const uint32_t tll_table[8 * 16][1 << TL_BITS][4];
+#ifdef WEBSERVER
+// The web server uses the XIP cache's memory as SRAM, so flash must never be
+// read through the cache (which flash writes turn back on for a moment)
+#include "hardware/regs/addressmap.h"
+#define TLL_ENTRY(a, b, c) (*(const volatile uint32_t *)((uintptr_t)&tll_table[a][b][c] - XIP_BASE + XIP_NOCACHE_NOALLOC_BASE))
+#endif
 #else
 static uint32_t tll_table[8 * 16][1 << TL_BITS][4];
 #endif
@@ -522,11 +528,15 @@ static void commit_slot_update(OPL_SLOT *slot, uint8_t notesel) {
 
     if (slot->update_requests & UPDATE_TLL) {
 #if !EMU8950_NO_TLL
+#ifdef TLL_ENTRY
+        slot->tll = TLL_ENTRY(slot->blk_fnum >> 6, slot->patch->TL, slot->patch->KL);
+#else
         if ((slot->type & 1) == 0) {
           slot->tll = tll_table[slot->blk_fnum >> 6][slot->patch->TL][slot->patch->KL];
         } else {
           slot->tll = tll_table[slot->blk_fnum >> 6][slot->patch->TL][slot->patch->KL];
         }
+#endif
 #else
         static const uint8_t kslrom4[16] = {
                 0 * 4, 32 * 4, 40 * 4, 45 * 4, 48 * 4, 51 * 4, 53 * 4, 55 * 4, 56 * 4, 58 * 4, 59 * 4, 60 * 4, 61 * 4,

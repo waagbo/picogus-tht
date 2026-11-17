@@ -699,6 +699,13 @@ __force_inline static void UpdateConductor(void) {
     mpu.state.req_mask|=(1<<9);
 }
 
+#ifdef WEBSERVER
+/* For MIDI from the web UI, which waits while intelligent mode is in use */
+bool MPU401_IsIntelligent(void) {
+    return mpu.mode == M_INTELLIGENT;
+}
+#endif
+
 /* sequencer tick: advance the track, conductor, and clock-to-host counters */
 __force_inline static void MPU401_Tick(void) {
     Bit8u i;

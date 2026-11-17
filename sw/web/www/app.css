@@ -1,0 +1,38 @@
+/* PicoGUS Setup: what the page adds to the Textmode design system
+   (textmode/README.md). Sizes are in character cells: 1ch wide, 1em tall. */
+
+html, body { height: 100%; margin: 0; background: #000000; }
+body { display: flex; overflow: auto; }
+/* the screen sits in the middle of the monitor; margins instead of centring
+   so that a window smaller than the screen can still scroll to all of it */
+#dos { margin: auto; flex: none; }
+[hidden] { display: none !important; }
+
+/* Windows are placed on the cell grid by the script (--x, --y in cells) */
+.win { position: absolute; left: calc(var(--x, 0) * 1ch); top: calc(var(--y, 0) * 1em); }
+
+/* The label of the control that has the focus carries the bar too, as in
+   text-mode dialogs, so the focus is easy to find without an outline */
+.dos-label.is-focused { background: var(--dos-focus-bg); color: var(--dos-focus-fg); --dos-hk: var(--dos-focus-fg); }
+.dos-field { caret-shape: underscore; }
+.dos-field[readonly] { caret-color: transparent; }
+.dos-field[readonly].is-focused { background: var(--dos-focus-bg); color: var(--dos-focus-fg); }
+
+/* Slider: a Progress bar with a value, moved with the arrow keys or the mouse */
+.slider { cursor: default; touch-action: none; }
+.slider-value { inline-size: 4ch; text-align: right; }
+
+/* A group of choices under one label, one per row */
+.dos-choices--col { display: grid; }
+
+/* Key hints on the status line can be clicked */
+.hint { cursor: default; white-space: pre; }
+.dos-statusbar__end { overflow: hidden; }
+
+/* While the keyboard is in use, a mouse pointer that happens to rest on a
+   command must not light up a second bar next to the one the keys move. Only
+   the look of :hover is taken away; a click still works at once. */
+.kbd .dos-menu__item:hover:not(.is-selected):not([aria-disabled="true"]) { background: none; color: var(--dos-fg); --dos-hk: inherit; --dos-key: inherit; }
+.kbd .dos-button:hover:not(.is-focused):not(:disabled) { background: transparent; color: var(--dos-fg); --dos-hk: inherit; }
+.kbd .dos-choice:hover:not(.is-focused) .dos-choice__box { background: none; color: inherit; }
+.kbd .dos-listbox__item:hover:not(:has(input:checked)) { background: none; color: inherit; }

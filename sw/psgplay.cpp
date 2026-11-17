@@ -72,6 +72,10 @@ extern Settings settings;
 #include "mpu401/export.h"
 #endif
 
+#ifdef WEBSERVER
+#include "web/web.h"
+#endif
+
 #define audio_pio __CONCAT(pio, PICO_AUDIO_I2S_PIO)
 
 static void init_audio(void) {
@@ -200,6 +204,10 @@ void play_psg() {
 #endif
 #ifdef SOUND_MPU
         send_midi_bytes(8);
+#endif
+#ifdef WEBSERVER
+        // Lowest priority work: PSG audio is synthesized in an interrupt
+        web_task();
 #endif
     }
 }

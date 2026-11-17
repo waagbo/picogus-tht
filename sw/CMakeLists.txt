@@ -122,6 +122,15 @@ endif()
 set(Python3_FIND_STRATEGY LOCATION)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
+# Web server (info, volume, settings, mode switching, mt32-pi MIDI controls and
+# file uploads) for boards with a CYW43 WiFi chip, i.e. Pico W. See web/README.md
+if(PICO_CYW43_SUPPORTED)
+    option(WEBSERVER "Include the web server in sound card firmwares on Pico W boards" ON)
+    if(WEBSERVER)
+        include(${CMAKE_CURRENT_LIST_DIR}/web/webserver.cmake)
+    endif()
+endif()
+
 # Global definitions across all targets
 add_compile_definitions(
     # 370MHz is extremely closely evenly divisible by 44100Hz.
@@ -165,6 +174,25 @@ function(config_target TARGET_NAME MULTIFW)
         # To patch to Pico SDK, run:
         # sed -i 's/WRAPPER_FUNC(x) __wrap_/WRAPPER_FUNC(x) __attribute__((used)) __wrap_/' "$PICO_SDK_PATH"/src/rp2_common/pico_platform/include/pico/platform.h
         target_compile_options(${TARGET_NAME} PRIVATE -flto=jobserver)
+    endif()
+
+    if(PICO_CYW43_SUPPORTED)
+        # Pico W style board: the LED and GPIOs 23/24/25/29 belong to the CYW43 WiFi chip
+        target_compile_definitions(${TARGET_NAME} PRIVATE PICOW=1)
+        if(WEBSERVER AND NOT NO_WEBSERVER)
+            # Firmwares in the multifw image share one copy of the WiFi chip
+            # firmware. This also applies to the non-multifw builds of the
+            # multifw project, whose sizes are used to lay out the image.
+            picogus_add_webserver(${TARGET_NAME} "${PICOGUS_IN_MULTIFW}")
+            # Everything runs from RAM, and on the RP2040 Sound Blaster mode (OPL3,
+            # DSP and CD-ROM) with the web server has too little left for the PGDFS
+            # file service as well, should this source tree have it (an
+            # experimental feature of its own): that mode is then built without it.
+            if(PICOGUS_CHIP STREQUAL "rp2040" AND PGDFS AND CDROM AND SOUND_OPL)
+                message("${TARGET_NAME}: web server on RP2040, built without PGDFS")
+                set(PGDFS FALSE)
+            endif()
+        endif()
     endif()
 
     target_sources(${TARGET_NAME} PRIVATE system/pico_reflash.c system/flash_settings.c)
@@ -673,6 +701,8 @@ endfunction()
 
 
 function(build_ne2k TARGET_NAME MULTIFW)
+    # NE2000 mode uses the WiFi chip as a raw network interface for DOS
+    set(NO_WEBSERVER TRUE)
     config_target(${TARGET_NAME} ${MULTIFW})
     pico_set_program_name(${TARGET_NAME} "picogus-ne2k")
     # The CYW43 PIO SPI takes 2 PIO cycles per bit. On RP2350 keep the clock
@@ -702,6 +732,13 @@ endfunction()
 # Build "multifw" - all firmwares in one UF2
 if(PROJECT_TYPE STREQUAL "MULTIFW")
     set(FW_TARGET picogus)
+    set(PICOGUS_IN_MULTIFW TRUE)
+    if(PICO_CYW43_SUPPORTED AND WEBSERVER)
+        # One copy of the CYW43 WiFi firmware and of the web page files right
+        # after the bootloader, shared by all modes; the mode firmwares start
+        # after them
+        picogus_multifw_shared_resources()
+    endif()
 
     # ---------------------------------------------------------------------------
     # OPL variant for the adlib slot in the multifw bundle.
@@ -748,6 +785,7 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
             -DFW_5_LD="${CMAKE_BINARY_DIR}/pg-sb-multifw.ld"
             -DFW_6_BIN="${CMAKE_BINARY_DIR}/pg-usb.bin"
             -DFW_6_LD="${CMAKE_BINARY_DIR}/pg-usb-multifw.ld"
+            ${MULTIFW_LD_EXTRA_ARGS}
             -P ${CMAKE_SOURCE_DIR}/multifw/generate_ld.cmake
         DEPENDS
             "${CMAKE_SOURCE_DIR}/multifw/firmware.ld.in"
@@ -822,8 +860,8 @@ if(PROJECT_TYPE STREQUAL "MULTIFW")
     endif()
     add_custom_command(
         OUTPUT picogus.uf2
-        DEPENDS bootloader UF2CREATE pg-gus-multifw ${ADLIB_TARGET_NAME}-multifw pg-mpu-multifw pg-psg-multifw pg-sb-multifw pg-usb-multifw
-        COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin ${ADLIB_TARGET_NAME}-multifw.bin pg-mpu-multifw.bin pg-psg-multifw.bin pg-sb-multifw.bin pg-usb-multifw.bin picogus.uf2
+        DEPENDS bootloader UF2CREATE pg-gus-multifw ${ADLIB_TARGET_NAME}-multifw pg-mpu-multifw pg-psg-multifw pg-sb-multifw pg-usb-multifw ${MULTIFW_UF2_EXTRA_DEPENDS}
+        COMMAND UF2CREATE bootloader.bin pg-gus-multifw.bin ${ADLIB_TARGET_NAME}-multifw.bin pg-mpu-multifw.bin pg-psg-multifw.bin pg-sb-multifw.bin pg-usb-multifw.bin ${MULTIFW_UF2_EXTRA_INPUTS} picogus.uf2
     )
     add_custom_target(picogus ALL DEPENDS picogus.uf2)
 

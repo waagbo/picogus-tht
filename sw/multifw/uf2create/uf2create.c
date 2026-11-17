@@ -9,8 +9,14 @@
 #include "flash_firmware.h"
 
 #define FLASH_SIZE 0x200000
+#define SETTINGS_SIZE 0x1000 // last sector of flash holds the settings
 #define PAYLOAD_SIZE 0x100
+#ifdef FLASH_CYW43_FW
+// bootloader, firmwares, then the CYW43 WiFi firmware blob shared by all modes
+#define INPUT_FILES (NR_OF_FIRMWARES + 2)
+#else
 #define INPUT_FILES (NR_OF_FIRMWARES + 1)
+#endif
 
 // Chip the image is for; the build passes the RP2350 family for RP2350 builds
 #ifndef UF2_FAMILY_ID
@@ -21,7 +27,11 @@ int main(int argc, char *argv[])
 {
 	int total_size = 0;
 	static uint8_t flashbuffer[FLASH_SIZE];
-	uint32_t offset[INPUT_FILES] = {0, FLASH_FIRMWARE1, FLASH_FIRMWARE2, FLASH_FIRMWARE3, FLASH_FIRMWARE4, FLASH_FIRMWARE5, FLASH_FIRMWARE6};
+	uint32_t offset[INPUT_FILES] = {0, FLASH_FIRMWARE1, FLASH_FIRMWARE2, FLASH_FIRMWARE3, FLASH_FIRMWARE4, FLASH_FIRMWARE5, FLASH_FIRMWARE6
+#ifdef FLASH_CYW43_FW
+		, FLASH_CYW43_FW
+#endif
+	};
 	struct uf2_block uf2;
 
 	FILE *f_input, *f_output;
@@ -44,7 +54,7 @@ int main(int argc, char *argv[])
 		fseek(f_input, 0L, SEEK_END);
 		uint32_t size = ftell(f_input);
 		fseek(f_input, 0L, SEEK_SET);
-		if ((size + offset[i]) > FLASH_SIZE) {
+		if ((size + offset[i]) > FLASH_SIZE - SETTINGS_SIZE) {
 			fprintf(stderr, "Too big to fit in FLASH!\n");
 			return -1;
 		}

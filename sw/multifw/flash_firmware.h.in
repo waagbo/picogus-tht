@@ -13,3 +13,5 @@
 #define FLASH_FIRMWARE4 ${FW_4_ORIGIN}
 #define FLASH_FIRMWARE5 ${FW_5_ORIGIN}
 #define FLASH_FIRMWARE6 ${FW_6_ORIGIN}
+// Shared CYW43 WiFi firmware blob (Pico W builds with the web server only)
+#cmakedefine FLASH_CYW43_FW ${FLASH_CYW43_FW}

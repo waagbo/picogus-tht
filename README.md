@@ -98,7 +98,7 @@ Want to buy a PicoGUS? Fully assembled PicoGUS 2.0 sound cards are available fro
 
 Want to make your own PicoGUS? See the [build guide](https://github.com/polpo/picogus/wiki/Building-your-PicoGUS). Note that the more DIY friendly v1.1.1 hardware has some documented issues with reset – a forthcoming v1.2 revision will fix these issues. **Important caveat**: due to the specs of the Pico, assumptions made by programs written to use the GUS, the imprecise nature of emulation, and the varying specs of retro DOS PC hardware, some things will likely never be perfect. **This is still a work in progress.**
 
-Have a PicoGUS and want to use it? See the [configuring and using your PicoGUS guide](https://github.com/polpo/picogus/wiki/Configuring-and-using-your-PicoGUS).
+Have a PicoGUS and want to use it? See the [configuring and using your PicoGUS guide](https://github.com/polpo/picogus/wiki/Configuring-and-using-your-PicoGUS). With a Pico W, the card can also be configured from a web browser, see [the web server notes](sw/web/README.md).
 
 Want to support PicoGUS? I have a limited number of machines to test PicoGUS in and donating either money or motherboards would be greatly appreciated and help increase the compatibility of PicoGUS.
 
