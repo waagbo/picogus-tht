@@ -159,6 +159,13 @@ silkscreen. Each round found real faults. Apply these from the start on the next
   - **The middle of a through-hole PLCC socket is free on the back.** A PLCC-32 socket leaves 6.2 × 8.7 mm
     between its inner pin rows: a TSSOP-16 fits there (0.6 mm to the socket's pads), with three 0.15 mm tracks
     through each gap between the socket pins. A TSSOP-20 does not. THT v2.1's boot ROM decoder went there.
+  - **So is the middle of a DIP.** Between the pin rows of a DIP (7.62 mm) 6.0 mm of board is free on the back: a
+    TSSOP-16 fits turned with its pin rows across the DIP's (5.0 mm along its rows), 0.54 mm from the DIP pads at
+    each end, and a 0.15 mm lane still passes between the two parts' pads there. The tracks that crossed the field
+    have to move. THT v2.1's boot ROM address select (U17, a 74HCT153) went under U7 that way.
+  - **A grid router's via cost is a length.** On THT v2.1's grid router (0.05 mm cells) a via cost of 600 cells,
+    30 mm, sent a decoder line 47 mm round U7 rather than through two vias; at 150 cells the four lines from the
+    decoder to U17 took 48 mm in all instead of 92 to 206 mm. Route the line with the fewest ways out first.
   - **A via is an obstacle on every layer.** When laying a track by hand through a group of vias, check it
     against every via near it, not only against the tracks on its own layer.
   - **Line parts up by their bodies, not by KiCad's outlines.** A DIP's fab and silkscreen outline ends 1.33 mm

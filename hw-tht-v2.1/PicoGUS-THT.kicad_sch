@@ -15269,10 +15269,6 @@
 		(uuid "b52b1b55-5160-46a5-980f-719642007255")
 	)
 	(no_connect
-		(at 92.71 45.085)
-		(uuid "c87edbd2-ec56-5c36-8a91-863aec48b9c3")
-	)
-	(no_connect
 		(at 325.755 102.87)
 		(uuid "c9fdc738-b3cc-4302-a9b1-c8571ed627bc")
 	)
@@ -39349,7 +39345,7 @@
 			)
 		)
 	)
-	(global_label "~{ROM_EN}"
+	(global_label "ROM_SEL0"
 		(shape output)
 		(at 92.71 42.545 180)
 		(fields_autoplaced yes)
@@ -39430,7 +39426,7 @@
 		)
 		(uuid "babf9a33-49a3-5c48-9b22-a0ef94acc69f")
 	)
-	(text "SST39SF010A in a PLCC-32 socket + 74HCT138: uses the global nets A0-A19, D0-D7, ~SMEMR and ~ROM_EN (GPIO2)."
+	(text "SST39SF010A in a PLCC-32 socket, 74HCT138 decoder, 74HCT153 base-address select: uses the global nets A0-A19, D0-D7, ~SMEMR, ROM_SEL0 (GPIO2) and ROM_SEL1 (GPIO3)."
 		(exclude_from_sim no)
 		(at 25.4 266.7 0)
 		(effects
@@ -39440,6 +39436,30 @@
 			(justify left bottom)
 		)
 		(uuid "e6287d4c-30ed-53a6-baa4-56f05a51ad42")
+	)
+	(global_label "ROM_SEL1"
+		(shape output)
+		(at 92.71 45.085 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c248da1b-8b33-5b0b-bc52-12d020b12445")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 92.71 45.085 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
 	)
 	(sheet_instances
 		(path "/"
