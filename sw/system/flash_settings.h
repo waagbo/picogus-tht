@@ -25,7 +25,7 @@ extern "C" {
 #include <stdbool.h>
 
 #define SETTINGS_MAGIC 0x70677573  // "pgus" in ascii
-#define SETTINGS_VERSION 6
+#define SETTINGS_VERSION 7
 
 // When adding new fields to Settings struct:
 // 1. Increment SETTINGS_VERSION
@@ -108,6 +108,9 @@ typedef struct Settings {
             uint8_t  options;
         };
     } SB16; // TEMPORARY - may be changed!
+    struct {
+        uint8_t base;   // bootrom_base_t (common/picogus.h): PicoGUS v2.1 THT boot ROM base address, 0 = off
+    } BootROM;
 } Settings;
 
 

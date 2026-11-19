@@ -75,12 +75,13 @@
 #define CYW43_DEFAULT_PIN_WL_CS 42u
 #endif
 
-// --- Boot ROM (experimental; U15 flash in a PLCC-32 socket, U16 74HCT138): ~ROM_EN, active low.
-// Low = the option ROM answers at its base address (one of the solder jumpers JP1-JP3,
-// default D0000h-D7FFFh). A 10k pull-up (R35) keeps it off until the firmware
-// drives the pin; the firmware only drives it low when built with
-// -DBOOTROM_ENABLE=ON.
-#define PICOGUS_BOOTROM_EN_PIN 2
+// --- Boot ROM (experimental; U15 flash in a PLCC-32 socket, U16 74HCT138 decoder, U17 74HCT153):
+// ROM_SEL1 (GPIO3) and ROM_SEL0 (GPIO2) pick the base address: high high = off, high low = D0000h,
+// low high = C8000h, low low = D8000h. 10k pull-ups (R35, R36) keep the ROM off until the firmware
+// drives the pins. The base is a saved setting (pgusinit /bootrom, off by default; the firmware
+// built with -DBOOTROM_ENABLE=ON defaults to D0000h).
+#define PICOGUS_BOOTROM_SEL0_PIN 2
+#define PICOGUS_BOOTROM_SEL1_PIN 3
 
 // --- FLASH: W25Q128-class, set up by the embedded XIP setup function ---
 #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 1

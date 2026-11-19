@@ -40,6 +40,8 @@ static uint8_t page_lines;
 
 #include "../common/picogus.h"
 
+static chip_type_t gChip = CHIP_RP2040;   // microcontroller on the card, set by initPicoGUS()
+
 
 const uint8_t get_screen_lines(void)
 {
@@ -88,6 +90,10 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /wtvol x      - set volume of WT header. 0-100, Default 100 (2.0 cards only)\n");
     pageprintf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
     pageprintf("   /mainvol x    - set the main audio volume: 0 - 100\n");
+    if (gChip == CHIP_RP2350B_V21 || print_all) {
+        pageprintf("   /bootrom x    - v2.1 boot ROM address: off, c800, d000, d800. Default: off\n");
+        pageprintf("                   (the BIOS finds it at its new address at the next reboot)\n");
+    }
     //         "...............................................................................\n"
     pageprintf("MPU-401 settings:\n");
     pageprintf("   /mpuport x    - set the base port of the MPU-401. Default: 330, 0 to disable\n");
@@ -1089,6 +1095,27 @@ static bool cmdFlashPico(const char* arg, const int cmd, const int cmd2, const i
     return true;
 }
 
+// Base address of the experimental boot ROM of the PicoGUS v2.1 THT (bootrom_base_t)
+static bool cmdSendBootROM(const char* arg, const int cmd, const int cmd2, const int cmd3)
+{
+    static const char *names[] = {"off", "c800", "d000", "d800"};
+    if (gChip != CHIP_RP2350B_V21) {
+        fprintf(stderr, "ERROR: /bootrom is for the PicoGUS v2.1 THT with the boot ROM\n");
+        return false;
+    }
+    for (uint8_t i = 0; i <= BOOTROM_D800; i++) {
+        if (!stricmp(arg, names[i])) {
+            outp(CONTROL_PORT, cmd);
+            outp(DATA_PORT_HIGH, i);
+            // Firmware without the boot ROM register stops listening to the control port: knock again
+            outp(CONTROL_PORT, 0xCC);
+            return true;
+        }
+    }
+    usage(gMode, false);
+    return false;
+}
+
 static bool cmdSave(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     permanent = true;
@@ -1150,6 +1177,7 @@ ParseCommand parseCommands[] = {
     {"/cdauto", cmdSendBool, CMD_CDAUTOADV, ARG_REQUIRE, "true"},
     {"/cdloadname", cmdCDLoadName, CMD_CDNAME, ARG_REQUIRE},
     {"/mainvol", cmdSetVol, CMD_MAINVOL, ARG_REQUIRE, "100"},
+    {"/bootrom", cmdSendBootROM, CMD_BOOTROM, ARG_REQUIRE, "off"},
     {"/oplvol", cmdSetVol, CMD_OPLVOL, ARG_REQUIRE, "100"},
     {"/sbvol", cmdSetVol, CMD_SBVOL, ARG_REQUIRE, "100"},
     {"/cdvol", cmdSetVol, CMD_CDVOL, ARG_REQUIRE, "100"},
@@ -1235,6 +1263,16 @@ static void printPicoGus()
         printf("extra wait: %s\n", ctrlGetUint8(CMD_MPUWAIT) ? "on" : "off");
     } else {
         printf("MPU-401 disabled\n");
+    }
+
+    if (gChip == CHIP_RP2350B_V21) {
+        static const char *bootrom[] = {"off", "at C800h", "at D000h", "at D800h"};
+        uint8_t base = ctrlGetUint8(CMD_BOOTROM);
+        // Firmware without the boot ROM register stops listening to the control port: knock again
+        outp(CONTROL_PORT, 0xCC);
+        if (base <= BOOTROM_D800) {
+            printf("Boot ROM %s\n", bootrom[base]);
+        }
     }
 }
 
@@ -1406,6 +1444,7 @@ static init_status initPicoGUS()
     outp(CONTROL_PORT, CMD_HWTYPE); // Select hardware type register
     board_type = inp(DATA_PORT_HIGH);
     chip_type_t chip_type = get_chip_type();
+    gChip = chip_type;
     if (chip_type == CHIP_RP2350B_V21) {
         // Reports itself as a PicoGUS 2.0, whose circuit it has
         printf("Hardware: PicoGUS v2.1 THT (RP2350B)");

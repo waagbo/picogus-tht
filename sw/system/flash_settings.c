@@ -26,6 +26,16 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 
+// Experimental boot ROM of the PicoGUS v2.1 THT: off unless the firmware is built with -DBOOTROM_ENABLE=ON,
+// which makes D0000h the default (values as bootrom_base_t in common/picogus.h)
+#ifndef PICOGUS_BOOTROM_DEFAULT
+#if PICOGUS_BOOTROM_ENABLE
+#define PICOGUS_BOOTROM_DEFAULT 2   // BOOTROM_D000
+#else
+#define PICOGUS_BOOTROM_DEFAULT 0   // BOOTROM_OFF
+#endif
+#endif
+
 static const Settings defaultSettings = {
     .magic = SETTINGS_MAGIC,
     .version = SETTINGS_VERSION,
@@ -94,6 +104,9 @@ static const Settings defaultSettings = {
         .sbType = 6,
         .fixTC = 0,
         .lockMixer = 0
+    },
+    .BootROM = {
+        .base = PICOGUS_BOOTROM_DEFAULT
     }
 };
 
@@ -139,6 +152,14 @@ static const VersionFields versionFieldsTable[] = {
     // version 5 - added SB16 settings
     {(const FieldInfo[]){
         FIELD(SB16),
+    }, 1},
+
+    // version 6 - added MPU.waitBusyStatus (no entry was made for it; left as it was)
+    {NULL, 0},
+
+    // version 7 - added the boot ROM base address (PicoGUS v2.1 THT)
+    {(const FieldInfo[]){
+        FIELD(BootROM),
     }, 1},
 };
 

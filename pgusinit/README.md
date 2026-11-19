@@ -69,6 +69,10 @@ settings. Options may be given for other settings:
   saved.
 * `/defaults` - restores all card settings to defaults.
 * `/joy 1|0` - enable USB joystick support with 1, disable with 0.
+* `/bootrom x` - PicoGUS v2.1 THT with the experimental boot ROM (branch
+  hw2.1-tht-experimental) only: the boot ROM's base address, `off`, `c800`,
+  `d000` or `d800`. Default: off. The BIOS finds it at its new address at the
+  next reboot; add `/save` to keep it.
 
 ### GUS options
 

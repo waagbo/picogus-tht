@@ -180,6 +180,23 @@ static uint8_t basePort_low;
 static uint8_t mouseSensitivity_low;
 static uint8_t picogus_dataLatch_low;
 
+#ifdef PICOGUS_BOOTROM_SEL0_PIN
+// Experimental boot ROM of the PicoGUS v2.1 THT: U17 (74HCT153) passes one of the decoder's outputs to the flash's
+// chip enable, as ROM_SEL1 (GPIO3) and ROM_SEL0 (GPIO2) select, or +5 V (off) when both are high, as R35/R36 hold
+// them until the firmware drives them.
+static void bootrom_apply(uint8_t base) {
+    //                              off  C800 D000 D800
+    static const uint8_t sel0[4] = {1,   1,   0,   0};
+    static const uint8_t sel1[4] = {1,   0,   1,   0};
+    if (base > BOOTROM_D800) {
+        base = BOOTROM_OFF;
+    }
+    const uint32_t mask = (1u << PICOGUS_BOOTROM_SEL0_PIN) | (1u << PICOGUS_BOOTROM_SEL1_PIN);
+    // Both pins in one write, so the ROM never shows up at a third address in between
+    gpio_put_masked(mask, ((uint32_t)sel0[base] << PICOGUS_BOOTROM_SEL0_PIN) | ((uint32_t)sel1[base] << PICOGUS_BOOTROM_SEL1_PIN));
+}
+#endif
+
 __force_inline void select_picogus(uint8_t value) {
     // printf("select picogus %x\n", value);
     sel_reg = value;
@@ -201,6 +218,7 @@ __force_inline void select_picogus(uint8_t value) {
         basePort_low = 0;
         break;
     case CMD_JOYEN: // enable joystick
+    case CMD_BOOTROM: // Boot ROM base address
         break;
     case CMD_GUSBUF: // Audio buffer size
     case CMD_GUSDMA: // DMA interval
@@ -509,6 +527,13 @@ __force_inline void write_picogus_high(uint8_t value) {
 #endif
         break;
 
+    case CMD_BOOTROM: // Boot ROM base address: takes effect at once, for the BIOS to find at the next reboot
+        settings.BootROM.base = value <= BOOTROM_D800 ? value : BOOTROM_OFF;
+#ifdef PICOGUS_BOOTROM_SEL0_PIN
+        bootrom_apply(settings.BootROM.base);
+#endif
+        break;
+
     // For multifw
     case CMD_BOOTMODE:
         settings.startupMode = value;
@@ -573,6 +598,8 @@ __force_inline uint8_t read_picogus_high(void) {
         return ret;
     case CMD_BOOTMODE: // Mode (GUS, OPL, MPU, etc...)
         return settings.startupMode;
+    case CMD_BOOTROM: // Boot ROM base address
+        return settings.BootROM.base;
     case CMD_GUSPORT: // GUS Base port
         return settings.GUS.basePort == 0xFFFF ? 0 : (settings.GUS.basePort >> 8);
     case CMD_OPLPORT: // Adlib Base port
@@ -741,6 +768,9 @@ void processSettings(void) {
     if (BOARD_TYPE == PICOGUS_2) {
         m62429->setVolume(M62429_BOTH, settings.Global.waveTableVolume);
     }
+#ifdef PICOGUS_BOOTROM_SEL0_PIN
+    bootrom_apply(settings.BootROM.base);
+#endif
 #ifdef SOUND_SB
     sbdsp_set_wtvol_passthrough(&settings.Global.waveTableVolume, wtvol_from_mixer);
 #endif
@@ -1266,15 +1296,14 @@ int main()
     gpio_init(23);
     gpio_set_dir(23, GPIO_OUT);
     BOARD_TYPE = PICOGUS_2;
-#ifdef PICOGUS_BOOTROM_EN_PIN
-    // Experimental boot ROM: the flash answers on the ISA memory bus while ~ROM_EN is low. This runs
-    // within a fraction of a second of reset, long before the BIOS scans for option ROMs.
-#ifndef PICOGUS_BOOTROM_ENABLE
-#define PICOGUS_BOOTROM_ENABLE 0
-#endif
-    gpio_init(PICOGUS_BOOTROM_EN_PIN);
-    gpio_put(PICOGUS_BOOTROM_EN_PIN, !PICOGUS_BOOTROM_ENABLE);
-    gpio_set_dir(PICOGUS_BOOTROM_EN_PIN, GPIO_OUT);
+#ifdef PICOGUS_BOOTROM_SEL0_PIN
+    // Experimental boot ROM at its saved base address (pgusinit /bootrom; off unless set). This runs within a
+    // fraction of a second of reset, long before the BIOS scans for option ROMs. The pins get their levels
+    // while still inputs, held high by R35/R36, so they never pass through another address.
+    gpio_init(PICOGUS_BOOTROM_SEL0_PIN);
+    gpio_init(PICOGUS_BOOTROM_SEL1_PIN);
+    bootrom_apply(settings.BootROM.base);
+    gpio_set_dir_out_masked((1u << PICOGUS_BOOTROM_SEL0_PIN) | (1u << PICOGUS_BOOTROM_SEL1_PIN));
 #endif
 #else
     // Determine board type. GPIO 29 is grounded on PicoGUS v2.0, and on a Pico, it's VSYS/3 (~1.666V)

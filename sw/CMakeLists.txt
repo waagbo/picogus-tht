@@ -112,9 +112,9 @@ endfunction()
 
 
 option(PGDEBUG "Enable debug printf framework" OFF)
-# PicoGUS v2.1 THT, experimental boot ROM (hw-tht-v2.1, sheet bootrom.kicad_sch): the option ROM only answers
-# while ~ROM_EN (GPIO2) is low. OFF drives the pin high, as its pull-up holds it.
-option(BOOTROM_ENABLE "PicoGUS v2.1: switch the experimental boot ROM on at start-up" OFF)
+# PicoGUS v2.1 THT, experimental boot ROM (hw-tht-v2.1, sheet bootrom.kicad_sch): its base address is a saved
+# setting (pgusinit /bootrom off|c800|d000|d800), off by default. ON makes D0000h the default instead.
+option(BOOTROM_ENABLE "PicoGUS v2.1: the experimental boot ROM defaults to D0000h instead of off" OFF)
 # Use the first Python on PATH rather than the newest version CMake knows about
 # (older CMakes won't look for newer Pythons)
 set(Python3_FIND_STRATEGY LOCATION)

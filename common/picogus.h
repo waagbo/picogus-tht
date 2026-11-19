@@ -33,6 +33,15 @@ typedef enum {
     CHIP_RP2350B_V21 = 2    // PicoGUS v2.1 THT (Core2350B module)
 } chip_type_t;
 
+// Base address of the experimental boot ROM of the PicoGUS v2.1 THT (branch hw2.1-tht-experimental), as
+// CMD_BOOTROM reads and sets it and the settings store it. A card without the boot ROM ignores it.
+typedef enum {
+    BOOTROM_OFF  = 0,
+    BOOTROM_C800 = 1,   // C8000h-CFFFFh
+    BOOTROM_D000 = 2,   // D0000h-D7FFFh
+    BOOTROM_D800 = 3    // D8000h-DFFFFh
+} bootrom_base_t;
+
 typedef enum {
     INVALID_MODE = 0,
     GUS_MODE     = 1,
@@ -65,6 +74,7 @@ static const char *modenames[8] = {
 #define CMD_MPUPORT    0x07 // MPU Base port
 #define CMD_TANDYPORT  0x08 // Tandy Base port
 #define CMD_CMSPORT    0x09 // CMS Base port
+#define CMD_BOOTROM    0x0e // Boot ROM base address (PicoGUS v2.1 THT with the experimental boot ROM), bootrom_base_t
 #define CMD_JOYEN      0x0f // enable joystick
 
 #define CMD_GUSBUF     0x10 // Audio buffer size
