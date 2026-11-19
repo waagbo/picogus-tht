@@ -412,9 +412,10 @@ three chips and two GPIOs. Schematic sheet `bootrom.kicad_sch`.
     Under U17's body: the +5 V strap from VCC (pin 16) to Ea (pin 1, half a off) and two ground vias for the unused
     inputs; round its left side the +5 V loop to I3b (the "off" input), fed through In2.Cu from the +5 V track on
     the card's left edge. C50 (0805) stands beside it. **Solder U17 and C50 before U7** (or U7's socket). The
-    three decoder outputs and `~ROM_CS` come up from the socket through U7's bottom row with two vias each (they
-    cross A9, which runs across on the back below U7); GPIO3 reaches U17 through R36 above U9, mostly on In2.Cu
-    (61 mm in all). The grid router laid those, at 0.15 mm.
+    three decoder outputs come up from the socket with two or three vias each (they cross A9, which runs across
+    on the back below U7) into U17's left-hand pins; `~ROM_CS` leaves pin 9 straight down between U7's pads to one
+    via. No via sits in an SMD pad. GPIO3 reaches U17 through R36 above U9, mostly on In2.Cu (61 mm in all). The
+    grid router laid those, at 0.15 mm: 171 mm and 13 vias for the eight nets it routed or re-routed.
   * **That corner is too dense for 0.2 mm tracks and clearances.** The rule area `bootrom` (x 116.0–174.6, y from
     79.0 down) allows **0.15 mm** there; the rest of the card keeps 0.2 mm (`PicoGUS-THT.kicad_dru`). 0.15 mm is
     within JLCPCB's standard 4-layer capability (0.09 mm). About 1.8 m of track is 0.15 mm wide.

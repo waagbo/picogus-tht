@@ -165,7 +165,9 @@ silkscreen. Each round found real faults. Apply these from the start on the next
     have to move. THT v2.1's boot ROM address select (U17, a 74HCT153) went under U7 that way.
   - **A grid router's via cost is a length.** On THT v2.1's grid router (0.05 mm cells) a via cost of 600 cells,
     30 mm, sent a decoder line 47 mm round U7 rather than through two vias; at 150 cells the four lines from the
-    decoder to U17 took 48 mm in all instead of 92 to 206 mm. Route the line with the fewest ways out first.
+    decoder to U17 took about 50 mm in all instead of 92 to 206 mm. Route the line with the fewest ways out first.
+  - **Tell a router that vias stay out of SMD pads, its own net's too.** The grid router put `~ROM_CS`'s via on
+    U17's pin 9 (DRC passes a via in a pad of the same net); hand soldering would draw the solder down the hole.
   - **A via is an obstacle on every layer.** When laying a track by hand through a group of vias, check it
     against every via near it, not only against the tracks on its own layer.
   - **Line parts up by their bodies, not by KiCad's outlines.** A DIP's fab and silkscreen outline ends 1.33 mm
