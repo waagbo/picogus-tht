@@ -32,9 +32,13 @@ Quantity,Manufacturer Part Number,Manufacturer,Customer Part Number,Description
 1,0676430910,Molex,J11,USB-A receptacle
 1,MF-R050,Bourns,F1,0.5A PTC
 1,16ZLH220MEFC6.3X11,Rubycon,C34,220uF
-1,USBLC6-2SC6,STMicroelectronics,U12 (optional),USBLC6-2SC6
 1,NE5532P,Texas Instruments,U11,NE5532
 3,MFR-25FBF52-100K,Yageo,"R14,R15,R18",100k
 2,MFR-25FBF52-10R,Yageo,"R23,R24",10R
 2,MFR-25FBF52-100R,Yageo,"R21,R22",100R
 2,K470J15C0GF5TH5,Vishay,"C30,C31",47pF C0G
+2,PPTC201LFBN-RC,Sullins,U1 sockets (optional),1x20 female header x2
+4,ICM-314-1-GT-HT,Adam Tech,"U5,U6,U7,U10 (opt.)",DIP-14 socket
+1,SA203000,On Shore Technology,U2 socket (optional),DIP-20 socket
+1,SA083000,On Shore Technology,U11 socket (optional),DIP-8 socket
+1,USBLC6-2SC6,STMicroelectronics,U12 (optional),USBLC6-2SC6
