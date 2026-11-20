@@ -30,7 +30,7 @@ typedef enum { PICO_BASED = 0, PICOGUS_2 = 1 } board_type_t;
 typedef enum {
     CHIP_RP2040 = 0,        // Pico, Pico W, PicoGUS 2.0
     CHIP_RP2350 = 1,        // Pico 2, Pico 2 W
-    CHIP_RP2350B_V21 = 2    // PicoGUS v2.1 THT (Core2350B module)
+    CHIP_CORE2350B = 2      // Waveshare Core2350B module (RP2350B), as on the PicoGUS v2.1 THT
 } chip_type_t;
 
 // Base address of the experimental boot ROM of the PicoGUS v2.1 THT (branch hw2.1-tht-experimental), as

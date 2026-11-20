@@ -53,9 +53,9 @@
 #define PLATFORM_UF2_FAMILY_ID_OPTIONAL 1
 #else
 #if PICOGUS_BOARD_V21
-// PicoGUS v2.1 THT: its firmware is not interchangeable with the Pico 2's
+// Core2350B module (PicoGUS v2.1 THT): its firmware is not interchangeable with the Pico 2's
 #define PICOGUS_CHIP_NAME "RP2350B"
-#define PICOGUS_CHIP_TYPE CHIP_RP2350B_V21
+#define PICOGUS_CHIP_TYPE CHIP_CORE2350B
 #else
 #define PICOGUS_CHIP_NAME "RP2350"
 #define PICOGUS_CHIP_TYPE CHIP_RP2350

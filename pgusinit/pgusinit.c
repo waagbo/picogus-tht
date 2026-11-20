@@ -90,7 +90,7 @@ static void usage(card_mode_t mode, bool print_all)
     pageprintf("   /wtvol x      - set volume of WT header. 0-100, Default 100 (2.0 cards only)\n");
     pageprintf("   /joy 1|0      - enable/disable USB joystick support, Default: 0\n");
     pageprintf("   /mainvol x    - set the main audio volume: 0 - 100\n");
-    if (gChip == CHIP_RP2350B_V21 || print_all) {
+    if (gChip == CHIP_CORE2350B || print_all) {
         pageprintf("   /bootrom x    - v2.1 boot ROM address: off, c800, d000, d800. Default: off\n");
         pageprintf("                   (the BIOS finds it at its new address at the next reboot)\n");
     }
@@ -610,8 +610,8 @@ static const char* chip_name(chip_type_t chip)
     switch (chip) {
     case CHIP_RP2350:
         return "RP2350 (Pico 2)";
-    case CHIP_RP2350B_V21:
-        return "RP2350B (PicoGUS v2.1)";
+    case CHIP_CORE2350B:
+        return "RP2350B (Core2350B)";
     default:
         return "RP2040";
     }
@@ -623,7 +623,7 @@ static const char* chip_firmware_files(chip_type_t chip)
     switch (chip) {
     case CHIP_RP2350:
         return "pgus2350.uf2 (ne2k2350.uf2 for NE2000 on a Pico 2 W)";
-    case CHIP_RP2350B_V21:
+    case CHIP_CORE2350B:
         return "core2350.uf2";
     default:
         return "picogus.uf2 (pg-ne2k.uf2 for NE2000 on a Pico W)";
@@ -640,7 +640,7 @@ static chip_type_t get_chip_type(void)
     // Firmware that doesn't know the register stops listening to the control port when it is selected, and the
     // commands that follow don't all knock first, so knock again
     outp(CONTROL_PORT, 0xCC);
-    return (chip == CHIP_RP2350 || chip == CHIP_RP2350B_V21) ? (chip_type_t)chip : CHIP_RP2040;
+    return (chip == CHIP_RP2350 || chip == CHIP_CORE2350B) ? (chip_type_t)chip : CHIP_RP2040;
 }
 
 // Check that a firmware file is for the card's microcontroller, going by the family ID in its first UF2 block. Firmware
@@ -1099,7 +1099,7 @@ static bool cmdFlashPico(const char* arg, const int cmd, const int cmd2, const i
 static bool cmdSendBootROM(const char* arg, const int cmd, const int cmd2, const int cmd3)
 {
     static const char *names[] = {"off", "c800", "d000", "d800"};
-    if (gChip != CHIP_RP2350B_V21) {
+    if (gChip != CHIP_CORE2350B) {
         fprintf(stderr, "ERROR: /bootrom is for the PicoGUS v2.1 THT with the boot ROM\n");
         return false;
     }
@@ -1265,7 +1265,7 @@ static void printPicoGus()
         printf("MPU-401 disabled\n");
     }
 
-    if (gChip == CHIP_RP2350B_V21) {
+    if (gChip == CHIP_CORE2350B) {
         static const char *bootrom[] = {"off", "at C800h", "at D000h", "at D800h"};
         uint8_t base = ctrlGetUint8(CMD_BOOTROM);
         // Firmware without the boot ROM register stops listening to the control port: knock again
@@ -1445,7 +1445,7 @@ static init_status initPicoGUS()
     board_type = inp(DATA_PORT_HIGH);
     chip_type_t chip_type = get_chip_type();
     gChip = chip_type;
-    if (chip_type == CHIP_RP2350B_V21) {
+    if (chip_type == CHIP_CORE2350B) {
         // Reports itself as a PicoGUS 2.0, whose circuit it has
         printf("Hardware: PicoGUS v2.1 THT (RP2350B)");
     } else if (board_type == PICO_BASED) {
