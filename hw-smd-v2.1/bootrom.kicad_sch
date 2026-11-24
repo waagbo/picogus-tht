@@ -2233,7 +2233,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "1727-2835-1-ND"
 			(at 95.25 85.09 0)
 			(hide yes)
 			(show_name no)
@@ -5510,7 +5510,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "1727-74HCT153D,653CT-ND"
 			(at 95.25 142.24 0)
 			(hide yes)
 			(show_name no)

@@ -15,7 +15,7 @@ the radio module). Only the packages change.
 > NOT routed. Not built, not tested.**
 > Schematic: ERC gives the same messages as THT v2.1, and its netlist is identical to THT v2.1's (201 nets, 589 pins,
 > 102 parts; only footprints, values and part numbers differ). Board: 0 courtyard overlaps, 0 schematic parity
-> issues, 418 connections still to route. The BOM is a draft: see [BOM](#bom).
+> issues, 418 connections still to route. The BOM has part numbers but no prices: see [BOM](#bom).
 > The board is not in the Hardware workflow yet, because an unrouted board fails its DRC.
 
 ![Placement, front](docs/renders/PicoGUS-SMD-v2.1.0-placement-red-front.jpg)
@@ -25,7 +25,7 @@ the radio module). Only the packages change.
 | `PicoGUS-SMD.kicad_pro/.kicad_sch/.kicad_pcb/.kicad_dru` | KiCad **10** project. The board is the THT v2.1 board (outline, stackup, plane zones, logo, edge connector, connectors and modules in place) with the SMD parts placed and no tracks |
 | `audio.kicad_sch`, `mixer.kicad_sch`, `bootrom.kicad_sch` | The DAC, line-out mixer and boot ROM sheets of THT v2.1 with SMD footprints |
 | `PicoGUS-SMD-schematic.pdf` | Schematic PDF |
-| `docs/BOM-SMD.csv` | Draft BOM: see [BOM](#bom) |
+| `docs/BOM-SMD.csv` | BOM with part numbers, no prices yet: see [BOM](#bom) |
 | `docs/renders/` | Render of the placement |
 
 ## What changed from THT v2.1
@@ -72,21 +72,30 @@ layout wants them:
   long high-impedance track. The input pull-downs R31/R32 moved here with them.
 * The analogue parts stay inside THT v2.1's AGND and AVDD plane islands, which are unchanged.
 
+Neighbouring parts have at least 0.6 mm between their pads; the 0805 rows at the DAC and the mixer have 0.9 mm.
 Every part has its reference on the silkscreen beside it (0.8 mm text; chips 1.0 mm). The silkscreen check finds no
 new overlap; the two overlaps and two clipped items it reports are on THT v2.1 as well.
 
 ## BOM
 
-`docs/BOM-SMD.csv` lists every part with manufacturer part number and DigiKey number where one is known. The column
-**Part number** says how far each line can be trusted:
+`docs/BOM-SMD.csv` lists every part with manufacturer part number and DigiKey number. The column **Part number**
+says where each line comes from:
 
-* `as on THT v2.1`: the same part as on the through-hole board, taken from its BOM.
-* `hw-smd BOM (2026-09-29)`: the part and DigiKey number come from the checked BOM of `hw-smd`. Stock and price were
-  not looked at again.
-* `checked 2026-11-24`: looked up for this board; the note says against what.
-* `NOT CHECKED`: a candidate part number that has not been verified. Check it before ordering.
+* `as on THT v2.1` (18 lines): the same part as on the through-hole board, taken from its BOM.
+* `hw-smd BOM (2026-09-29)` (21 lines): the part and its DigiKey number come from the checked BOM of `hw-smd`.
+* `checked 2026-11-24` (12 lines): the parts that are new here, looked up on DigiKey's product page and, where the
+  land pattern or the pin-out depends on it, in the manufacturer's datasheet. The Notes column says what was read.
 
-There are no prices and no cart upload files yet: they come when the board is routed.
+Stock and prices were not looked at for any line, and there are no cart upload files yet: they come when the board
+is routed.
+
+Three things from the check that are easy to get wrong when ordering:
+
+* **C38** is EEE-FK1E101**X**P (6.3 mm can). EEE-FK1E101P without the X is 8 mm and does not fit.
+* **C39–C42** are UWP1**V**2R2MCL1GB (35 V, 4 mm can). The 50 V UWP1H2R2MCL1GB is 5 mm and does not fit. They are
+  bipolar and fit either way round; the + mark on the board comes with KiCad's footprint and means nothing here.
+* **U9**: the SOT-223 MCP1826S has the same pin order as the TO-220 of THT v2.1 (VIN, GND, VOUT, tab on GND).
+  DigiKey sells MCP1826S-3302E/DB only in tubes; the BOM names the taped MCP1826ST-3302E/DB.
 
 ## Next
 

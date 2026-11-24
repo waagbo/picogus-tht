@@ -20791,7 +20791,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4658-1-ND"
 			(at 120.015 179.07 0)
 			(hide yes)
 			(show_name no)
@@ -21030,7 +21030,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 264.16 155.575 0)
 			(hide yes)
 			(show_name no)
@@ -21189,7 +21189,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4658-1-ND"
 			(at 170.815 155.575 0)
 			(hide yes)
 			(show_name no)
@@ -21946,7 +21946,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 246.38 158.115 0)
 			(hide yes)
 			(show_name no)
@@ -22311,7 +22311,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 196.85 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -23524,7 +23524,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-1096-1-ND"
 			(at 132.715 131.445 0)
 			(hide yes)
 			(show_name no)
@@ -23669,7 +23669,7 @@
 				)
 			)
 		)
-		(property "Description" "2.2uF 50V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, either polarity): Waveblaster left into U13"
+		(property "Description" "2.2uF 35V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, fits either way round): Waveblaster left into U13"
 			(at 299.72 31.75 0)
 			(hide yes)
 			(show_name no)
@@ -23691,7 +23691,7 @@
 				)
 			)
 		)
-		(property "MPN" "UWP1H2R2MCL1GB"
+		(property "MPN" "UWP1V2R2MCL1GB"
 			(at 299.72 31.75 0)
 			(hide yes)
 			(show_name no)
@@ -23702,7 +23702,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "493-9836-1-ND"
 			(at 299.72 31.75 0)
 			(hide yes)
 			(show_name no)
@@ -24156,7 +24156,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 246.38 170.18 0)
 			(hide yes)
 			(show_name no)
@@ -24433,7 +24433,7 @@
 				)
 			)
 		)
-		(property "MPN" "EEE-FK1E101P"
+		(property "MPN" "EEE-FK1E101XP"
 			(at 295.91 21.59 0)
 			(hide yes)
 			(show_name no)
@@ -24444,7 +24444,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "PCE3797CT-ND"
 			(at 295.91 21.59 0)
 			(hide yes)
 			(show_name no)
@@ -24646,7 +24646,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 107.315 179.07 0)
 			(hide yes)
 			(show_name no)
@@ -25218,7 +25218,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "SW836CT-ND"
 			(at 271.78 173.99 0)
 			(hide yes)
 			(show_name no)
@@ -25621,7 +25621,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4658-1-ND"
 			(at 93.98 213.36 0)
 			(hide yes)
 			(show_name no)
@@ -26749,7 +26749,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4658-1-ND"
 			(at 116.84 213.36 0)
 			(hide yes)
 			(show_name no)
@@ -27669,7 +27669,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 95.885 179.07 0)
 			(hide yes)
 			(show_name no)
@@ -27830,7 +27830,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 182.88 210.82 0)
 			(hide yes)
 			(show_name no)
@@ -28260,7 +28260,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 172.72 124.46 0)
 			(hide yes)
 			(show_name no)
@@ -28487,7 +28487,7 @@
 				)
 			)
 		)
-		(property "MPN" "MCP1826S-3302E/DB"
+		(property "MPN" "MCP1826ST-3302E/DB"
 			(at 262.89 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -28498,7 +28498,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "MCP1826ST-3302E/DBCT-ND"
 			(at 262.89 100.33 0)
 			(hide yes)
 			(show_name no)
@@ -31248,7 +31248,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "160-1414-1-ND"
 			(at 145.415 57.785 0)
 			(hide yes)
 			(show_name no)
@@ -32583,7 +32583,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "SW836CT-ND"
 			(at 131.445 92.075 0)
 			(hide yes)
 			(show_name no)
@@ -34003,7 +34003,7 @@
 				)
 			)
 		)
-		(property "Description" "USB host VBUS fuse, 0.5 A hold, 1812 resettable"
+		(property "Description" "USB host VBUS fuse: resettable, 0.5 A hold, 1.0 A trip, 15 V, 1812"
 			(at 227.965 69.215 0)
 			(hide yes)
 			(show_name no)
@@ -34036,7 +34036,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "MF-MSMF050-2CT-ND"
 			(at 227.965 69.215 0)
 			(hide yes)
 			(show_name no)
@@ -34954,7 +34954,7 @@
 				)
 			)
 		)
-		(property "Description" "2.2uF 50V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, either polarity): Waveblaster right into U13"
+		(property "Description" "2.2uF 35V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, fits either way round): Waveblaster right into U13"
 			(at 299.72 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -34976,7 +34976,7 @@
 				)
 			)
 		)
-		(property "MPN" "UWP1H2R2MCL1GB"
+		(property "MPN" "UWP1V2R2MCL1GB"
 			(at 299.72 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -34987,7 +34987,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "493-9836-1-ND"
 			(at 299.72 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -35190,7 +35190,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 196.85 132.08 0)
 			(hide yes)
 			(show_name no)
@@ -35351,7 +35351,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4509-1-ND"
 			(at 264.16 141.605 0)
 			(hide yes)
 			(show_name no)
@@ -36734,7 +36734,7 @@
 				)
 			)
 		)
-		(property "Description" "2.2uF 50V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, either polarity): U13 right out to the mixer"
+		(property "Description" "2.2uF 35V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, fits either way round): U13 right out to the mixer"
 			(at 332.105 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -36756,7 +36756,7 @@
 				)
 			)
 		)
-		(property "MPN" "UWP1H2R2MCL1GB"
+		(property "MPN" "UWP1V2R2MCL1GB"
 			(at 332.105 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -36767,7 +36767,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "493-9836-1-ND"
 			(at 332.105 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -36890,7 +36890,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "296-4658-1-ND"
 			(at 210.82 210.82 0)
 			(hide yes)
 			(show_name no)
@@ -37017,7 +37017,7 @@
 				)
 			)
 		)
-		(property "Description" "2.2uF 50V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, either polarity): U13 left out to the mixer"
+		(property "Description" "2.2uF 35V bipolar SMD electrolytic, 4 x 5.4 mm (audio coupling, fits either way round): U13 left out to the mixer"
 			(at 332.105 33.02 0)
 			(hide yes)
 			(show_name no)
@@ -37039,7 +37039,7 @@
 				)
 			)
 		)
-		(property "MPN" "UWP1H2R2MCL1GB"
+		(property "MPN" "UWP1V2R2MCL1GB"
 			(at 332.105 33.02 0)
 			(hide yes)
 			(show_name no)
@@ -37050,7 +37050,7 @@
 				)
 			)
 		)
-		(property "DigiKey" ""
+		(property "DigiKey" "493-9836-1-ND"
 			(at 332.105 33.02 0)
 			(hide yes)
 			(show_name no)
