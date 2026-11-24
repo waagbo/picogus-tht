@@ -112,6 +112,12 @@ silkscreen. Each round found real faults. Apply these from the start on the next
   - JLCPCB no longer prints an order number by default, so the placeholder text lives on B.Fab.
   - `hw-common/tools/jlcpcb.sh` gates on DRC with schematic parity. The 12 accepted courtyard overlaps in the
     logic column pass with `ALLOW_DRC=courtyards_overlap`, which still stops on any other error type.
+  - **Open the gerber zip and count the copper layers before ordering.** `jlcpcb.sh` was written for the 2-layer
+    v1.3 and listed `F.Cu,B.Cu` by name. THT v2.1 is the first 4-layer board: for weeks the script and the
+    Hardware workflow produced, without any error, a zip with no inner layers (no GND plane, no +3V3 layer with
+    its 0.7 m of signal track). It was found on 2026-11-24, when the files were first made for an order. The
+    script now takes the copper layers from the board file and stops if the gerbers written do not match. Look
+    at the gerbers in a gerber viewer (`gerbv`), not at the board in KiCad: only that shows what the fab gets.
 - **Routing**:
   - Lock the critical pre-routes first: the finger corridor (IRQ2, D5), the USB pair between the Pico's shell
     holes, and the DAC GND/VNEG/XSMT stubs.

@@ -4,7 +4,8 @@
 #   hw-common/tools/jlcpcb.sh hw-tht-v1.3/PicoGUS-THT.kicad_pcb [OUT_DIR]
 #
 # Output (default OUT_DIR: <board dir>/build/jlcpcb):
-#   <name>-gerbers.zip     upload this to jlcpcb.com (gerbers + Excellon drill files)
+#   <name>-gerbers.zip     upload this to jlcpcb.com (gerbers of every copper layer, inner ones included, +
+#                          Excellon drill files)
 #   <name>-drc.rpt         DRC report (errors only, incl. schematic parity)
 #   <name>-bom-jlc.csv     JLCPCB assembly BOM  (Comment, Designator, Footprint, LCSC Part #, MPN), every part
 #   <name>-cpl-jlc.csv     JLCPCB placement list (Designator, Mid X, Mid Y, Layer, Rotation): SMD parts only (plus
@@ -47,11 +48,21 @@ if ! kicad-cli pcb drc --severity-error --schematic-parity --exit-code-violation
 fi
 grep -E '^\*\* Found' "$out/$name-drc.rpt" || true
 
-echo "== Gerbers"
+# Every copper layer of the board: a 4-layer board also has In1.Cu and In2.Cu (its planes), taken from the
+# board file's layer table
+inner=$(grep -oE '^[[:space:]]*\([0-9]+ "In[0-9]+\.Cu"' "$pcb" | grep -oE 'In[0-9]+\.Cu' | sort -V | paste -sd, - || true)
+copper="F.Cu${inner:+,$inner},B.Cu"
+ncopper=$(echo "$copper" | tr ',' '\n' | wc -l)
+echo "== Gerbers ($ncopper copper layers: $copper)"
 # JLCPCB: Protel extensions (default), no X2 attributes, silkscreen clipped by the mask openings
 kicad-cli pcb export gerbers -o "$out/gerbers" \
-    --layers F.Cu,B.Cu,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts \
+    --layers "$copper,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts" \
     --exclude-value --subtract-soldermask --no-x2 --no-netlist --check-zones "$pcb" >/dev/null
+found=$(ls "$out/gerbers" | grep -cE -- '-(F|B|In[0-9]+)_Cu\.' || true)
+if [ "$found" != "$ncopper" ]; then
+    echo "The board has $ncopper copper layers but $found copper gerbers were written" >&2
+    exit 1
+fi
 
 echo "== Drill"
 kicad-cli pcb export drill -o "$out/gerbers/" --format excellon --excellon-units mm \
