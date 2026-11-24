@@ -586,6 +586,11 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   `D000` and `D800` went with the jumpers on 2026-11-19); `R36` stands on its body, as U9 and C20 leave no room
   beside it. With KiCad's silkscreen checks switched on (they are off in the project) the boot ROM adds no
   overlap.
+* **Attribution block on the back** (name, copyright, licence, link and thanks, in a frame): its link is
+  `https://github.com/waagbo/picogus-tht` (2026-11-24; before that upstream's `github.com/polpo/picogus`). The frame
+  is 26.6 × 10.9 mm and sits between the through-hole pads round it: C2 and C3 above, J3 below, D3 and R13 on one
+  side and the flash socket's pins on the other, 3.5 to 5.0 mm from each. It is 0.8 mm off the exact middle, where
+  9 via holes fall in letters instead of 17 (the vias are tented, but their holes take the ink).
 * **Groups, as on v1.3.2**, so a block moves as one: `74AHCT126 (U6)`, `74AHC00 (U4)`, `74AHC00 (U5)`,
   `74AHC14 (U3)` (with the column resistors), `74AHC244 (U7)`, `ISA bus switches (U1, U2)`,
   `Waveblaster header (J8)`, `DAC (U10)`, `Mixer + line out (U11, J9)`, `WT volume (U13)`, `MIDI out (J7)`,
