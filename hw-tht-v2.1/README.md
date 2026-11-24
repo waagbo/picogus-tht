@@ -34,8 +34,8 @@ and R33/R34 (the radio module's, between the Core2350B and the module). Everythi
 > **Status: schematic done; board placed and routed (4 layers, DRC clean, matches the schematic), for review. Not
 > built or tested. Firmware: ported and built (`core2350.uf2`, and `pg-ne2k-v21.uf2` for the radio module), not tested on hardware** (see
 > [Firmware](#firmware) and [Layout status](#layout-status)). The boot ROM of this branch is in the schematic and
-> on the board (same checks), with a firmware switch for its enable pin; nothing of it is tested. JLCPCB files: `hw-common/tools/jlcpcb.sh
-> hw-tht-v2.1/PicoGUS-THT.kicad_pcb` with `ALLOW_DRC=courtyards_overlap` (the 12 accepted overlaps in the logic
+> on the board (same checks), with a firmware setting for its base address; nothing of it is tested. JLCPCB files: `hw-common/tools/jlcpcb.sh
+> hw-tht-v2.1/PicoGUS-THT.kicad_pcb` with `ALLOW_DRC=courtyards_overlap` (the 13 accepted overlaps in the logic
 > column); the Hardware workflow builds them on every change.
 
 Files:
