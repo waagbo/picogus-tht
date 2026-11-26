@@ -73,8 +73,12 @@ layout wants them:
 * The analogue parts stay inside THT v2.1's AGND and AVDD plane islands, which are unchanged.
 
 Neighbouring parts have at least 0.6 mm between their pads; the 0805 rows at the DAC and the mixer have 0.9 mm.
-Every part has its reference on the silkscreen beside it (0.8 mm text; chips 1.0 mm). The silkscreen check finds no
-new overlap; the two overlaps and two clipped items it reports are on THT v2.1 as well.
+Every part has its reference on the silkscreen: 0.8 mm text beside the part, 1.0 mm for the chips. Five labels are
+inside their part instead, where the part covers them once it is soldered: U13 and U16 between their pad rows, and
+C23, R31 and R32 between their two pads. Those three are 0.45 mm text, the largest that fits the 0.8 mm between
+0805 pads, and their footprints lose the two small body marks to make room; DRC lists the small text and the changed
+footprints as six warnings. The mounting holes have no label. The silkscreen check finds no new overlap; the two
+overlaps and two clipped items it reports are on THT v2.1 as well.
 
 ## BOM
 
