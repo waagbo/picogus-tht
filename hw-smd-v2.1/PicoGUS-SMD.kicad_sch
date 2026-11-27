@@ -6,7 +6,7 @@
 	(paper "A3")
 	(title_block
 		(title "PicoGUS v2.1 SMD")
-		(date "2026-11-24")
+		(date "2026-11-27")
 		(rev "v2.1")
 		(comment 1 "SMD version of the PicoGUS v2.1 THT: same circuit and references, Waveshare Core2350B (RP2350B) module")
 		(comment 2 "v2.0 ISA logic and GPIO map; SMD parts chosen for hand soldering, 0805 passives")
@@ -15236,9 +15236,29 @@
 		(at 64.135 24.13)
 		(uuid "8d82ccf3-d524-474d-b9bc-6e894d820c7c")
 	)
-	(no_connect
-		(at 28.575 49.53)
-		(uuid "9361ef78-a7af-4fca-8ac6-f11f03300cc9")
+	(global_label "~{SMEMW}"
+		(shape output)
+		(at 28.575 49.53 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "312f4be4-4375-5825-8043-84e2a4c05b6c")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 28.575 49.53 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
 	)
 	(no_connect
 		(at 145.415 136.525)

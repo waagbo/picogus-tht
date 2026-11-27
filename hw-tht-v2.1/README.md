@@ -394,9 +394,13 @@ three chips and two GPIOs. Schematic sheet `bootrom.kicad_sch`.
   a write only after a three-byte unlock sequence at 5555h and 2AAAh, and those addresses use A0-A14 only, so
   they lie inside the window with A15/A16 tied low (datasheet DS20005022). Ordinary memory writes into the window
   do nothing. Switch ROM shadowing off for the window in the PC's setup. A programmer still works: the flash is in
-  a socket (the image at offset 0, with the usual option ROM header and checksum). On v2.1.0 WE# is tied to
-  +5 V: see [docs/v2.1.0-flash-write-mod.md](docs/v2.1.0-flash-write-mod.md). **Not tested on a card.** The NE2000 card's write jumper, its
-  four 32 KB banks and its full base address on GPIOs are left out; that is where the chips and GPIOs were saved.
+  a socket (the image at offset 0, with the usual option ROM header and checksum). If a written image stops the PC
+  during its start-up: pull the chip, or hold BOOTSEL while the PC starts, so the module waits in its USB loader
+  and R35/R36 keep the ROM switched off; RUN, pressed once DOS is up, starts the firmware, which switches the ROM
+  on again so it can be written anew. On v2.1.0 WE# is tied to +5 V: see
+  [docs/v2.1.0-flash-write-mod.md](docs/v2.1.0-flash-write-mod.md). **None of this is tested on a card.** The
+  NE2000 card's write jumper, its four 32 KB banks and its full base address on GPIOs are left out; that is where
+  the chips and GPIOs were saved.
 * **No bus buffer** (the NE2000 card has a 74AHCT245): the flash drives the ISA data lines itself, as the boot
   EPROM of an NE2000 clone does. Its data sheet only promises its output levels at 100 µA, so on a full bus with
   pull-ups the levels are not guaranteed. This is the main thing to check on a built card.

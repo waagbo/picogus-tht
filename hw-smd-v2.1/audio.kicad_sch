@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "PicoGUS v2.1 SMD - PCM5100A DAC")
-		(date "2026-11-24")
+		(date "2026-11-27")
 		(rev "v2.1")
 	)
 	(lib_symbols

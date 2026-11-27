@@ -10,17 +10,20 @@ the radio module). Only the packages change.
 * **Parts picked for soldering by hand**: 0805 resistors and capacitors on KiCad's hand-solder lands (longer pads),
   SOIC (1.27 mm pitch) wherever the chip exists as SOIC, and everything on the front. Nothing is on the back.
 * The radio module (U14) and the experimental boot ROM (U15–U17) of THT v2.1 are included, and optional as there.
-  The boot ROM's flash keeps its through-hole socket: see [Boot ROM socket](#boot-rom-socket).
+  The boot ROM's flash keeps its through-hole socket, and as on THT v2.1.1 it can be written in the card: see
+  [Boot ROM socket](#boot-rom-socket).
 * **Every joint can be made with a soldering iron.** That rules parts out whose leads hide under the body.
 
 > **Status: draft for placement review. The schematic is done; the board has every part placed and labelled but is
 > NOT routed. Not built, not tested.**
-> Schematic: ERC gives the same messages as THT v2.1, and its netlist is identical to THT v2.1's (201 nets, 589 pins,
-> 102 parts; only footprints, values and part numbers differ). Board: 0 courtyard overlaps, 0 schematic parity
+> The files say **v2.1.1** (2026-11-27), like THT v2.1.1 whose circuit they follow: the flash's write enable is on
+> ISA's memory write strobe.
+> Schematic: ERC gives the same messages as THT v2.1.1, and its netlist is identical to THT v2.1.1's (201 nets, 589
+> pins, 102 parts; only footprints, values and part numbers differ). Board: 0 courtyard overlaps, 0 schematic parity
 > issues, 398 connections still to route. The BOM has part numbers but no prices: see [BOM](#bom).
 > The board is not in the Hardware workflow yet, because an unrouted board fails its DRC.
 
-![Placement, front](docs/renders/PicoGUS-SMD-v2.1.0-placement-red-front.jpg)
+![Placement, front](docs/renders/PicoGUS-SMD-v2.1.1-placement-red-front.jpg)
 
 | File | What |
 |---|---|
@@ -130,13 +133,20 @@ possible with a soldering iron. What was looked at (maker drawings read 2026-11-
   flash. They are 40.6 mm long and about 21 mm over the pads, cost 6 to 23 US$ and were hardly in stock, so they
   are not used.
 
-**The socket could go altogether** if the card could write the flash: the chip itself (J-leads, 1.27 mm pitch) is
-easy to solder by hand. Today it cannot: the flash's write enable (pin 31) is tied to +5 V and ISA's memory write
-strobe SMEMW (pin B11) is not connected on the card, so the chip is programmed in a programmer and plugged in.
-Connecting the two would be enough. By the SST39SF010A datasheet (DS20005022) the chip writes from 5 V alone, its
-command addresses 5555h and 2AAAh use only A0–A14, so they lie inside the 32 KB window, and A15/A16 tied low is
-allowed; XTIDECFG (r620 and later, "SST39SFx flash") and Lo-tech's FLASH utility program this chip in a 32 KB
-window from DOS. This is not wired and not decided.
+**The flash can be written in the card** (from v2.1.1, as on THT v2.1.1): its write enable (pin 31) is on ISA's
+memory write strobe SMEMW (edge connector pin B11) instead of +5 V. By the SST39SF010A datasheet (DS20005022) the
+chip writes from 5 V alone, its command addresses 5555h and 2AAAh use only A0–A14, so they lie inside the 32 KB
+window, and A15/A16 tied low is allowed. XTIDECFG (r620 and later, "SST39SFx flash") and Lo-tech's FLASH utility
+program this chip in a 32 KB window from DOS; see the THT v2.1 README for how. The chip's own three-byte unlock
+sequence is the write protection: there is no jumper. **Not tested on a card.**
+
+That makes it possible to leave the socket out and solder the flash itself: its J-leads on 1.27 mm pitch can be
+soldered by hand. This board does not do that yet, because a soldered chip depends on the write path, and that has
+not run on a card. A THT v2.1.0 card with the [two wires](../hw-tht-v2.1/docs/v2.1.0-flash-write-mod.md) has the
+same circuit and can show it. An image that stops the PC during its start-up would not be the end of a soldered
+chip: with BOOTSEL held while the PC starts, the module waits in its USB loader and R35/R36 keep the ROM switched
+off; RUN, pressed once DOS is up, starts the firmware, which switches the ROM on again so it can be written anew
+(from the schematic and the firmware source, not tried).
 
 ## BOM
 
@@ -162,6 +172,8 @@ Three things from the check that are easy to get wrong when ordering:
 ## Next
 
 1. Review of the placement.
-2. Routing (4 layers, 0.2 mm tracks and clearances; the boot ROM corner should not need THT v2.1's 0.15 mm any more),
+2. The flash soldered straight to the board in place of the socket, if that is wanted: see
+   [Boot ROM socket](#boot-rom-socket).
+3. Routing (4 layers, 0.2 mm tracks and clearances; the boot ROM corner should not need THT v2.1's 0.15 mm any more),
    DRC, then the Hardware workflow entry and JLCPCB files.
-3. Prices, DigiKey and LCSC upload files.
+4. Prices, DigiKey and LCSC upload files.
