@@ -10,14 +10,14 @@ the radio module). Only the packages change.
 * **Parts picked for soldering by hand**: 0805 resistors and capacitors on KiCad's hand-solder lands (longer pads),
   SOIC (1.27 mm pitch) wherever the chip exists as SOIC, and everything on the front. Nothing is on the back.
 * The radio module (U14) and the experimental boot ROM (U15–U17) of THT v2.1 are included, and optional as there.
-  The boot ROM's flash sits in a surface-mount socket, the one part here that is not easy by hand: see
-  [Boot ROM socket](#boot-rom-socket).
+  The boot ROM's flash keeps its through-hole socket: see [Boot ROM socket](#boot-rom-socket).
+* **Every joint can be made with a soldering iron.** That rules parts out whose leads hide under the body.
 
 > **Status: draft for placement review. The schematic is done; the board has every part placed and labelled but is
 > NOT routed. Not built, not tested.**
 > Schematic: ERC gives the same messages as THT v2.1, and its netlist is identical to THT v2.1's (201 nets, 589 pins,
 > 102 parts; only footprints, values and part numbers differ). Board: 0 courtyard overlaps, 0 schematic parity
-> issues, 401 connections still to route. The BOM has part numbers but no prices: see [BOM](#bom).
+> issues, 398 connections still to route. The BOM has part numbers but no prices: see [BOM](#bom).
 > The board is not in the Hardware workflow yet, because an unrouted board fails its DRC.
 
 ![Placement, front](docs/renders/PicoGUS-SMD-v2.1.0-placement-red-front.jpg)
@@ -29,7 +29,7 @@ the radio module). Only the packages change.
 | `PicoGUS-SMD-schematic.pdf` | Schematic PDF |
 | `docs/BOM-SMD.csv` | BOM with part numbers, no prices yet: see [BOM](#bom) |
 | `docs/renders/` | Render of the placement |
-| `tools/gen_tssop20_handsolder.py`, `tools/gen_plcc32_smd_socket.py` | Write the two footprints this board adds to the shared library (`hw-common/PiGUS library.pretty`): the TSSOP-20 with hand-solder toes and no test pads, and the surface-mount PLCC-32 socket with its 3D model |
+| `tools/gen_tssop20_handsolder.py` | Writes the footprint this board adds to the shared library (`hw-common/PiGUS library.pretty`): the TSSOP-20 with hand-solder toes and no test pads |
 
 ## What changed from THT v2.1
 
@@ -40,7 +40,6 @@ the radio module). Only the packages change.
 | U11 NE5532 | DIP-8 | SOIC-8 |
 | U9 MCP1826S 3.3 V regulator | TO-220, lying | SOT-223 |
 | U16 74HCT138, U17 74HCT153 (boot ROM) | TSSOP-16 on the back | SOIC-16 on the front |
-| U15 flash socket (boot ROM) | through-hole PLCC-32 socket | surface-mount PLCC-32 socket; the chip can also be soldered to the same lands |
 | U10 PCM5100A | TSSOP-20 with hand-solder toes and a test pad per pin | the same toes, no test pads |
 | Resistors | axial; four 0805 on the back | 0805 on the front; 0.1 % thin film in the audio path (R10, R11, R21–R26), 1 % thick film elsewhere |
 | Capacitors up to 2.2 µF | radial ceramic | 0805: X7R, and C0G for the DAC filter (C21, C22) and the mixer feedback (C24, C25) |
@@ -55,7 +54,7 @@ the radio module). Only the packages change.
 
 Unchanged: U1/U2 (SN74CB3T3257) exist only as TSSOP and keep THT v2.1's footprint with hand-solder toes and a test
 pad per pin; U13 (M62429L) is a SOIC-8 already. All connectors and headers stay through hole, as do the module
-sockets. The radio module keeps its hand-solder lands.
+sockets and the PLCC-32 socket of the boot ROM. The radio module keeps its hand-solder lands.
 
 ## Placement
 
@@ -120,30 +119,23 @@ pads cover the space above them.
 
 ### Boot ROM socket
 
-U15 is the footprint of a surface-mount PLCC-32 socket without locating pegs: Amphenol FCI 69802-432LF or -132LF,
-Assmann A-CCS 032-Z-SM, Mill-Max 940-44-032-17-400000 (rows 11.02 and 13.56 mm apart by their drawings, pads
-0.76 × 1.91 mm; Preci-Dip's 540 series is narrower and does not fit). Two things to know:
+The flash (U15, PLCC-32) stays in THT v2.1's through-hole socket. A surface-mount socket was tried and taken out
+again: on every surface-mount PLCC-32 socket whose drawing was read (Amphenol FCI 69802, Assmann A-CCS 032-Z-SM,
+Mill-Max 940-44-032-17-400000, Kycon SMPX-32LCC, Preci-Dip 540-88-032-17-400) the solder tails turn inwards under
+the housing, 2 to 3 mm inside its outer wall, where an iron cannot reach them from outside.
 
-* **It is not a hand-soldering part.** On every one of these sockets the solder tails turn inwards under the
-  housing, 2 to 3 mm inside its outer wall. That takes hot air or reflow, or a fine tip through the open frame
-  before the chip goes in. The through-hole socket of THT v2.1 is the easy one by hand; it can come back if that
-  matters more than having no holes there.
-* **The flash can be soldered straight to the same lands** (its own lands lie inside the socket's pads), which is
-  easy by hand. Then it has to be programmed first: the card cannot write it.
-
-The housing is about as large as the through-hole socket's (up to 18.2 × 20.8 mm) and 4.5 mm high. What the board
-gains is that the 32 holes are gone: tracks can pass under the socket on the other layers.
+The socket is there because the card cannot write the flash: its write enable is tied high, so the chip is
+programmed in a programmer and plugged in.
 
 ## BOM
 
 `docs/BOM-SMD.csv` lists every part with manufacturer part number and DigiKey number. The column **Part number**
 says where each line comes from:
 
-* `as on THT v2.1` (17 lines): the same part as on the through-hole board, taken from its BOM.
+* `as on THT v2.1` (18 lines): the same part as on the through-hole board, taken from its BOM.
 * `hw-smd BOM (2026-09-29)` (21 lines): the part and its DigiKey number come from the checked BOM of `hw-smd`.
 * `checked 2026-11-24` (12 lines): the parts that are new here, looked up on DigiKey's product page and, where the
   land pattern or the pin-out depends on it, in the manufacturer's datasheet. The Notes column says what was read.
-* `checked 2026-11-27` (1 line): the surface-mount socket of the boot ROM, from the makers' drawings.
 
 Stock and prices were not looked at for any line, and there are no cart upload files yet: they come when the board
 is routed.
