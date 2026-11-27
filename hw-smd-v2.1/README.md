@@ -119,13 +119,24 @@ pads cover the space above them.
 
 ### Boot ROM socket
 
-The flash (U15, PLCC-32) stays in THT v2.1's through-hole socket. A surface-mount socket was tried and taken out
-again: on every surface-mount PLCC-32 socket whose drawing was read (Amphenol FCI 69802, Assmann A-CCS 032-Z-SM,
-Mill-Max 940-44-032-17-400000, Kycon SMPX-32LCC, Preci-Dip 540-88-032-17-400) the solder tails turn inwards under
-the housing, 2 to 3 mm inside its outer wall, where an iron cannot reach them from outside.
+The flash (U15, PLCC-32) stays in THT v2.1's through-hole socket, because every joint on this board has to be
+possible with a soldering iron. What was looked at (maker drawings read 2026-11-27):
 
-The socket is there because the card cannot write the flash: its write enable is tied high, so the chip is
-programmed in a programmer and plugged in.
+* **Surface-mount PLCC-32 sockets**: Amphenol FCI 69802, Assmann A-CCS 032-Z-SM, Mill-Max 940, Kycon SMPX-32LCC,
+  Preci-Dip 540, 3M 8432, CNC Tech 232-32, Connfly DS1032 and Samtec PLCC-032 all turn their solder tails inwards
+  under the housing, 2 to 3 mm inside its outer wall. None with leads on the outside was found.
+* **Surface-mount DIP-32 sockets with gull-wing leads** (Mill-Max 110-xx-632-41-105000, Preci-Dip
+  110-87-632-41-105101, Samtec ICF-632-x-O) can be soldered by hand and would take the DIP version of the same
+  flash. They are 40.6 mm long and about 21 mm over the pads, cost 6 to 23 US$ and were hardly in stock, so they
+  are not used.
+
+**The socket could go altogether** if the card could write the flash: the chip itself (J-leads, 1.27 mm pitch) is
+easy to solder by hand. Today it cannot: the flash's write enable (pin 31) is tied to +5 V and ISA's memory write
+strobe SMEMW (pin B11) is not connected on the card, so the chip is programmed in a programmer and plugged in.
+Connecting the two would be enough. By the SST39SF010A datasheet (DS20005022) the chip writes from 5 V alone, its
+command addresses 5555h and 2AAAh use only A0–A14, so they lie inside the 32 KB window, and A15/A16 tied low is
+allowed; XTIDECFG (r620 and later, "SST39SFx flash") and Lo-tech's FLASH utility program this chip in a 32 KB
+window from DOS. This is not wired and not decided.
 
 ## BOM
 
