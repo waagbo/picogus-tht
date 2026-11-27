@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "PicoGUS v2.1 THT - boot ROM (experimental)")
-		(date "2026-11-19")
+		(date "2026-11-27")
 		(rev "v2.1")
 	)
 	(lib_symbols
@@ -4180,40 +4180,18 @@
 		)
 		(uuid "946e6297-fe55-5930-8c0b-21917c000fa1")
 	)
-	(symbol
-		(lib_id "power:+5V")
-		(at 181.61 110.49 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
+(global_label "~{SMEMW}"
+		(shape input)
+		(at 181.61 110.49 180)
 		(fields_autoplaced yes)
-		(uuid "2d3d2efa-5677-5f7c-b770-2124efac965a")
-		(property "Reference" "#PWR957"
-			(at 175.26 110.49 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
+		(effects
+			(font
+				(size 1.27 1.27)
 			)
+			(justify right)
 		)
-		(property "Value" "+5V"
-			(at 176.53 110.49 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
+		(uuid "25f5b8bb-7b63-50d3-86b8-08ae541d76cc")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 181.61 110.49 0)
 			(hide yes)
 			(show_name no)
@@ -4222,38 +4200,7 @@
 				(font
 					(size 1.27 1.27)
 				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 181.61 110.49 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 181.61 110.49 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "bc16fe8b-126c-5998-97af-ce8cd849dc1e")
-		)
-		(instances
-			(project "PicoGUS-THT"
-				(path "/8fb4b197-630e-4faa-9892-8ecaeb71c13b/6a6f69f9-b2fb-58de-aefe-9bea60b2b63f"
-					(reference "#PWR957")
-					(unit 1)
-				)
+				(justify right)
 			)
 		)
 	)
@@ -5088,7 +5035,7 @@
 		)
 		(uuid "31d0944e-62cd-53a8-a7a8-6722cb07e215")
 	)
-	(text "WE is tied high: program the flash in a programmer (it is in a socket)."
+	(text "WE = ~SMEMW: the flash can be written in the card from DOS (it needs its unlock sequence first); a programmer works too (it is in a socket)."
 		(exclude_from_sim no)
 		(at 152.4 135.89 0)
 		(effects

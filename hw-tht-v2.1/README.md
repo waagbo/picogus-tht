@@ -31,6 +31,10 @@ select U17 (74HCT153), between U7's pin rows on the back, with its 0805 decoupli
 and R33/R34 (the radio module's, between the Core2350B and the module). Everything else is through hole; see
 [Parts with no through-hole version](#parts-with-no-through-hole-version).
 
+**The board files are v2.1.1** (2026-11-27): the boot ROM flash can be written in the card, see
+[Boot ROM](#boot-rom-experimental). Cards made from the **v2.1.0** files (commit d2338c3 and its label fixes up to
+a8325fb) get the same with two cuts and two wires: [docs/v2.1.0-flash-write-mod.md](docs/v2.1.0-flash-write-mod.md).
+
 > **Status: schematic done; board placed and routed (4 layers, DRC clean, matches the schematic), for review. Not
 > built or tested. Firmware: ported and built (`core2350.uf2`, and `pg-ne2k-v21.uf2` for the radio module), not tested on hardware** (see
 > [Firmware](#firmware) and [Layout status](#layout-status)). The boot ROM of this branch is in the schematic and
@@ -57,6 +61,7 @@ Files:
 | `tools/gen_rm2.py` | Generates the Radio Module 2 footprint and 3D model in `hw-common` and its symbol (dimensions from the RM2 datasheet) |
 | `tools/gen_plcc32_socket.py` | Generates a simple 3D model of the PLCC-32 socket with its chip (`hw-common/parts/PLCC-32_THT-Socket.wrl`), for the renders: KiCad's library has none for that footprint |
 | `docs/renders/` | 3D renders of the routed card: red from the front and the back, green, purple, white and black from the front (ENIG; white silkscreen, black on white). Made with `hw-common/tools/render.sh` |
+| `docs/v2.1.0-flash-write-mod.md`, `docs/figures/v2.1.0-flash-write-mod.png` | For cards made from the v2.1.0 files: the two cuts and two wires that make the boot ROM flash writable. `tools/fig_flash_write_mod.py` draws the picture from the v2.1.0 board file |
 | `docs/figures/routing.png` | The routed board: tracks per layer (In2.Cu carries part of the boot ROM's buses), vias and the AGND/AVDD islands |
 
 The shared `PiGUS library` footprints are linked from `hw-common/`. **New in the shared library for v2.1:**
@@ -382,8 +387,15 @@ three chips and two GPIOs. Schematic sheet `bootrom.kicad_sch`.
   card (see below), and the 74HCT688 is not made in TSSOP (only the HC version, whose inputs want 3.5 V: too high
   for TTL-level ISA lines and a 3.3 V GPIO). The 74HCT138 is a common part in U1/U2's package. What it costs:
   three base addresses instead of six. U17 is an HCT part for the same reason: its select inputs are 3.3 V GPIOs.
-* **Read only in the card.** WE# is tied to +5 V: program the flash in a programmer and press it into the socket
-  (the image at offset 0, with the usual option ROM header and checksum). The NE2000 card's write jumper, its
+* **Writable in the card from v2.1.1.** WE# is on ISA's memory write strobe SMEMW (edge connector pin B11), so a
+  DOS program can write the flash through the 32 KB window while the ROM is switched on: XTIDECFG of the XTIDE
+  Universal BIOS project (r620 or later, EEPROM type "SST39SFx flash") and Lo-tech's FLASH utility do that for
+  this chip in such a window (read in their sources, not run on this card). The SST39SF010A needs only 5 V, takes
+  a write only after a three-byte unlock sequence at 5555h and 2AAAh, and those addresses use A0-A14 only, so
+  they lie inside the window with A15/A16 tied low (datasheet DS20005022). Ordinary memory writes into the window
+  do nothing. Switch ROM shadowing off for the window in the PC's setup. A programmer still works: the flash is in
+  a socket (the image at offset 0, with the usual option ROM header and checksum). On v2.1.0 WE# is tied to
+  +5 V: see [docs/v2.1.0-flash-write-mod.md](docs/v2.1.0-flash-write-mod.md). **Not tested on a card.** The NE2000 card's write jumper, its
   four 32 KB banks and its full base address on GPIOs are left out; that is where the chips and GPIOs were saved.
 * **No bus buffer** (the NE2000 card has a 74AHCT245): the flash drives the ISA data lines itself, as the boot
   EPROM of an NE2000 clone does. Its data sheet only promises its output levels at 100 µA, so on a full bus with
@@ -508,7 +520,7 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   island** (see [Audio](#audio)); FB3 (GND–AGND) and FB4 (+3V3–AVDD) are the only ties. 0.2 mm signal tracks (0.15 mm
   in the boot ROM corner of this branch), 0.4 mm
   for +5V, VSYS, the USB VBUS nets and ±12 V; the plane nets reach their planes through short stubs and vias. 0.6/0.3
-  mm vias. About 2.97 m of track on F.Cu, 2.99 m on B.Cu, 0.73 m on In2.Cu and 218 vias (plain v2.1: 2.5 m on each
+  mm vias. About 2.97 m of track on F.Cu, 3.04 m on B.Cu, 0.79 m on In2.Cu and 223 vias (plain v2.1: 2.5 m on each
   outer layer, 0.05 m and 152). In1.Cu carries no signal.
 * **On the plain v2.1, In2.Cu carries eight short signal hops** (52 mm in all, the longest 12 mm: D5, ADS, D4, D7,
   GPIO23, D2, AD3, AD1) where the band above the ISA fingers is full on both outer layers. They cut slots in the
@@ -540,7 +552,7 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
     `~IOW`, `~SMEMR`, IRQ2, DRQ and DACK) were cut back to two boxes round it and joined again with the grid
     router. Freerouting stalled at seven open links on that task; the grid router closed all of them once
     `~SMEMR` and `~IOW` went first. The cost: eight more vias, about 30 mm more on In2.Cu, SA5 17 mm longer.
-  * **In2.Cu now carries 0.73 m of signal track** (33 nets, the longest SD7 and SA5 with 49 mm each and
+  * **In2.Cu now carries 0.79 m of signal track** (34 nets, the longest ~SMEMW with 54 mm, SD7 and SA5 with 49 mm each and
     SA10–SA14 with 22–47 mm each), nearly all of it in that corner. The +3V3 plane is cut into strips there. **One
     strip of 15 mm² under U1 is cut off from the rest of the plane**; the only thing on it is U1's supply pin,
     which a 0.2 mm track on the back joins to its capacitor C2. The GND plane has no track in it.
@@ -556,7 +568,7 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
 * **TSSOP escape**: U1, U2 and U10 are routed through their 0.7 mm test pads, with vias in most test pads, so their
   pins reach both outer layers without fanning out past the toes.
 * **Changes to the user's placement**: R4 in series on RUN and the RUN button SW2 next to BOOTSEL SW1 (J10's 1×2
-  header is gone; see [Power](#power)); U9 lying down, tab down; `v2.1.0` at (212.84, 40.58) with the copper logo
+  header is gone; see [Power](#power)); U9 lying down, tab down; the version (`v2.1.1` now) at (212.84, 40.58) with the copper logo
   (see below); H1/H2 without silkscreen; on the back, the title, copyright, licence, project URL and thanks in one
   framed group behind U1/U2. **C38 moved out from under the Waveblaster daughterboard** (its 5 × 11 mm can was
   taller than the daughterboard's 11 mm clearance) to (184.75, 77.0), between the mixer and RUN, still on the
@@ -565,9 +577,9 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   join it to the DAC with milliohms, while C17 (10 µF) and C15/C16 (0.1 µF) stay at U10's pins for the local
   decoupling. C38 is now in the `Mixer + line out` group; the C29 label moved above C29, as C28's is. **C39 and C40
   moved 2.19 mm right together** (to x 171.19 / 179.69, pad 1), to get C39 out from under the daughterboard; their
-  four track ends were stretched onto the moved pads. **The PicoGUS logo and `v2.1.0` then moved 1.02 mm right as
+  four track ends were stretched onto the moved pads. **The PicoGUS logo and the version text then moved 1.02 mm right as
   one group**, so they sit centred between C40 and the board edge: 0.77 mm from C40's silkscreen outline to the "P"
-  and from the end of `v2.1.0` to the edge (letters x 186.92–212.69, `v2.1.0` at (212.84, 40.58)).
+  and from the end of the version text to the edge (letters x 186.92–212.69, the version at (212.84, 40.58)).
 * **Radio module in, USB-C moved (2026-11-11)**: U14 took the USB-C's place at the bracket end. J6 went to v2.0's
   place on the bottom edge, with R19/R20 standing above it. D2 moved to the strip above SW1/SW2 (and into the
   `Core2350B + power` group). R33/R34 stood in a row above the module, C47 above them (since 2026-11-17 they and
@@ -589,7 +601,7 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   reference is horizontal, left of the capacitor (2026-11-17; it stood on end before). On the back: R33/R34 on end
   below their resistors, R19/R20 below theirs.
 * **PicoGUS logo in copper, as on v1.3.2**: the eight solder-mask openings (the letters) with copper letters 0.15 mm
-  larger under them, and a rule area that keeps tracks and vias off them. `v2.1.0` stands right of it (Jost 1.2 mm).
+  larger under them, and a rule area that keeps tracks and vias off them. The version, `v2.1.1`, stands right of it (Jost 1.2 mm).
 * **Silkscreen labels** (Jost, embedded in the board file as on v1.3.2): `WAVEBLASTER`, `MIXER`, `DAC`, `WT VOL`,
   `MIDI OUT`, `LINE OUT`, `USB HOST`, `WIFI`, `USB-C FLASH`, `RUN`, `BOOTSEL`, `UART`, `SWD`, and `IRQ`/`DMA` over J3.
   On this branch, in KiCad's stroke font: `BOOT ROM` below the socket and, on the back, `U16` on its chip between

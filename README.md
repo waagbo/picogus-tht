@@ -48,7 +48,7 @@ Assembly should be *EASY to MEDIUM* with the appropriate quality tools and consu
 
 ### Version 2.1
 
-<img src="hw-tht-v2.1/docs/renders/PicoGUS-THT-v2.1.0-purple-front.jpg" alt="PicoGUS THT v2.1.0 Render" width="350" align="right" />
+<img src="hw-tht-v2.1/docs/renders/PicoGUS-THT-v2.1.1-purple-front.jpg" alt="PicoGUS THT v2.1.1 Render" width="350" align="right" />
 
 This is an experimental extension of the PicoGUS 2.0 SMD design, made possible using a Waveshare Core2350B board to free enough I/O ports for the 2.0 feature set. This is still in the design phase.
 <br/>
