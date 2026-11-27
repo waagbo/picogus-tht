@@ -268,6 +268,11 @@ Core2350B1/B2 the PSRAM chip select (QMI CS1) is **GPIO47** (through a 0 Ω link
   not leave enough headroom after the diode. Its pinout is VIN–GND–VOUT, tab GND (**not** the 1117 pinout, so an
   LD1117V33 does not fit). C11/C13 (10 µF) + C10 (1 µF) on its output: Microchip asks for at least 1 µF and at most
   22 µF. C12 (10 µF, input) is about 10 mm from the VIN pin, joined by a 0.4 mm track.
+  **Insulate U9 from the board**: two signal tracks (ROM_SEL1 and I/O CH RDY) run on the front under its metal back,
+  which is GND, with only the solder mask between. Put polyimide tape or a TO-220 insulating pad under it, or solder
+  it a millimetre clear of the board, and do not bolt the tab down: a screw can press the tab through the mask. A
+  short would hold ROM_SEL1 or I/O CH RDY low; I/O CH RDY low stops the PC. U9 needs no heat sink: it dissipates
+  an estimated 0.1 W at most without the radio module and about 0.5 W at worst with it.
 * **Radio module**: U14's VIN and VDDIO are on the card's +3V3 (U9), with C47 (10 µF) next to it. It draws up to
   about 270 mA while transmitting (RM2 datasheet), which U9 (1 A) has to spare: about 0.4 W more in the TO-220 at
   worst.
@@ -544,8 +549,10 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
     none of the order of the rest of the board. It passes DRC; it was not reviewed line by line.
 * **Routing rules**: no copper between the gold fingers (rule areas between them; tracks leave each finger straight
   up) and no vias over the fingers (rule area from y 128.3); digital tracks kept off the analog islands where possible
-  (see [Audio](#audio) for what crosses). No track or via runs on F.Cu under U9, whose metal back (GND) lies on the
-  board.
+  (see [Audio](#audio) for what crosses). **Two signal tracks run on F.Cu under U9**, whose metal back (GND) lies
+  on the board with only the solder mask between them: ROM_SEL1 crosses under it for about 14 mm (since U17 was added
+  on 2026-11-19; this README said until 2026-11-27 that nothing ran there) and I/O CH RDY passes under one corner of
+  its tab for under 2 mm. No via is under it. **Insulate U9 from the board**: see [Power](#power).
 * **TSSOP escape**: U1, U2 and U10 are routed through their 0.7 mm test pads, with vias in most test pads, so their
   pins reach both outer layers without fanning out past the toes.
 * **Changes to the user's placement**: R4 in series on RUN and the RUN button SW2 next to BOOTSEL SW1 (J10's 1×2
@@ -571,21 +578,27 @@ the bracket edge as on v1.3.2, J6 over the bottom edge).
   Core2350B on the back, under the +5V track, and reach the module through vias next to its lands. The ISA D3
   line now stays on the front all the way (two vias less), and the old VSYS run to D2's former place is gone (VSYS reaches D2 from C12). Labels: `RUN` (now
   0.9 mm, like `BOOTSEL`) and `BOOTSEL` moved sideways to clear D2; `USB-C FLASH` (1.0 mm) stands left of J6;
-  `USB HOST` moved 1.7 mm right; `WIFI` is new. H2's reference is hidden; the references of J6 and F1 are inside
-  their own outlines.
-* **Labels to look at** (visible references over a neighbour's courtyard): C23 under J9's body and U13 under C41
-  (both hidden once the parts are fitted), D1 over R13, C16 over C14; U14 left of the module's lands. C38's
+  `USB HOST` moved 1.7 mm right; `WIFI` is new. The references of H1, H2, J2 and J4 are hidden; those of J6 and F1
+  are inside their own outlines.
+* **Labels moved on 2026-11-27**, silkscreen only: C23, C16, R31 and R32 are inside their parts like the other
+  capacitors and resistors, U13 is between its pad columns and U16 on its chip on the back; C41 and C42 are inside
+  their outlines beside the pad row; D1 is upright, above and right of the LED; H1 and J2 have no label (`SWD` names
+  J2); D3's cathode mark K is left of its pad. Before that the labels of C16, C41, C42, D1, U13 and J2 and the K
+  were partly printed on a pad and cut off there, and C23's lay on J9's outline. **Boards made from the files before
+  that day (commit d2338c3 and earlier) have the old labels.** U14's reference is left of the module's lands. C38's
   reference is horizontal, left of the capacitor (2026-11-17; it stood on end before). On the back: R33/R34 on end
   below their resistors, R19/R20 below theirs.
 * **PicoGUS logo in copper, as on v1.3.2**: the eight solder-mask openings (the letters) with copper letters 0.15 mm
   larger under them, and a rule area that keeps tracks and vias off them. `v2.1.0` stands right of it (Jost 1.2 mm).
 * **Silkscreen labels** (Jost, embedded in the board file as on v1.3.2): `WAVEBLASTER`, `MIXER`, `DAC`, `WT VOL`,
   `MIDI OUT`, `LINE OUT`, `USB HOST`, `WIFI`, `USB-C FLASH`, `RUN`, `BOOTSEL`, `UART`, `SWD`, and `IRQ`/`DMA` over J3.
-  On this branch, in KiCad's stroke font: `BOOT ROM` below the socket and, on the back, `U16` below the socket's
-  bottom pin row and `U17` on its chip between U7's pins (the jumper labels `BOOT ROM SEGMENT`, `CLOSE ONE`, `C800`,
+  On this branch, in KiCad's stroke font: `BOOT ROM` below the socket and, on the back, `U16` on its chip between
+  the socket's pin rows and `U17` on its chip between U7's pins (the jumper labels `BOOT ROM SEGMENT`, `CLOSE ONE`, `C800`,
   `D000` and `D800` went with the jumpers on 2026-11-19); `R36` stands on its body, as U9 and C20 leave no room
-  beside it. With KiCad's silkscreen checks switched on (they are off in the project) the boot ROM adds no
-  overlap.
+  beside it. With KiCad's silkscreen checks switched on (they are off in the project) no reference or other text
+  is on a pad or on another part's outline any more. What the checks still list is part outlines, not text: the
+  outlines of C4-C7 where they cross the pins of the chips they sit between (40), U12's corner mark on its pin 1,
+  and the divider line at J3 (twice).
 * **Attribution block on the back**, in a frame, as three paragraphs with a blank line between them: name and
   copyright, licence and link, thanks. Its link is `https://github.com/waagbo/picogus-tht` (2026-11-24; before
   that upstream's `github.com/polpo/picogus`). The frame is 26.6 × 13.4 mm and sits between the through-hole pads
