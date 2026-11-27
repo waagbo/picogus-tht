@@ -77,8 +77,8 @@ Every part has its reference on the silkscreen: 0.8 mm text beside the part, 1.0
 inside their part instead, where the part covers them once it is soldered: U13 and U16 between their pad rows, and
 C23, R31 and R32 between their two pads. Those three are 0.45 mm text, the largest that fits the 0.8 mm between
 0805 pads, and their footprints lose the two small body marks to make room; DRC lists the small text and the changed
-footprints as six warnings. The mounting holes have no label. The silkscreen check finds no new overlap; the two
-overlaps and two clipped items it reports are on THT v2.1 as well.
+footprints as six warnings. The mounting holes and J2 (named `SWD`) have no label. The silkscreen check finds no
+new overlap: what it reports, the divider line at J3 and U12's corner mark on its pin 1, is on THT v2.1 as well.
 
 ## BOM
 
