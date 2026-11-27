@@ -3304,7 +3304,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_LCC:PLCC-32_THT-Socket"
+		(property "Footprint" "PiGUS library:PLCC-32_SMD-Socket"
 			(at 200.66 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -3326,7 +3326,7 @@
 				)
 			)
 		)
-		(property "Description" "Boot ROM: 128 KB 5 V flash in a through-hole PLCC-32 socket; the first 32 KB appear at the base address (A15/A16 low); CE from the decoder, OE = ~SMEMR; read only in the card (WE high)"
+		(property "Description" "Boot ROM: 128 KB 5 V flash (PLCC-32) in a surface-mount PLCC-32 socket, or soldered straight to the same lands; the first 32 KB appear at the base address (A15/A16 low); CE from the decoder, OE = ~SMEMR; read only in the card (WE high)"
 			(at 200.66 90.17 0)
 			(hide yes)
 			(show_name no)

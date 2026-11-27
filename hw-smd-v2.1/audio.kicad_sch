@@ -3254,7 +3254,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "PiGUS library:TSSOP-20_4.4x6.5mm_P0.65mm_HandSolder_TestPads"
+		(property "Footprint" "PiGUS library:TSSOP-20_4.4x6.5mm_P0.65mm_HandSolder"
 			(at 63.5 36.83 0)
 			(hide yes)
 			(show_name no)
@@ -3276,7 +3276,7 @@
 				)
 			)
 		)
-		(property "Description" "I2S DAC, TSSOP-20 (hand-solder footprint with a test pad per pin)"
+		(property "Description" "I2S DAC, TSSOP-20 on hand-solder toes without test pads, so that its capacitors sit at the pins"
 			(at 64.77 55.88 0)
 			(hide yes)
 			(show_name no)
